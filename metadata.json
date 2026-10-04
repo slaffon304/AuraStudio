@@ -1,0 +1,6 @@
+{
+  "name": "AuraStudio - AI Photo Studio Moldova & Romania",
+  "description": "Premium AI photo studio for Moldova and Romania. Create photos you'll want to post with curated templates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
