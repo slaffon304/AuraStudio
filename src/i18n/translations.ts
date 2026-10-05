@@ -232,7 +232,7 @@ export const TRANSLATIONS = {
     appTagline: 'AuraStudio • нейросеть для создания фоток в 1 клик',
     heroHeadline: 'Преврати селфи в редакционный портрет.',
     heroSubhead: 'Выбери стиль, загрузи фото — AuraStudio создаст остальное.',
-    landingBadge: 'AuraStudio • нейросеть для создания фоток в 1 кликЯ',
+    landingBadge: 'AuraStudio • нейросеть для создания фоток в 1 клик',
     landingHeadlineLead: 'Одно селфи. Новый образ.',
     landingHeadlineHighlight: 'Фотографии как из редакционной съёмки.',
     landingSubhead: 'Выбери стиль, загрузи своё фото и создай студийный портрет — без промптов и сложного редактирования.',
