@@ -1,5 +1,6 @@
 export type Language = 'ro' | 'ru' | 'en';
 export type Currency = 'MDL' | 'RON' | 'EUR';
+export type Theme = 'light' | 'dark';
 
 export type TemplateCategory =
   | 'Trending'
@@ -11,8 +12,8 @@ export type TemplateCategory =
   | 'Birthday'
   | 'Travel'
   | 'Lifestyle'
-  | 'Moldova'
-  | 'Romania';
+  | 'Heritage'
+  | 'Editorial';
 
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 
@@ -29,12 +30,17 @@ export interface LocalizedString {
   en: string;
 }
 
+export type StudioMode = 'template' | 'pinterest' | 'couple';
+export type GenderCategory = 'all' | 'women' | 'men' | 'couples';
+
 export interface PhotoTemplate {
   id: string;
   name: LocalizedString;
   description: LocalizedString;
   category: TemplateCategory;
+  gender?: 'women' | 'men' | 'unisex' | 'couple';
   previewImage: string;
+  beforeImage?: string;
   prompt: string;
   negativePrompt?: string;
   aspectRatio: AspectRatio;
@@ -54,6 +60,13 @@ export interface UserPhoto {
   uploadedAt: string;
   width?: number;
   height?: number;
+  label?: string; // e.g. "Me", "Partner"
+}
+
+export interface SavedFace {
+  id: string;
+  label: string;
+  photoUrl: string;
 }
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -66,10 +79,13 @@ export interface GenerationJob {
   templatePreview: string;
   userPhotoId: string;
   userPhotoUrl: string;
+  customReferenceUrl?: string;
+  partnerPhotoUrl?: string;
   status: JobStatus;
   progress: number; // 0 - 100
   currentStepMessage?: string;
   resultImageUrl?: string;
+  resultImagesPack?: string[];
   errorMessage?: string;
   providerId: string;
   providerName: string;
@@ -136,8 +152,9 @@ export interface AIProviderMeta {
 
 export interface GenerationRequestPayload {
   templateId: string;
-  userPhotoUrl: string;
   userPhotoId: string;
-  aspectRatio: AspectRatio;
-  customPromptOverride?: string;
+  aspectRatio?: AspectRatio;
+  mode?: StudioMode;
+  customReferencePhotoId?: string;
+  partnerPhotoId?: string;
 }

@@ -52,7 +52,11 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
     isLocalPreviewMode,
     currentUser,
     signOut,
-    quickSelectTemplate
+    quickSelectTemplate,
+    openCustomPinterest,
+    openCoupleStudio,
+    genderFilter,
+    setGenderFilter
   } = useApp();
 
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
@@ -66,6 +70,10 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
     const query = searchQuery.trim().toLocaleLowerCase();
     return activeTemplates.filter((template) => {
       const matchesCategory = selectedCategory === 'All' || template.category === selectedCategory;
+      const matchesGender = genderFilter === 'all'
+        || (genderFilter === 'women' && (template.gender === 'women' || template.gender === 'unisex' || !template.gender))
+        || (genderFilter === 'men' && (template.gender === 'men' || template.gender === 'unisex'))
+        || (genderFilter === 'couples' && (template.category === 'Couple' || template.gender === 'couple'));
       const searchableText = [
         template.name.ro,
         template.name.ru,
@@ -76,20 +84,24 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
         template.category,
         ...(template.tags || [])
       ].join(' ').toLocaleLowerCase();
-      return matchesCategory && (!query || searchableText.includes(query));
+      return matchesCategory && matchesGender && (!query || searchableText.includes(query));
     });
-  }, [activeTemplates, selectedCategory, searchQuery]);
+  }, [activeTemplates, selectedCategory, searchQuery, genderFilter]);
 
   const trendingTemplates = useMemo(() => {
-    const curated = activeTemplates.filter((template) =>
+    const matchesGender = (template: PhotoTemplate) => genderFilter === 'all'
+      || (genderFilter === 'women' && (template.gender === 'women' || template.gender === 'unisex' || !template.gender))
+      || (genderFilter === 'men' && (template.gender === 'men' || template.gender === 'unisex'))
+      || (genderFilter === 'couples' && (template.category === 'Couple' || template.gender === 'couple'));
+    const curated = activeTemplates.filter((template) => matchesGender(template) && (
       template.category === 'Trending' || (template.tags || []).some((tag) => tag.toLowerCase() === 'trending')
-    );
-    const rest = activeTemplates.filter((template) => !curated.some((item) => item.id === template.id));
+    ));
+    const rest = activeTemplates.filter((template) => matchesGender(template) && !curated.some((item) => item.id === template.id));
     return [...curated, ...rest].slice(0, 8);
-  }, [activeTemplates]);
+  }, [activeTemplates, genderFilter]);
 
   const quickCollections: { category: TemplateCategory; label: string; image: PhotoTemplate | undefined; icon: React.ElementType }[] = [
-    { category: 'Moldova', label: t.appQuickMoldova, image: activeTemplates.find((template) => template.category === 'Moldova'), icon: MapPin },
+    { category: 'Heritage', label: t.appQuickMoldova, image: activeTemplates.find((template) => template.category === 'Heritage'), icon: MapPin },
     { category: 'Couple', label: t.appQuickCouple, image: activeTemplates.find((template) => template.category === 'Couple'), icon: Heart },
     { category: 'Business', label: t.appQuickBusiness, image: activeTemplates.find((template) => template.category === 'Business'), icon: BriefcaseBusiness }
   ];
@@ -136,8 +148,15 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#eef1f8] pb-28 text-[#1d2540] md:pb-8">
+    <div className="min-h-screen bg-[#eef1f8] pb-28 text-[#1d2540] transition-colors md:pb-8 dark:bg-[#090a0f] dark:text-slate-100">
       <Header variant="app" onNavigateHome={() => navigate('/')} onNavigateApp={() => navigate('/app')} />
+      {isLocalPreviewMode && (
+        <div role="status" className="mx-auto mt-3 max-w-[1180px] px-4 text-[10px] leading-relaxed text-indigo-700 sm:px-6 dark:text-indigo-300">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-400/20 dark:bg-indigo-400/[0.06]">
+            {t.localPreviewBanner}
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto w-full max-w-[1180px] px-4 sm:px-6">
         {currentView === 'explore' && (
@@ -150,11 +169,23 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder={t.appSearchPlaceholder}
-                  className="h-11 w-full rounded-full border border-[#e3e7f0] bg-white px-11 text-[12px] text-[#29324c] shadow-[0_2px_8px_rgba(42,55,91,.035)] outline-none placeholder:text-[#a0a7b6] focus:border-[#aebafb] focus:ring-4 focus:ring-[#536dfe]/[0.08] sm:h-12 sm:text-[13px]"
+                  className="h-11 w-full rounded-full border border-[#e3e7f0] bg-white px-11 text-[12px] text-[#29324c] shadow-[0_2px_8px_rgba(42,55,91,.035)] outline-none placeholder:text-[#a0a7b6] focus:border-[#aebafb] focus:ring-4 focus:ring-[#536dfe]/[0.08] sm:h-12 sm:text-[13px] dark:border-white/10 dark:bg-[#141724] dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               </label>
               <div className="mt-2 sm:mt-3">
                 <CategoryFilter />
+              </div>
+              <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label={t.genderFilterLabel}>
+                {[
+                  { id: 'all' as const, label: t.genderFilterAll },
+                  { id: 'women' as const, label: t.genderFilterWomen },
+                  { id: 'men' as const, label: t.genderFilterMen },
+                  { id: 'couples' as const, label: t.genderFilterCouples }
+                ].map((item) => (
+                  <button key={item.id} type="button" onClick={() => setGenderFilter(item.id)} aria-pressed={genderFilter === item.id} className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold transition sm:text-[11px] ${genderFilter === item.id ? 'border-[#536dfe] bg-[#536dfe] text-white' : 'border-[#e2e6ef] bg-white text-[#7f899e] hover:border-[#b8c1e1] dark:border-white/10 dark:bg-[#141724] dark:text-slate-400 dark:hover:border-white/20'}`}>
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -164,7 +195,7 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
                   key={category}
                   type="button"
                   onClick={() => setSelectedCategory(category)}
-                  className="group relative h-[88px] overflow-hidden rounded-[18px] bg-white text-left ring-1 ring-[#e5e8f0] transition active:scale-[.985] sm:h-[112px] sm:rounded-[20px]"
+                  className="group relative h-[88px] overflow-hidden rounded-[18px] bg-white text-left ring-1 ring-[#e5e8f0] transition active:scale-[.985] sm:h-[112px] sm:rounded-[20px] dark:bg-[#141724] dark:ring-white/10"
                 >
                   {image && <img src={image.previewImage} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />}
                   <span className="absolute inset-0 bg-gradient-to-t from-[#10182d]/80 via-[#10182d]/18 to-[#10182d]/5" />
@@ -178,14 +209,23 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
               ))}
             </section>
 
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={openCustomPinterest} className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e1e5ef] bg-white px-3 text-[10px] font-bold text-[#65718c] transition hover:border-[#bfc8ef] hover:text-[#5169e8] sm:text-xs dark:border-white/10 dark:bg-[#141724] dark:text-slate-300">
+                <ImagePlus className="h-3.5 w-3.5" />{t.openPinterestStudio}
+              </button>
+              <button type="button" onClick={openCoupleStudio} className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e1e5ef] bg-white px-3 text-[10px] font-bold text-[#65718c] transition hover:border-[#e8c2ce] hover:text-[#b34c6b] sm:text-xs dark:border-white/10 dark:bg-[#141724] dark:text-slate-300">
+                <Heart className="h-3.5 w-3.5" />{t.openCoupleStudio}
+              </button>
+            </div>
+
             <section className="mt-6 sm:mt-8" aria-labelledby="trending-title">
               <div className="mb-3 flex items-center justify-between sm:mb-4">
-                <h1 id="trending-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl">{t.appTrendingTitle}</h1>
+                <h1 id="trending-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl dark:text-white">{t.appTrendingTitle}</h1>
                 <div className="hidden items-center gap-1.5 sm:flex">
-                  <button onClick={() => scrollTrending(-1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8]" aria-label={t.scrollTrendingLeft}>
+                  <button onClick={() => scrollTrending(-1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8] dark:bg-[#141724] dark:text-slate-300 dark:ring-white/10" aria-label={t.scrollTrendingLeft}>
                     <ArrowLeft className="h-4 w-4" />
                   </button>
-                  <button onClick={() => scrollTrending(1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8]" aria-label={t.scrollTrendingRight}>
+                  <button onClick={() => scrollTrending(1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8] dark:bg-[#141724] dark:text-slate-300 dark:ring-white/10" aria-label={t.scrollTrendingRight}>
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -210,8 +250,8 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
             <section className="mt-7 sm:mt-9" aria-labelledby="try-title">
               <div className="mb-3 flex items-end justify-between sm:mb-4">
                 <div>
-                  <h2 id="try-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl">{t.appTryTitle}</h2>
-                  <p className="mt-1 text-[10px] text-[#9299aa] sm:text-xs">{t.landingSamplesSub}</p>
+                  <h2 id="try-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl dark:text-white">{t.appTryTitle}</h2>
+                  <p className="mt-1 text-[10px] text-[#9299aa] sm:text-xs dark:text-slate-400">{t.landingSamplesSub}</p>
                 </div>
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} className="text-[10px] font-semibold text-[#5268ed] sm:text-xs">
@@ -221,8 +261,8 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
               </div>
 
               {visibleTemplates.length === 0 ? (
-                <div className="rounded-2xl border border-[#e3e7f0] bg-white px-5 py-12 text-center">
-                  <p className="text-sm font-semibold text-[#404b68]">{t.noTemplatesFound}</p>
+                <div className="rounded-2xl border border-[#e3e7f0] bg-white px-5 py-12 text-center dark:border-white/10 dark:bg-[#141724]">
+                  <p className="text-sm font-semibold text-[#404b68] dark:text-slate-200">{t.noTemplatesFound}</p>
                   <button onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }} className="mt-2 text-xs font-semibold text-[#536dfe]">{t.resetFilters}</button>
                 </div>
               ) : (
@@ -242,34 +282,34 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
 
         {currentView === 'profile' && currentUser && (
           <section className="mx-auto max-w-xl py-7 sm:py-10">
-            <h1 className="text-2xl font-extrabold tracking-tight text-[#202844]">{t.profileTitle}</h1>
-            <p className="mt-1 text-sm text-[#858ea2]">{t.profileSub}</p>
-            <div className="mt-5 rounded-[22px] border border-[#e3e7f0] bg-white p-5 shadow-[0_6px_25px_rgba(42,55,91,.04)]">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#202844] dark:text-white">{t.profileTitle}</h1>
+            <p className="mt-1 text-sm text-[#858ea2] dark:text-slate-400">{t.profileSub}</p>
+            <div className="mt-5 rounded-[22px] border border-[#e3e7f0] bg-white p-5 shadow-[0_6px_25px_rgba(42,55,91,.04)] dark:border-white/10 dark:bg-[#141724]">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8ecff] text-[#536dfe]"><UserRound className="h-5 w-5" /></div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-[#27314f]">{currentUser.name}</p>
-                  <p className="truncate text-xs text-[#8a92a4]">{currentUser.email}</p>
+                  <p className="truncate text-sm font-bold text-[#27314f] dark:text-slate-100">{currentUser.name}</p>
+                  <p className="truncate text-xs text-[#8a92a4] dark:text-slate-400">{currentUser.email}</p>
                 </div>
               </div>
-              <button onClick={() => setIsCreditModalOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-[#f3f5ff] px-4 py-3 text-left">
+              <button onClick={() => setIsCreditModalOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-[#f3f5ff] px-4 py-3 text-left dark:bg-white/5">
                 <span className="text-xs font-medium text-[#747f99]">{t.currentBalance}</span>
                 <span className="text-sm font-extrabold text-[#4e64e6]">{currentUser.creditBalance} {t.credits}</span>
               </button>
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <button onClick={() => setCurrentView('library')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb]">{t.profilePhotos}</button>
-                <button onClick={() => setCurrentView('gallery')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb]">{t.myGallery}</button>
+                <button onClick={() => setCurrentView('library')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.profilePhotos}</button>
+                <button onClick={() => setCurrentView('gallery')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.myGallery}</button>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2]">
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2] dark:bg-white/5 dark:text-slate-400">
                   {t.profileLanguage}
-                  <select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none">
+                  <select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none dark:text-slate-200">
                     <option value="ro">Română</option><option value="ru">Русский</option><option value="en">English</option>
                   </select>
                 </label>
-                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2]">
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2] dark:bg-white/5 dark:text-slate-400">
                   {t.profileCurrency}
-                  <select value={currency} onChange={(event) => setCurrency(event.target.value as typeof currency)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none">
+                  <select value={currency} onChange={(event) => setCurrency(event.target.value as typeof currency)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none dark:text-slate-200">
                     <option value="MDL">MDL</option><option value="RON">RON</option><option value="EUR">EUR</option>
                   </select>
                 </label>
@@ -317,7 +357,7 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#eef1f8] text-[#18203b]">
+    <div className="min-h-screen bg-[#eef1f8] text-[#18203b] dark:bg-[#090a0f] dark:text-slate-100">
       <Header variant="marketing" onNavigateApp={openApp} onNavigateHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
 
       <main>
@@ -326,11 +366,11 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-[9px] font-bold tracking-[.13em] text-[#6675d4] ring-1 ring-[#e2e7f2] sm:text-[10px]">
               <Sparkles className="h-3 w-3" /> {t.landingBadge}
             </span>
-            <h1 className="mt-5 text-[34px] font-extrabold leading-[1.06] tracking-[-.045em] text-[#151d38] sm:mt-6 sm:text-5xl md:text-[58px]">
+            <h1 className="mt-5 text-[34px] font-extrabold leading-[1.06] tracking-[-.045em] text-[#151d38] sm:mt-6 sm:text-5xl md:text-[58px] dark:text-white">
               <span className="block">{t.landingHeadlineLead}</span>
               <span className="mt-1 block text-[#5269f5]">{t.landingHeadlineHighlight}</span>
             </h1>
-            <p className="mx-auto mt-4 max-w-[590px] text-[12px] leading-[1.75] text-[#7d879d] sm:mt-5 sm:text-sm">
+            <p className="mx-auto mt-4 max-w-[590px] text-[12px] leading-[1.75] text-[#7d879d] sm:mt-5 sm:text-sm dark:text-slate-400">
               {t.landingSubhead}
             </p>
             <button
@@ -376,12 +416,12 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
           </div>
         </section>
 
-        <section id="examples" className="border-y border-[#e4e8f1] bg-white/65 py-8 sm:py-11">
+        <section id="examples" className="border-y border-[#e4e8f1] bg-white/65 py-8 sm:py-11 dark:border-white/10 dark:bg-white/[0.02]">
           <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
             <div className="mb-4 flex items-end justify-between gap-4 sm:mb-5">
               <div>
-                <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl">{t.landingSamplesTitle}</h2>
-                <p className="mt-1 text-[11px] text-[#9098aa] sm:text-xs">{t.landingSamplesSub}</p>
+                <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl dark:text-white">{t.landingSamplesTitle}</h2>
+                <p className="mt-1 text-[11px] text-[#9098aa] sm:text-xs dark:text-slate-400">{t.landingSamplesSub}</p>
               </div>
               <button onClick={openApp} className="hidden items-center gap-1 text-xs font-bold text-[#5269f5] sm:inline-flex">
                 {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
@@ -401,8 +441,8 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
         <section id="how-it-works" className="mx-auto max-w-[1020px] px-4 py-10 sm:px-6 sm:py-14">
           <div className="mx-auto max-w-[560px] text-center">
             <span className="text-[9px] font-bold uppercase tracking-[.15em] text-[#7180dc]">AuraStudio</span>
-            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1c2541] sm:text-3xl">{t.landingHowTitle}</h2>
-            <p className="mt-2 text-[11px] text-[#8c95a9] sm:text-sm">{t.landingHowSub}</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1c2541] sm:text-3xl dark:text-white">{t.landingHowTitle}</h2>
+            <p className="mt-2 text-[11px] text-[#8c95a9] sm:text-sm dark:text-slate-400">{t.landingHowSub}</p>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
             {[
@@ -410,13 +450,13 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
               { number: '02', title: t.step2Photo, body: t.landingStep2Body, icon: <ImagePlus className="h-4 w-4" /> },
               { number: '03', title: t.step3Generate, body: t.landingStep3Body, icon: <Sparkles className="h-4 w-4" /> }
             ].map((step) => (
-              <div key={step.number} className="rounded-[20px] border border-[#e8ebf2] bg-white p-4 shadow-[0_5px_18px_rgba(42,55,91,.035)] sm:p-5">
+              <div key={step.number} className="rounded-[20px] border border-[#e8ebf2] bg-white p-4 shadow-[0_5px_18px_rgba(42,55,91,.035)] sm:p-5 dark:border-white/10 dark:bg-[#141724]">
                 <div className="flex items-center justify-between">
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f0f3ff] text-[#576df3]">{step.icon}</span>
                   <span className="text-sm font-extrabold text-[#cad0df]">{step.number}</span>
                 </div>
-                <h3 className="mt-4 text-[12px] font-bold text-[#27314e] sm:text-sm">{step.title}</h3>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-[#8a93a7] sm:text-xs">{step.body}</p>
+                <h3 className="mt-4 text-[12px] font-bold text-[#27314e] sm:text-sm dark:text-slate-100">{step.title}</h3>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-[#8a93a7] sm:text-xs dark:text-slate-400">{step.body}</p>
               </div>
             ))}
           </div>
@@ -448,18 +488,18 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
               <details key={question} open={faqOpen === index} onToggle={(event) => {
                 if ((event.currentTarget as HTMLDetailsElement).open) setFaqOpen(index);
                 else if (faqOpen === index) setFaqOpen(null);
-              }} className="group rounded-2xl border border-[#e4e8f0] bg-white px-4 py-3.5 open:shadow-[0_5px_18px_rgba(42,55,91,.04)] sm:px-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold text-[#303a57] sm:text-xs">
+              }} className="group rounded-2xl border border-[#e4e8f0] bg-white px-4 py-3.5 open:shadow-[0_5px_18px_rgba(42,55,91,.04)] sm:px-5 dark:border-white/10 dark:bg-[#141724]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold text-[#303a57] sm:text-xs dark:text-slate-100">
                   {question}<ChevronDown className="h-4 w-4 shrink-0 text-[#8792aa] transition group-open:rotate-180" />
                 </summary>
-                <p className="pt-2.5 text-[10px] leading-relaxed text-[#858ea2] sm:text-xs">{answer}</p>
+                <p className="pt-2.5 text-[10px] leading-relaxed text-[#858ea2] sm:text-xs dark:text-slate-400">{answer}</p>
               </details>
             ))}
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-[#e2e6ef] px-4 py-5 text-center text-[10px] text-[#9aa2b2] sm:py-6">
+      <footer className="border-t border-[#e2e6ef] px-4 py-5 text-center text-[10px] text-[#9aa2b2] sm:py-6 dark:border-white/10 dark:text-slate-400">
         <div className="font-bold text-[#56617c]">AuraStudio <span className="font-normal text-[#a4abba]">· Moldova & România</span></div>
         <p className="mt-1">© {new Date().getFullYear()} AuraStudio. {t.rightsReserved}</p>
       </footer>

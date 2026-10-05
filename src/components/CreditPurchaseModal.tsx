@@ -236,7 +236,7 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                 >
                   <Building2 className="h-5 w-5 text-amber-400 shrink-0" />
                   <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Moldova Banking</div>
+                    <div className="font-semibold text-white">Plată Transfer MDL</div>
                     <div className="text-[11px] text-slate-400">MAIB, VictoriaBank, RunPay</div>
                   </div>
                 </button>
@@ -251,7 +251,7 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                 >
                   <Building2 className="h-5 w-5 text-amber-400 shrink-0" />
                   <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">România Banking</div>
+                    <div className="font-semibold text-white">Plată Transfer RON</div>
                     <div className="text-[11px] text-slate-400">BT, BCR, Revolut Pay</div>
                   </div>
                 </button>

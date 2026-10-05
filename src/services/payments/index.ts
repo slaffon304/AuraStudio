@@ -39,7 +39,7 @@ export interface IPaymentProvider {
  */
 export class StandardPaymentGateway implements IPaymentProvider {
   id = 'standard-gateway';
-  name = 'Online Card & Bank Payments (Moldova / România)';
+  name = 'Online Card & Bank Payments';
 
   isConfigured(): boolean {
     // In production, checks for STRIPE_SECRET_KEY, PAYNET_KEY or NETOPIA_KEY in env

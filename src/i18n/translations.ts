@@ -42,6 +42,13 @@ export const TRANSLATIONS = {
     appQuickMoldova: 'Locuri din Moldova',
     appQuickCouple: 'Portrete în doi',
     appQuickBusiness: 'Portrete business',
+    genderFilterLabel: 'Filtrează după audiență',
+    genderFilterAll: 'Toți',
+    genderFilterWomen: 'Femei',
+    genderFilterMen: 'Bărbați',
+    genderFilterCouples: 'Cupluri',
+    openPinterestStudio: 'Folosește o referință',
+    openCoupleStudio: 'Studio de cuplu',
     bottomHome: 'Acasă',
     bottomMy: 'Lucrările mele',
     bottomProfile: 'Profil',
@@ -51,6 +58,9 @@ export const TRANSLATIONS = {
     profileLanguage: 'Limbă',
     profileCurrency: 'Monedă',
     profileSignOut: 'Deconectare',
+    theme: 'Temă',
+    themeLight: 'Deschisă',
+    themeDark: 'Întunecată',
     createPhotoAction: 'Creează o Fotografie',
     exploreTemplates: 'Descoperă Șabloane',
     myGallery: 'Galeria Mea',
@@ -79,8 +89,8 @@ export const TRANSLATIONS = {
       Birthday: 'Zile de Naștere',
       Travel: 'Călătorii',
       Lifestyle: 'Lifestyle',
-      Moldova: 'Moldova',
-      Romania: 'România'
+      Heritage: 'Castele & Palate',
+      Editorial: 'Editorial'
     },
 
     // Generation Flow
@@ -249,6 +259,13 @@ export const TRANSLATIONS = {
     appQuickMoldova: 'Места Молдовы',
     appQuickCouple: 'Портреты для двоих',
     appQuickBusiness: 'Деловые портреты',
+    genderFilterLabel: 'Фильтр по аудитории',
+    genderFilterAll: 'Все',
+    genderFilterWomen: 'Женщины',
+    genderFilterMen: 'Мужчины',
+    genderFilterCouples: 'Пары',
+    openPinterestStudio: 'Использовать референс',
+    openCoupleStudio: 'Парная студия',
     bottomHome: 'Главная',
     bottomMy: 'Мои работы',
     bottomProfile: 'Профиль',
@@ -258,6 +275,9 @@ export const TRANSLATIONS = {
     profileLanguage: 'Язык',
     profileCurrency: 'Валюта',
     profileSignOut: 'Выйти',
+    theme: 'Тема',
+    themeLight: 'Светлая',
+    themeDark: 'Тёмная',
     createPhotoAction: 'Создать Фото',
     exploreTemplates: 'Каталог Шаблонов',
     myGallery: 'Моя Галерея',
@@ -286,8 +306,8 @@ export const TRANSLATIONS = {
       Birthday: 'День Рождения',
       Travel: 'Путешествия',
       Lifestyle: 'Лайфстайл',
-      Moldova: 'Молдова',
-      Romania: 'Румыния'
+      Heritage: 'Замки и дворцы',
+      Editorial: 'Эдиториал'
     },
 
     // Generation Flow
@@ -456,6 +476,13 @@ export const TRANSLATIONS = {
     appQuickMoldova: 'Moldova locations',
     appQuickCouple: 'Couple portraits',
     appQuickBusiness: 'Business portraits',
+    genderFilterLabel: 'Filter by audience',
+    genderFilterAll: 'All',
+    genderFilterWomen: 'Women',
+    genderFilterMen: 'Men',
+    genderFilterCouples: 'Couples',
+    openPinterestStudio: 'Use a reference',
+    openCoupleStudio: 'Couple studio',
     bottomHome: 'Home',
     bottomMy: 'My creations',
     bottomProfile: 'Profile',
@@ -465,6 +492,9 @@ export const TRANSLATIONS = {
     profileLanguage: 'Language',
     profileCurrency: 'Currency',
     profileSignOut: 'Sign out',
+    theme: 'Theme',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     createPhotoAction: 'Create Photo',
     exploreTemplates: 'Browse Templates',
     myGallery: 'My Gallery',
@@ -493,8 +523,8 @@ export const TRANSLATIONS = {
       Birthday: 'Birthday',
       Travel: 'Travel',
       Lifestyle: 'Lifestyle',
-      Moldova: 'Moldova',
-      Romania: 'Romania'
+      Heritage: 'Castles & Palaces',
+      Editorial: 'Editorial'
     },
 
     // Generation Flow

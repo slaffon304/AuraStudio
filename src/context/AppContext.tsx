@@ -3,13 +3,16 @@ import {
   UserAccount,
   UserPhoto,
   PhotoTemplate,
-  AspectRatio,
   GenerationJob,
   CreditTransaction,
   Language,
   Currency,
   TemplateCategory,
-  CreditPackage
+  CreditPackage,
+  StudioMode,
+  GenderCategory,
+  AspectRatio,
+  Theme
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
 import { CREDIT_PACKAGES } from '../data/creditPackages';
@@ -23,6 +26,9 @@ interface AppContextType {
   setLanguage: (lang: Language) => void;
   currency: Currency;
   setCurrency: (curr: Currency) => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   t: TranslationSchema;
 
   // Supabase Backend Status
@@ -39,7 +45,7 @@ interface AppContextType {
   currentUser: UserAccount | null;
   allUsers: UserAccount[];
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string, country: 'Moldova' | 'Romania') => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, country?: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 
   // Templates (Database is source of truth)
@@ -61,8 +67,28 @@ interface AppContextType {
   // Generation Jobs (Real PostgreSQL asynchronous pipeline)
   jobs: GenerationJob[];
   activeJob: GenerationJob | null;
-  createGenerationJob: (templateId: string, userPhotoUrl: string, userPhotoId: string, aspectRatio?: AspectRatio) => Promise<GenerationJob>;
+  createGenerationJob: (
+    templateId: string,
+    userPhotoUrl: string,
+    userPhotoId?: string,
+    options?: {
+      mode?: StudioMode;
+      customReferenceUrl?: string;
+      customReferencePhotoId?: string;
+      partnerPhotoUrl?: string;
+      partnerPhotoId?: string;
+      aspectRatio?: AspectRatio;
+    }
+  ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
+
+  // Studio Mode & Gender Filter (PifPaf AI Features)
+  studioMode: StudioMode;
+  setStudioMode: (mode: StudioMode) => void;
+  genderFilter: GenderCategory;
+  setGenderFilter: (filter: GenderCategory) => void;
+  openCustomPinterest: () => void;
+  openCoupleStudio: () => void;
 
   // Credits & Transactions
   creditPackages: CreditPackage[];
@@ -118,6 +144,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('aurastudio_curr', curr);
   };
 
+  const [theme, setThemeState] = useState<Theme>(() => {
+    return (localStorage.getItem('aurastudio_theme') as Theme) || 'light';
+  });
+
+  const setTheme = (t: Theme) => {
+    setThemeState(t);
+    localStorage.setItem('aurastudio_theme', t);
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+  }, [theme]);
+
   const t = TRANSLATIONS[language];
 
   useEffect(() => {
@@ -127,8 +177,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Navigation
   const [currentView, setCurrentView] = useState<'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin'>('explore');
 
-  // Supabase Auth Session. Development gets a clearly-labelled, in-memory preview identity
-  // when Supabase has not been provisioned yet; production never creates a local user.
+  // Studio Mode & Gender Filter (PifPaf AI Features)
+  const [studioMode, setStudioMode] = useState<StudioMode>('template');
+  const [genderFilter, setGenderFilter] = useState<GenderCategory>('all');
+
+  // Supabase Auth Session. Development may use a clearly marked in-memory preview identity.
   const isBackendConnected = isSupabaseConfigured();
   const isLocalPreviewMode = import.meta.env.DEV && !isBackendConnected;
   const [session, setSession] = useState<Session | null>(null);
@@ -180,17 +233,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const mapped: PhotoTemplate[] = dbTemplates.map((item: any) => {
             const bundledFallback = INITIAL_TEMPLATES.find((template) => template.id === item.id);
             const databasePreviewUrl = item.preview_image_url || '';
-            // Seed data uses Vite source paths; in production use the bundled asset instead.
+            const databaseCategory = String(item.category_id || bundledFallback?.category || 'Editorial');
+            const normalizedCategory = databaseCategory === 'Moldova' || databaseCategory === 'Romania'
+              ? 'Heritage'
+              : databaseCategory;
             const previewImage = databasePreviewUrl.startsWith('/src/assets/') && bundledFallback
               ? bundledFallback.previewImage
               : databasePreviewUrl;
 
             return {
               id: item.id,
-              category: item.category_id,
+              category: normalizedCategory as TemplateCategory,
               name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
               description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
               previewImage,
+              gender: item.gender || bundledFallback?.gender,
+              beforeImage: item.before_image_url || bundledFallback?.beforeImage,
               prompt: item.prompt,
               negativePrompt: item.negative_prompt,
               aspectRatio: item.aspect_ratio,
@@ -414,7 +472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     email: string,
     password: string,
     name: string,
-    country: 'Moldova' | 'Romania'
+    country: string = 'MDL'
   ): Promise<{ success: boolean; error?: string }> => {
     if (!isBackendConnected) {
       return {
@@ -464,8 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView('explore');
   };
 
-  // Local-only photo intake keeps design work unblocked before Supabase exists.
-  // These in-memory preview photos are never presented as persisted cloud uploads.
+  // Upload user photo to private storage, or keep an in-memory copy in local preview.
   const uploadPhoto = async (dataUrl: string, filename = 'My_Photo.jpg'): Promise<UserPhoto> => {
     if (isLocalPreviewMode && !session) {
       const localPhoto: UserPhoto = {
@@ -478,7 +535,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUserPhotos((prev) => [localPhoto, ...prev]);
       return localPhoto;
     }
-
     if (!session) {
       setIsAuthModalOpen(true);
       throw new Error('Autentificare necesară.');
@@ -520,6 +576,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Quick select template
   const quickSelectTemplate = (template: PhotoTemplate) => {
     setSelectedTemplate(template);
+    setStudioMode('template');
+    setIsCreateModalOpen(true);
+  };
+
+  const openCustomPinterest = () => {
+    const portraitTemplate = templates.find((template) => template.category !== 'Couple' && template.gender !== 'couple') || templates[0] || null;
+    setSelectedTemplate(portraitTemplate);
+    setStudioMode('pinterest');
+    setIsCreateModalOpen(true);
+  };
+
+  const openCoupleStudio = () => {
+    const coupleTmpl = templates.find((t) => t.category === 'Couple' || t.gender === 'couple') || templates[0];
+    setSelectedTemplate(coupleTmpl || null);
+    setStudioMode('couple');
     setIsCreateModalOpen(true);
   };
 
@@ -527,22 +598,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createGenerationJob = async (
     templateId: string,
     userPhotoUrl: string,
-    userPhotoId: string,
-    requestedAspectRatio?: AspectRatio
+    userPhotoId: string = '',
+    options?: {
+      mode?: StudioMode;
+      customReferenceUrl?: string;
+      customReferencePhotoId?: string;
+      partnerPhotoUrl?: string;
+      partnerPhotoId?: string;
+      aspectRatio?: AspectRatio;
+    }
   ): Promise<GenerationJob> => {
     if (isLocalPreviewMode && !session) {
       throw new Error(t.localPreviewGenerationUnavailable);
     }
-
     if (!session || !currentUser) {
       setIsAuthModalOpen(true);
       throw new Error('Te rugăm să te autentifici pentru a genera fotografii.');
     }
 
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) throw new Error('Șablonul nu a fost găsit.');
+    const template = templates.find((t) => t.id === templateId) || {
+      id: templateId || 'custom-pinterest',
+      name: { ro: 'Stil Personalizat', ru: 'Свой стиль', en: 'Custom Style' },
+      previewImage: options?.customReferenceUrl || userPhotoUrl,
+      creditCost: 2,
+      aspectRatio: options?.aspectRatio || '3:4'
+    };
 
-    if (currentUser.creditBalance < template.creditCost) {
+    const cost = template.creditCost;
+
+    if (currentUser.creditBalance < cost) {
       setIsCreditModalOpen(true);
       throw new Error(t.insufficientCredits);
     }
@@ -552,9 +636,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateId,
+        templateId: template.id,
         userPhotoId,
-        aspectRatio: requestedAspectRatio || template.aspectRatio
+        aspectRatio: options?.aspectRatio || template.aspectRatio,
+        mode: options?.mode || studioMode || 'template',
+        customReferencePhotoId: options?.customReferencePhotoId,
+        partnerPhotoId: options?.partnerPhotoId
       })
     });
 
@@ -578,14 +665,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       templatePreview: template.previewImage,
       userPhotoId,
       userPhotoUrl,
+      customReferenceUrl: options?.customReferenceUrl,
+      partnerPhotoUrl: options?.partnerPhotoUrl,
       status: 'completed',
       progress: 100,
       currentStepMessage: t.completed,
       resultImageUrl: data.resultImageUrl,
       providerId: 'gemini-genai',
       providerName: 'Google Gemini Image',
-      creditCost: template.creditCost,
-      aspectRatio: requestedAspectRatio || template.aspectRatio,
+      creditCost: cost,
+      aspectRatio: (options?.aspectRatio || template.aspectRatio) as AspectRatio,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString()
     };
@@ -608,7 +697,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isLocalPreviewMode && !session) {
       return { success: false, message: t.localPreviewPaymentUnavailable };
     }
-
     if (!session) {
       setIsAuthModalOpen(true);
       return { success: false, message: 'Autentificare necesară.' };
@@ -746,6 +834,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLanguage,
         currency,
         setCurrency,
+        theme,
+        setTheme,
+        toggleTheme,
         t,
         isBackendConnected,
         isLocalPreviewMode,
@@ -774,6 +865,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeJob,
         createGenerationJob,
         retryJob,
+        studioMode,
+        setStudioMode,
+        genderFilter,
+        setGenderFilter,
+        openCustomPinterest,
+        openCoupleStudio,
         creditPackages,
         creditTransactions,
         purchaseCredits,

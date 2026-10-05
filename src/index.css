@@ -1,9 +1,17 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   html {
     scroll-behavior: smooth;
     background: #eef1f8;
+    color-scheme: light;
+  }
+
+  html.dark {
+    background: #090a0f;
+    color-scheme: dark;
   }
 
   body {
@@ -11,6 +19,12 @@
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: #eef1f8;
     color: #1d2540;
+    transition: background-color .2s ease, color .2s ease;
+  }
+
+  .dark body {
+    background-color: #090a0f;
+    color: #f1f5f9;
   }
 
   h1, h2, h3, .font-display {
@@ -26,7 +40,7 @@
   }
 }
 
-/* A quiet scrollbar that fits the new light studio surfaces. */
+/* Quiet scrollbars in both color modes. */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -40,6 +54,15 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #bac4d9;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #090a0f;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #222634;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #333a4d;
 }
 
 .no-scrollbar::-webkit-scrollbar {

@@ -46,10 +46,10 @@ export const PhotoLibraryView: React.FC = () => {
         <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto">
           <FolderHeart className="h-8 w-8" />
         </div>
-        <h2 className="text-xl font-bold text-white font-display">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white font-display">
           Biblioteca Ta Privată de Fotografii
         </h2>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+        <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
           Conectează-te pentru a încărca și gestiona fotografiile tale în siguranță pe Supabase Storage.
         </p>
         <button
@@ -66,12 +66,12 @@ export const PhotoLibraryView: React.FC = () => {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/[0.08] pb-6">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             {t.libraryTitle}
           </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-400">
+          <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
             {t.librarySub}
           </p>
         </div>
@@ -97,7 +97,7 @@ export const PhotoLibraryView: React.FC = () => {
       </div>
 
       {/* Privacy Banner */}
-      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 text-xs text-emerald-300">
+      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 text-xs text-emerald-700 dark:text-emerald-300">
         <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-400" />
         <span>{isLocalPreviewMode ? t.localPreviewPhotoNote : t.privacyNote}</span>
       </div>
@@ -113,22 +113,22 @@ export const PhotoLibraryView: React.FC = () => {
       {userPhotos.length === 0 ? (
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="mt-8 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-white/10 bg-white/[0.02] p-16 text-center cursor-pointer hover:border-amber-400/40 transition-colors"
+          className="mt-8 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-300 bg-white p-16 text-center cursor-pointer hover:border-amber-400/60 transition-colors dark:border-white/10 dark:bg-white/[0.02]"
         >
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-400/10 text-amber-300 mb-3">
             <FolderHeart className="h-7 w-7" />
           </div>
-          <h3 className="text-sm font-semibold text-white">{t.noPhotosInLibrary}</h3>
-          <p className="mt-1 text-xs text-slate-400">{t.dropPhotoHere}</p>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{t.noPhotosInLibrary}</h3>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{t.dropPhotoHere}</p>
         </div>
       ) : (
         <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {userPhotos.map((photo) => (
             <div
               key={photo.id}
-              className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#12141c] hover:border-amber-500/40 transition-all shadow-md"
+              className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white hover:border-amber-500/40 transition-all shadow-md dark:border-white/[0.08] dark:bg-[#12141c]"
             >
-              <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-900">
+              <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-100 dark:bg-slate-900">
                 <img
                   src={photo.url}
                   alt={photo.filename}
@@ -161,7 +161,7 @@ export const PhotoLibraryView: React.FC = () => {
 
               {/* Photo filename */}
               <div className="p-2.5">
-                <p className="text-[11px] font-medium text-slate-300 truncate">
+                <p className="text-[11px] font-medium text-slate-800 dark:text-slate-300 truncate">
                   {photo.filename}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5">

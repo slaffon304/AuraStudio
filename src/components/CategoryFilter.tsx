@@ -8,7 +8,7 @@ export const CategoryFilter: React.FC = () => {
   const allCategories: ('All' | TemplateCategory)[] = ['All', ...CATEGORIES_LIST];
 
   return (
-    <div className="no-scrollbar -mx-4 overflow-x-auto border-b border-[#e2e6ef] px-4 sm:mx-0 sm:px-0">
+    <div className="no-scrollbar -mx-4 overflow-x-auto border-b border-[#e2e6ef] px-4 sm:mx-0 sm:px-0 dark:border-white/10">
       <div className="flex min-w-max items-center gap-6 sm:gap-7">
         {allCategories.map((category) => {
           const selected = selectedCategory === category;
@@ -20,7 +20,7 @@ export const CategoryFilter: React.FC = () => {
               onClick={() => setSelectedCategory(category)}
               aria-pressed={selected}
               className={`relative flex min-h-11 items-center whitespace-nowrap text-[12px] font-semibold transition-colors sm:text-[13px] ${
-                selected ? 'text-[#202947]' : 'text-[#9098aa] hover:text-[#4d5873]'
+                selected ? 'text-[#202947] dark:text-white' : 'text-[#9098aa] hover:text-[#4d5873] dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               {label}
