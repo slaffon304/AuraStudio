@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { PhotoTemplate, UserPhoto } from '../types';
-import { SAMPLE_USER_PORTRAITS } from '../data/samplePhotos';
+import { PhotoTemplate } from '../types';
 import {
   X,
   Upload,
@@ -11,10 +10,9 @@ import {
   AlertCircle,
   RefreshCw,
   Download,
-  Image as ImageIcon,
   FolderHeart,
   ArrowRight,
-  ShieldCheck
+  LogIn
 } from 'lucide-react';
 
 interface CreatePhotoModalProps {
@@ -36,6 +34,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     currentUser,
     createGenerationJob,
     setIsCreditModalOpen,
+    setIsAuthModalOpen,
     setCurrentView
   } = useApp();
 
@@ -44,16 +43,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   });
 
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string>(() => {
-    return userPhotos[0]?.url || SAMPLE_USER_PORTRAITS[0].url;
+    return userPhotos[0]?.url || '';
   });
   const [selectedPhotoId, setSelectedPhotoId] = useState<string>(() => {
-    return userPhotos[0]?.id || SAMPLE_USER_PORTRAITS[0].id;
+    return userPhotos[0]?.id || '';
   });
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'library' | 'samples'>('samples');
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
   const [currentStepText, setCurrentStepText] = useState('');
   const [generatedResultUrl, setGeneratedResultUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -63,32 +60,48 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   if (!isOpen) return null;
 
   const currentTemplate = selectedTemplate || templates[0];
-  const hasEnoughCredits = currentUser.creditBalance >= (currentTemplate?.creditCost || 1);
+  const hasEnoughCredits = (currentUser?.creditBalance || 0) >= (currentTemplate?.creditCost || 1);
 
-  // Handle local file upload
+  // Handle local file upload to Supabase Storage
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     setIsUploading(true);
+    setErrorMessage(null);
     try {
       const reader = new FileReader();
       reader.onload = async (event) => {
-        const dataUrl = event.target?.result as string;
-        const uploaded = await uploadPhoto(dataUrl, file.name);
-        setSelectedPhotoUrl(uploaded.url);
-        setSelectedPhotoId(uploaded.id);
-        setActiveTab('library');
-        setIsUploading(false);
+        try {
+          const dataUrl = event.target?.result as string;
+          const uploaded = await uploadPhoto(dataUrl, file.name);
+          setSelectedPhotoUrl(uploaded.url);
+          setSelectedPhotoId(uploaded.id);
+        } catch (uploadErr: any) {
+          setErrorMessage(uploadErr.message || 'Eroare la încărcarea imaginii.');
+        } finally {
+          setIsUploading(false);
+        }
       };
       reader.readAsDataURL(file);
-    } catch (err) {
+    } catch (err: any) {
       setIsUploading(false);
+      setErrorMessage(err.message);
     }
   };
 
-  // Start Generation Job
+  // Start Real Generation Job
   const handleStartGeneration = async () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     if (!currentTemplate) return;
 
     if (!hasEnoughCredits) {
@@ -96,46 +109,34 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       return;
     }
 
+    if (!selectedPhotoUrl) {
+      setErrorMessage('Te rugăm să selectezi o fotografie din biblioteca ta sau să încarci una nouă.');
+      return;
+    }
+
     setIsGenerating(true);
-    setGenerationProgress(5);
-    setCurrentStepText(t.queued);
+    setCurrentStepText(t.progressStepAnalyze);
     setErrorMessage(null);
     setGeneratedResultUrl(null);
 
     try {
+      // Step feedback
+      const progressTimer = setTimeout(() => {
+        setCurrentStepText(t.progressStepLighting);
+      }, 2000);
+
       const job = await createGenerationJob(
         currentTemplate.id,
         selectedPhotoUrl,
         selectedPhotoId
       );
 
-      // Listen for progress updates via local simulation or provider
-      const interval = setInterval(() => {
-        setGenerationProgress((prev) => {
-          if (prev >= 95) {
-            clearInterval(interval);
-            return 95;
-          }
-          if (prev < 30) setCurrentStepText(t.progressStepAnalyze);
-          else if (prev < 65) setCurrentStepText(t.progressStepLighting);
-          else if (prev < 85) setCurrentStepText(t.progressStepLikeness);
-          else setCurrentStepText(t.progressStepRefine);
-
-          return prev + 12;
-        });
-      }, 500);
-
-      // Wait for job completion in memory
-      setTimeout(() => {
-        clearInterval(interval);
-        setGenerationProgress(100);
-        setCurrentStepText(t.completed);
-        // The job result is available
-        setGeneratedResultUrl(job.resultImageUrl || currentTemplate.previewImage);
-      }, 3500);
+      clearTimeout(progressTimer);
+      setCurrentStepText(t.completed);
+      setGeneratedResultUrl(job.resultImageUrl || null);
     } catch (err: any) {
       setIsGenerating(false);
-      setErrorMessage(err?.message || 'A apărut o problemă la inițierea generării');
+      setErrorMessage(err?.message || 'A apărut o problemă la generare. Creditele au fost restituite.');
     }
   };
 
@@ -181,8 +182,28 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 sm:p-6">
-          {/* STATE 1: GENERATION IN PROGRESS OR COMPLETED */}
-          {isGenerating ? (
+          {/* USER NOT LOGGED IN BANNER */}
+          {!currentUser ? (
+            <div className="py-8 text-center space-y-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 mx-auto">
+                <LogIn className="h-6 w-6" />
+              </div>
+              <h3 className="text-base font-bold text-white font-display">
+                Autentifică-te pentru a crea fotografii
+              </h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Fiecare utilizator nou primește 15 credite cadou de bun venit la înregistrare.
+              </p>
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95"
+              >
+                <span>Conectează-te sau Înregistrează-te</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          ) : isGenerating ? (
+            /* STATE 1: REAL ASYNCHRONOUS PIPELINE IN PROGRESS OR COMPLETED */
             <div className="flex flex-col items-center justify-center py-6 text-center">
               {generatedResultUrl ? (
                 // SUCCESS VIEW
@@ -251,21 +272,15 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   </div>
                 </div>
               ) : (
-                // LOADING SPINNER & PROGRESS
+                // REAL PROCESSING SPINNER
                 <div className="space-y-6 max-w-sm mx-auto">
-                  {/* Circular Ambient Loader */}
-                  <div className="relative mx-auto flex h-32 w-32 items-center justify-center">
+                  <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
                     <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-pulse" />
                     <div
                       className="absolute inset-0 rounded-full border-4 border-t-amber-400 border-r-transparent border-b-transparent border-l-transparent animate-spin"
                       style={{ animationDuration: '1.2s' }}
                     />
-                    <div className="flex flex-col items-center">
-                      <Sparkles className="h-6 w-6 text-amber-400 animate-bounce" />
-                      <span className="text-sm font-bold text-white tabular-nums mt-1">
-                        {generationProgress}%
-                      </span>
-                    </div>
+                    <Sparkles className="h-7 w-7 text-amber-400 animate-bounce" />
                   </div>
 
                   <div>
@@ -273,22 +288,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                       {currentStepText || t.processing}
                     </h3>
                     <p className="mt-1 text-xs text-slate-400">
-                      Motorul AuraStudio sintetizează iluminarea europeană și trăsăturile tale.
+                      Serverul AuraStudio procesează cererea prin modelul Google Gemini.
                     </p>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-300 rounded-full"
-                      style={{ width: `${generationProgress}%` }}
-                    />
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            // STATE 2: STEP-BY-STEP CREATION WORKFLOW
+            /* STATE 2: STEP-BY-STEP WORKFLOW */
             <div className="space-y-6">
               {/* Step 1: Selected Template Display */}
               <div>
@@ -333,53 +340,23 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 </div>
               </div>
 
-              {/* Step 2: Choose or Upload User Photo */}
+              {/* Step 2: Choose Photo from Supabase Storage or Upload */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     {t.step2Photo}
                   </label>
 
-                  {/* Tabs: Test Samples | My Library | Upload New */}
-                  <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
-                    <button
-                      onClick={() => setActiveTab('samples')}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                        activeTab === 'samples'
-                          ? 'bg-amber-400 text-slate-950 font-semibold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {t.quickSamplePhotos.split(' ')[0]}
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('library')}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                        activeTab === 'library'
-                          ? 'bg-amber-400 text-slate-950 font-semibold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {t.photoLibrary.split(' ')[0]} ({userPhotos.length})
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab('upload');
-                        fileInputRef.current?.click();
-                      }}
-                      className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                        activeTab === 'upload'
-                          ? 'bg-amber-400 text-slate-950 font-semibold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Upload className="h-3 w-3" />
-                      <span>{t.uploadNewPhoto.split(' ')[0]}</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-amber-400 text-slate-950 hover:brightness-110 transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="h-3 w-3" />
+                    <span>{isUploading ? 'Se încarcă...' : t.uploadNewPhoto}</span>
+                  </button>
                 </div>
 
-                {/* Hidden input for local upload */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -388,17 +365,29 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   className="hidden"
                 />
 
-                {/* Tab Content: Quick Samples */}
-                {activeTab === 'samples' && (
-                  <div className="grid grid-cols-3 gap-3">
-                    {SAMPLE_USER_PORTRAITS.map((sample) => {
-                      const isSelected = selectedPhotoUrl === sample.url;
+                {userPhotos.length === 0 ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center cursor-pointer hover:border-amber-400 hover:bg-white/[0.04] transition-all"
+                  >
+                    <FolderHeart className="h-8 w-8 text-slate-500 mb-2" />
+                    <p className="text-xs font-semibold text-white mb-1">
+                      {isUploading ? 'Se încarcă în Storage...' : 'Nu ai încă fotografii în biblioteca ta'}
+                    </p>
+                    <span className="text-[11px] text-slate-400">
+                      Apasă aici pentru a încărca prima fotografie privată în Supabase Storage.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-52 overflow-y-auto pr-1">
+                    {userPhotos.map((photo) => {
+                      const isSelected = selectedPhotoUrl === photo.url;
                       return (
                         <div
-                          key={sample.id}
+                          key={photo.id}
                           onClick={() => {
-                            setSelectedPhotoUrl(sample.url);
-                            setSelectedPhotoId(sample.id);
+                            setSelectedPhotoUrl(photo.url);
+                            setSelectedPhotoId(photo.id);
                           }}
                           className={`group relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl border-2 transition-all ${
                             isSelected
@@ -407,15 +396,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                           }`}
                         >
                           <img
-                            src={sample.url}
-                            alt={sample.name}
+                            src={photo.url}
+                            alt="User photo"
                             className="h-full w-full object-cover"
                           />
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-center">
-                            <span className="text-[11px] font-medium text-white truncate block">
-                              {sample.name}
-                            </span>
-                          </div>
                           {isSelected && (
                             <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-950">
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -424,74 +408,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                         </div>
                       );
                     })}
-                  </div>
-                )}
-
-                {/* Tab Content: User Photo Library */}
-                {activeTab === 'library' && (
-                  <div>
-                    {userPhotos.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 p-6 text-center">
-                        <FolderHeart className="h-8 w-8 text-slate-500 mb-2" />
-                        <p className="text-xs text-slate-400 mb-3">{t.noPhotosInLibrary}</p>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20"
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                          <span>{t.uploadNewPhoto}</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-52 overflow-y-auto pr-1">
-                        {userPhotos.map((photo) => {
-                          const isSelected = selectedPhotoUrl === photo.url;
-                          return (
-                            <div
-                              key={photo.id}
-                              onClick={() => {
-                                setSelectedPhotoUrl(photo.url);
-                                setSelectedPhotoId(photo.id);
-                              }}
-                              className={`group relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl border-2 transition-all ${
-                                isSelected
-                                  ? 'border-amber-400 ring-2 ring-amber-400/30 shadow-lg'
-                                  : 'border-white/10 hover:border-white/30'
-                              }`}
-                            >
-                              <img
-                                src={photo.url}
-                                alt="User photo"
-                                className="h-full w-full object-cover"
-                              />
-                              {isSelected && (
-                                <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-950">
-                                  <CheckCircle className="h-3.5 w-3.5" />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tab Content: Upload Drop Area */}
-                {activeTab === 'upload' && (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/[0.03] p-8 text-center cursor-pointer hover:border-amber-400 hover:bg-amber-500/[0.06] transition-all"
-                  >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400/10 text-amber-300 mb-3">
-                      <Upload className="h-6 w-6" />
-                    </div>
-                    <span className="text-xs font-semibold text-white">
-                      {isUploading ? 'Se încarcă...' : t.dropPhotoHere}
-                    </span>
-                    <span className="text-[11px] text-slate-400 mt-1">
-                      JPG, PNG, HEIC până la 20MB. Salvare automată în biblioteca privată.
-                    </span>
                   </div>
                 )}
               </div>
@@ -506,7 +422,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
               {/* Bottom Cost & Generation Trigger */}
               <div className="border-t border-white/[0.08] pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                {/* Cost and Balance Note */}
                 <div className="flex items-center gap-2 text-xs">
                   <Coins className="h-4 w-4 text-amber-400" />
                   <span className="text-slate-300">
@@ -514,7 +429,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   </span>
                   <span className="text-slate-600">·</span>
                   <span className="text-slate-400">
-                    Balanță: <strong className="text-amber-300 font-semibold">{currentUser.creditBalance}</strong>
+                    Balanță: <strong className="text-amber-300 font-semibold">{currentUser?.creditBalance || 0}</strong>
                   </span>
                 </div>
 

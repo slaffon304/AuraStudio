@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { providerRegistry } from '../services/providers';
 import { PhotoTemplate, TemplateCategory, AspectRatio, RequiredInputType } from '../types';
@@ -12,15 +12,11 @@ import {
   Coins,
   CheckCircle,
   AlertCircle,
-  RefreshCw,
   Plus,
   Trash2,
   Edit3,
-  Search,
-  ExternalLink,
   Shield,
-  Zap,
-  Sliders
+  CreditCard
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -34,7 +30,9 @@ export const AdminDashboard: React.FC = () => {
     retryJob,
     allUsers,
     adjustCredits,
-    formatPrice
+    formatPrice,
+    currentUser,
+    authToken
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'stats' | 'templates' | 'jobs' | 'users' | 'providers'>('stats');
@@ -43,10 +41,13 @@ export const AdminDashboard: React.FC = () => {
   const [providers, setProviders] = useState(() => providerRegistry.getAllProviders());
   const [activeProviderId, setActiveProviderId] = useState(() => providerRegistry.getActiveProviderId());
 
+  // Real payment transactions from server
+  const [paymentTransactions, setPaymentTransactions] = useState<any[]>([]);
+
   // User credit adjust modal
   const [selectedUserForCredit, setSelectedUserForCredit] = useState<string | null>(null);
   const [creditAdjustmentAmount, setCreditAdjustmentAmount] = useState<number>(10);
-  const [creditAdjustmentReason, setCreditAdjustmentReason] = useState<string>('Bonus promoțional');
+  const [creditAdjustmentReason, setCreditAdjustmentReason] = useState<string>('Bonus acordat de administrator');
 
   // Template edit modal
   const [editingTemplate, setEditingTemplate] = useState<PhotoTemplate | null>(null);
@@ -67,25 +68,48 @@ export const AdminDashboard: React.FC = () => {
     displayOrder: 1
   });
 
-  // Calculate statistics
+  // Load real transactions for admin stats
+  useEffect(() => {
+    if (authToken && currentUser?.role === 'admin') {
+      fetch('/api/admin/transactions', {
+        headers: { Authorization: `Bearer ${authToken}` }
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setPaymentTransactions(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [authToken, currentUser?.role]);
+
+  // Real statistics based strictly on verified database records (NO invented numbers)
   const totalGenerations = jobs.length;
   const completedGenerations = jobs.filter((j) => j.status === 'completed').length;
   const failedGenerations = jobs.filter((j) => j.status === 'failed').length;
   const totalCreditsSpent = jobs.reduce((acc, j) => acc + (j.status === 'completed' ? j.creditCost : 0), 0);
-  // Estimate revenue from credits (assuming ~4 MDL / ~1 RON per credit)
-  const estRevenueMDL = totalCreditsSpent * 4.5 + allUsers.length * 20;
-  const estRevenueRON = estRevenueMDL / 4;
-  const estRevenueEUR = estRevenueMDL / 20;
+  
+  // Real verified revenue strictly from completed payment transactions
+  const verifiedRevenueMDL = paymentTransactions
+    .filter((tx) => tx.status === 'paid' && tx.currency === 'MDL')
+    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+  const verifiedRevenueRON = paymentTransactions
+    .filter((tx) => tx.status === 'paid' && tx.currency === 'RON')
+    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+  const verifiedRevenueEUR = paymentTransactions
+    .filter((tx) => tx.status === 'paid' && tx.currency === 'EUR')
+    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
 
   const handleSetProvider = (providerId: string) => {
-    providerRegistry.setActiveProviderId(providerId);
+    providerRegistry.setDefaultProvider(providerId);
     setActiveProviderId(providerId);
     setProviders(providerRegistry.getAllProviders());
   };
 
-  const handleSaveNewTemplate = (e: React.FormEvent) => {
+  const handleSaveNewTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
-    addTemplate({
+    await addTemplate({
       name: {
         ro: newTemplateForm.nameRo,
         ru: newTemplateForm.nameRu || newTemplateForm.nameRo,
@@ -109,19 +133,33 @@ export const AdminDashboard: React.FC = () => {
     setIsCreatingTemplate(false);
   };
 
-  const handleUpdateTemplateSubmit = (e: React.FormEvent) => {
+  const handleUpdateTemplateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTemplate) return;
-    updateTemplate(editingTemplate);
+    await updateTemplate(editingTemplate);
     setEditingTemplate(null);
   };
 
-  const handleAdjustCreditsSubmit = (e: React.FormEvent) => {
+  const handleAdjustCreditsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserForCredit) return;
-    adjustCredits(selectedUserForCredit, creditAdjustmentAmount, creditAdjustmentReason);
+    await adjustCredits(selectedUserForCredit, creditAdjustmentAmount, creditAdjustmentReason);
     setSelectedUserForCredit(null);
   };
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto mb-4">
+          <Shield className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-white font-display">Acces Restricționat</h2>
+        <p className="mt-2 text-xs text-slate-400 max-w-md mx-auto">
+          Această zonă este rezervată administratorilor AuraStudio. Rolul de administrator este configurat direct în tabela <code>profiles</code> din PostgreSQL.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -130,7 +168,7 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-              Admin Console
+              Admin Console · Supabase Connected
             </span>
             <span className="text-slate-600">·</span>
             <span className="text-xs text-slate-400">Moldova & România Hub</span>
@@ -193,10 +231,9 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* TAB 1: USAGE AND REVENUE STATISTICS */}
+      {/* TAB 1: USAGE AND REVENUE STATISTICS (Strictly Real Data) */}
       {activeTab === 'stats' && (
         <div className="mt-8 space-y-8">
-          {/* Top Metric Cards (Domain Guideline: Clean unboxed stats with tabular-nums) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
               <span className="text-xs font-medium text-slate-400">{t.totalGenerations}</span>
@@ -206,7 +243,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
                 <span className="text-emerald-400 font-semibold">{completedGenerations} finalizate</span>
                 <span>·</span>
-                <span className="text-rose-400">{failedGenerations} erori</span>
+                <span className="text-rose-400">{failedGenerations} eșuate</span>
               </div>
             </div>
 
@@ -216,27 +253,27 @@ export const AdminDashboard: React.FC = () => {
                 {allUsers.length}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Moldova & România
+                Înregistrați în baza Supabase
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
-              <span className="text-xs font-medium text-slate-400">Credite Consumate</span>
+              <span className="text-xs font-medium text-slate-400">Credite Consumate Real</span>
               <div className="mt-2 text-2xl sm:text-3xl font-display font-bold text-amber-400 tabular-nums">
                 {totalCreditsSpent}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Echivalent ~{Math.round(totalCreditsSpent * 1.5)} minute GPU
+                Generări finalizate cu succes
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
-              <span className="text-xs font-medium text-slate-400">{t.totalRevenue} (Est.)</span>
+              <span className="text-xs font-medium text-slate-400">{t.totalRevenue} (Încasări Reale)</span>
               <div className="mt-2 text-2xl sm:text-3xl font-display font-bold text-emerald-400 tabular-nums">
-                {formatPrice(Math.round(estRevenueMDL), Math.round(estRevenueRON), Math.round(estRevenueEUR))}
+                {formatPrice(verifiedRevenueMDL, verifiedRevenueRON, verifiedRevenueEUR)}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Card, MAIB, BT, Revolut
+                Tranzacții plătite verificate
               </div>
             </div>
           </div>
@@ -265,12 +302,12 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: TEMPLATES MANAGEMENT */}
+      {/* TAB 2: TEMPLATES MANAGEMENT (PostgreSQL Source of Truth) */}
       {activeTab === 'templates' && (
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white font-display">
-              Toate Șabloanele Active & Inactive ({templates.length})
+              Șabloane din Baza de Date ({templates.length})
             </h2>
 
             <button
@@ -282,7 +319,6 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Table of Templates */}
           <div className="overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#12141c]">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-white/[0.08] bg-white/[0.02] text-slate-400 uppercase tracking-wider font-semibold">
@@ -356,12 +392,12 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: JOBS QUEUE MONITOR */}
+      {/* TAB 3: REAL JOBS MONITOR */}
       {activeTab === 'jobs' && (
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white font-display">
-              Monitor Generări Asincrone în Timp Real ({jobs.length})
+              Joburi de Generare din PostgreSQL ({jobs.length})
             </h2>
           </div>
 
@@ -371,9 +407,9 @@ export const AdminDashboard: React.FC = () => {
                 <tr>
                   <th className="py-3 px-4">Job ID</th>
                   <th className="py-3 px-4">Șablon</th>
-                  <th className="py-3 px-4">Utilizator</th>
-                  <th className="py-3 px-4">Status & Progres</th>
+                  <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Engine AI</th>
+                  <th className="py-3 px-4">Credite</th>
                   <th className="py-3 px-4">Data</th>
                   <th className="py-3 px-4 text-right">Acțiuni</th>
                 </tr>
@@ -382,20 +418,17 @@ export const AdminDashboard: React.FC = () => {
                 {jobs.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-slate-500">
-                      Nicio generare în coadă.
+                      Nicio generare înregistrată în baza de date.
                     </td>
                   </tr>
                 ) : (
                   jobs.map((job) => (
                     <tr key={job.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                        {job.id.substring(0, 10)}...
+                        {job.id.substring(0, 8)}...
                       </td>
                       <td className="py-2.5 px-4 font-semibold text-white">
                         {job.templateName}
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-400">
-                        {job.userId}
                       </td>
                       <td className="py-2.5 px-4">
                         <span
@@ -409,12 +442,14 @@ export const AdminDashboard: React.FC = () => {
                         >
                           {job.status === 'completed' && <CheckCircle className="h-3 w-3" />}
                           {job.status === 'failed' && <AlertCircle className="h-3 w-3" />}
-                          {job.status === 'processing' && <RefreshCw className="h-3 w-3 animate-spin" />}
-                          <span>{job.status} ({job.progress}%)</span>
+                          <span>{job.status}</span>
                         </span>
                       </td>
                       <td className="py-2.5 px-4 text-[11px] text-slate-400">
                         {job.providerId}
+                      </td>
+                      <td className="py-2.5 px-4 text-[11px] text-amber-400 font-semibold">
+                        {job.creditCost}
                       </td>
                       <td className="py-2.5 px-4 text-[11px] text-slate-400">
                         {new Date(job.createdAt).toLocaleTimeString()}
@@ -438,7 +473,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: USERS & CREDITS ADJUSTMENT */}
+      {/* TAB 4: USERS & ATOMIC CREDITS ADJUSTMENT */}
       {activeTab === 'users' && (
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between">
@@ -460,38 +495,48 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05] text-slate-300">
-                {allUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2.5 px-4 font-semibold text-white">
-                      {u.name}
-                    </td>
-                    <td className="py-2.5 px-4 text-slate-400">{u.email}</td>
-                    <td className="py-2.5 px-4">{u.country}</td>
-                    <td className="py-2.5 px-4">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-4 font-bold text-amber-300 text-sm tabular-nums">
-                      {u.creditBalance}
-                    </td>
-                    <td className="py-2.5 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedUserForCredit(u.id)}
-                        className="rounded-lg bg-amber-400/10 border border-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-400/20"
-                      >
-                        {t.adjustCredits}
-                      </button>
+                {allUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-500">
+                      Niciun utilizator găsit. Înregistrează un cont nou pentru a testa.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  allUsers.map((u) => (
+                    <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-2.5 px-4 font-semibold text-white">
+                        {u.name}
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-400">{u.email}</td>
+                      <td className="py-2.5 px-4">{u.country}</td>
+                      <td className="py-2.5 px-4">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          u.role === 'admin' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 font-bold text-amber-300 text-sm tabular-nums">
+                        {u.creditBalance}
+                      </td>
+                      <td className="py-2.5 px-4 text-right">
+                        <button
+                          onClick={() => setSelectedUserForCredit(u.id)}
+                          className="rounded-lg bg-amber-400/10 border border-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-400/20"
+                        >
+                          {t.adjustCredits}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* TAB 5: AI PROVIDER ENGINE ABSTRACTION LAYER */}
+      {/* TAB 5: AI PROVIDERS ABSTRACTION LAYER */}
       {activeTab === 'providers' && (
         <div className="mt-8 space-y-6">
           <div className="border-b border-white/5 pb-4">
@@ -499,7 +544,7 @@ export const AdminDashboard: React.FC = () => {
               Arhitectura Stratului de Abstracție AI (Image & Video Providers)
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              Conform specificațiilor arhitecturale, AuraStudio folosește un strat decuplat de generare AI care permite comutarea instantanee între furnizori fără rescrierea aplicației.
+              AuraStudio folosește un strat decuplat de generare AI care permite comutarea instantanee între furnizori fără rescrierea aplicației.
             </p>
           </div>
 
@@ -566,7 +611,7 @@ export const AdminDashboard: React.FC = () => {
               {t.adjustCredits}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Adaugă sau scade credite manual pentru utilizatorul selectat.
+              Adaugă sau scade credite în mod atomic prin funcția securizată din PostgreSQL.
             </p>
 
             <form onSubmit={handleAdjustCreditsSubmit} className="mt-5 space-y-4">
@@ -622,7 +667,7 @@ export const AdminDashboard: React.FC = () => {
               {t.addNewTemplate}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Creează un șablon nou pe baza unui prompt și a unei imagini de prezentare.
+              Inserează un șablon nou în tabela PostgreSQL <code>templates</code>.
             </p>
 
             <form onSubmit={handleSaveNewTemplate} className="mt-5 space-y-4">
@@ -740,7 +785,7 @@ export const AdminDashboard: React.FC = () => {
                   type="submit"
                   className="rounded-xl bg-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 hover:brightness-110"
                 >
-                  Creează Șablonul
+                  Salvează în Baza de Date
                 </button>
               </div>
             </form>
@@ -844,7 +889,7 @@ export const AdminDashboard: React.FC = () => {
                   type="submit"
                   className="rounded-xl bg-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 hover:brightness-110"
                 >
-                  Salvează Modificările
+                  Salvează în Supabase
                 </button>
               </div>
             </form>

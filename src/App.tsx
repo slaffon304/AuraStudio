@@ -56,10 +56,19 @@ const MainAppContent: React.FC = () => {
     return matchesCategory && matchesSearch;
   });
 
+  const { isBackendConnected } = useApp();
+
   return (
     <div className="min-h-screen bg-[#090a0f] text-slate-100 flex flex-col pb-20 md:pb-10">
       {/* Top Header */}
       <Header />
+
+      {/* Supabase Setup Notice Banner (Only shown if env vars are pending) */}
+      {!isBackendConnected && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-300">
+          <span>ℹ️ Mod Configurare Backend: Pentru a conecta baza de date Supabase și Auth în producție, configurează <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code> și <code>SUPABASE_SERVICE_ROLE_KEY</code> în variabilele de mediu.</span>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1">

@@ -3,12 +3,12 @@ import { useApp } from '../context/AppContext';
 import {
   X,
   Coins,
-  CheckCircle,
   CreditCard,
   Building2,
   Smartphone,
   ShieldCheck,
   History,
+  AlertCircle,
   Sparkles
 } from 'lucide-react';
 import { Currency } from '../types';
@@ -30,16 +30,17 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
     creditPackages,
     creditTransactions,
     purchaseCredits,
-    formatPrice
+    formatPrice,
+    setIsAuthModalOpen
   } = useApp();
 
   const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    creditPackages.find((p) => p.isPopular)?.id || creditPackages[0].id
+    creditPackages.find((p) => p.isPopular)?.id || creditPackages[0]?.id || 'pack-creator'
   );
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank_md' | 'bank_ro' | 'apple_pay'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
   if (!isOpen) return null;
@@ -47,24 +48,19 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
   const selectedPackage = creditPackages.find((p) => p.id === selectedPackageId) || creditPackages[0];
 
   const handleCheckout = async () => {
-    setIsProcessing(true);
-    try {
-      const methodName =
-        paymentMethod === 'card'
-          ? 'Card Bancar Visa/Mastercard'
-          : paymentMethod === 'bank_md'
-          ? 'MAIB / VictoriaBank (Moldova)'
-          : paymentMethod === 'bank_ro'
-          ? 'Banca Transilvania / BCR / Revolut'
-          : 'Apple Pay';
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
 
-      await new Promise((r) => setTimeout(r, 800));
-      await purchaseCredits(selectedPackage.id, methodName);
-      setSuccessMessage(t.purchaseSuccessTitle);
-      setTimeout(() => {
-        setSuccessMessage(null);
-        onClose();
-      }, 1500);
+    setIsProcessing(true);
+    setNoticeMessage(null);
+
+    try {
+      const res = await purchaseCredits(selectedPackage.id, paymentMethod);
+      if (!res.success && res.message) {
+        setNoticeMessage(res.message);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -103,16 +99,19 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
               {t.currentBalance}
             </span>
             <span className="text-base font-bold text-amber-300 tabular-nums">
-              {currentUser.creditBalance} {t.credits}
+              {currentUser?.creditBalance || 0} {t.credits}
             </span>
           </div>
         </div>
 
-        {/* Success Alert */}
-        {successMessage && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs font-semibold text-emerald-300">
-            <CheckCircle className="h-4 w-4" />
-            <span>{successMessage}</span>
+        {/* Informative notice if online payments are pending live keys */}
+        {noticeMessage && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold">Notificare Gateway Plăți:</div>
+              <p className="mt-0.5 text-amber-200/90">{noticeMessage}</p>
+            </div>
           </div>
         )}
 
@@ -136,13 +135,15 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
           </div>
 
           {/* Transaction History Button */}
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-400 transition-colors"
-          >
-            <History className="h-3.5 w-3.5" />
-            <span>{t.transactionHistoryTitle}</span>
-          </button>
+          {currentUser && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-400 transition-colors"
+            >
+              <History className="h-3.5 w-3.5" />
+              <span>{t.transactionHistoryTitle}</span>
+            </button>
+          )}
         </div>
 
         {/* VIEW A: PACKAGES AND CHECKOUT */}
@@ -165,7 +166,6 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                         : 'border-white/10 bg-white/[0.02] hover:border-white/20'
                     }`}
                   >
-                    {/* Badge if Popular or Value */}
                     {pkg.isPopular && (
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase tracking-wider bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-md">
                         {t.popularBadge}
@@ -221,8 +221,8 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                 >
                   <CreditCard className="h-5 w-5 text-amber-400 shrink-0" />
                   <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Card Bancar (Visa / MC)</div>
-                    <div className="text-[11px] text-slate-400">MDL, RON, EUR · Securizat 3D</div>
+                    <div className="font-semibold text-white">Card Bancar (Visa / Mastercard)</div>
+                    <div className="text-[11px] text-slate-400">MDL, RON, EUR · 3D Secure</div>
                   </div>
                 </button>
 
@@ -277,29 +277,29 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
             <div className="border-t border-white/[0.08] pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>Creditele sunt adăugate instant pe cont.</span>
+                <span>Tranzacție securizată de serverul AuraStudio.</span>
               </div>
 
               <button
                 onClick={handleCheckout}
-                disabled={isProcessing}
+                disabled={isProcessing || !selectedPackage}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-8 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 disabled:opacity-50"
               >
                 <Sparkles className="h-4 w-4" />
                 <span>
                   {isProcessing
-                    ? 'Procesare plată...'
+                    ? 'Procesare...'
                     : `${t.instantCheckout} (${formatPrice(
-                        selectedPackage.priceMDL,
-                        selectedPackage.priceRON,
-                        selectedPackage.priceEUR
+                        selectedPackage?.priceMDL || 0,
+                        selectedPackage?.priceRON || 0,
+                        selectedPackage?.priceEUR || 0
                       )})`}
                 </span>
               </button>
             </div>
           </div>
         ) : (
-          /* VIEW B: TRANSACTION HISTORY */
+          /* VIEW B: REAL TRANSACTION HISTORY FROM SUPABASE */
           <div className="mt-6 space-y-4">
             <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
               {creditTransactions.length === 0 ? (

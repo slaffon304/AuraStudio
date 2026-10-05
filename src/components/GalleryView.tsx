@@ -5,20 +5,52 @@ import {
   Download,
   Sparkles,
   RefreshCw,
-  Clock,
   CheckCircle,
   AlertCircle,
   Sliders,
   X,
-  ExternalLink,
-  Coins
+  Coins,
+  LogIn
 } from 'lucide-react';
 
 export const GalleryView: React.FC = () => {
-  const { jobs, t, retryJob, quickSelectTemplate, templates, setIsCreateModalOpen } = useApp();
+  const {
+    jobs,
+    t,
+    retryJob,
+    quickSelectTemplate,
+    templates,
+    setIsCreateModalOpen,
+    currentUser,
+    setIsAuthModalOpen
+  } = useApp();
+
   const [comparingJob, setComparingJob] = useState<GenerationJob | null>(null);
   const [filter, setFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [sliderPosition, setSliderPosition] = useState(50);
+
+  if (!currentUser) {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center space-y-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto">
+          <Sparkles className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-white font-display">
+          Galeria Ta Privată de Creații
+        </h2>
+        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          Autentifică-te pentru a vizualiza fotografiile generate salvate pe contul tău.
+        </p>
+        <button
+          onClick={() => setIsAuthModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95"
+        >
+          <LogIn className="h-4 w-4" />
+          <span>Autentifică-te în cont</span>
+        </button>
+      </div>
+    );
+  }
 
   const filteredJobs = jobs.filter((j) => {
     if (filter === 'completed') return j.status === 'completed';
@@ -166,7 +198,7 @@ export const GalleryView: React.FC = () => {
                   )}
 
                   {/* Hover Quick Actions */}
-                  {isCompleted && (
+                  {isCompleted && job.resultImageUrl && (
                     <div className="absolute inset-x-3 bottom-3 flex items-center gap-2 opacity-95 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setComparingJob(job)}
@@ -218,12 +250,16 @@ export const GalleryView: React.FC = () => {
 
                   {/* Footer actions */}
                   <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs">
-                    <button
-                      onClick={() => setComparingJob(job)}
-                      className="text-slate-400 hover:text-amber-400 transition-colors"
-                    >
-                      Vezi detalii
-                    </button>
+                    {job.resultImageUrl ? (
+                      <button
+                        onClick={() => setComparingJob(job)}
+                        className="text-slate-400 hover:text-amber-400 transition-colors"
+                      >
+                        Vezi detalii
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-500">Fără rezultat</span>
+                    )}
 
                     {template && (
                       <button
@@ -273,18 +309,20 @@ export const GalleryView: React.FC = () => {
                 className="absolute inset-0 h-full w-full object-cover"
               />
 
-              {/* Before Image (Clipped Left by Slider) */}
-              <div
-                className="absolute inset-0 overflow-hidden"
-                style={{ width: `${sliderPosition}%` }}
-              >
-                <img
-                  src={comparingJob.userPhotoUrl}
-                  alt="Original"
-                  className="absolute inset-0 h-full w-full object-cover max-w-none"
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
+              {/* Before Image (Clipped Left by Slider if available) */}
+              {comparingJob.userPhotoUrl ? (
+                <div
+                  className="absolute inset-0 overflow-hidden"
+                  style={{ width: `${sliderPosition}%` }}
+                >
+                  <img
+                    src={comparingJob.userPhotoUrl}
+                    alt="Original"
+                    className="absolute inset-0 h-full w-full object-cover max-w-none"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+              ) : null}
 
               {/* Slider Line Divider */}
               <div

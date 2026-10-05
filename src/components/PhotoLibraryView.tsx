@@ -1,14 +1,19 @@
 import React, { useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Upload, Trash2, Sparkles, FolderHeart, ShieldCheck, CheckCircle } from 'lucide-react';
+import { Upload, Trash2, Sparkles, FolderHeart, ShieldCheck, LogIn, ArrowRight } from 'lucide-react';
 
 export const PhotoLibraryView: React.FC = () => {
-  const { userPhotos, uploadPhoto, deletePhoto, t, setIsCreateModalOpen } = useApp();
+  const { userPhotos, uploadPhoto, deletePhoto, currentUser, setIsAuthModalOpen, t, setIsCreateModalOpen } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -17,6 +22,29 @@ export const PhotoLibraryView: React.FC = () => {
     };
     reader.readAsDataURL(file);
   };
+
+  if (!currentUser) {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center space-y-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto">
+          <FolderHeart className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-white font-display">
+          Biblioteca Ta Privată de Fotografii
+        </h2>
+        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          Conectează-te pentru a încărca și gestiona fotografiile tale în siguranță pe Supabase Storage.
+        </p>
+        <button
+          onClick={() => setIsAuthModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95"
+        >
+          <LogIn className="h-4 w-4" />
+          <span>Autentifică-te pentru a accesa biblioteca</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
