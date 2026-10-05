@@ -262,33 +262,89 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// Helper to convert dataURL or fetch image buffer to Gemini inlineData
+async function urlToGenerativePart(url: string) {
+  if (!url) return null;
+  if (url.startsWith('data:image/')) {
+    const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    if (match) {
+      return {
+        inlineData: {
+          mimeType: match[1],
+          data: match[2]
+        }
+      };
+    }
+  }
+  try {
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const buffer = await resp.arrayBuffer();
+      const contentType = resp.headers.get('content-type') || 'image/jpeg';
+      return {
+        inlineData: {
+          mimeType: contentType,
+          data: Buffer.from(buffer).toString('base64')
+        }
+      };
+    }
+  } catch (err) {
+    console.warn('Could not parse or fetch image for generative part:', err);
+  }
+  return null;
+}
+
 // ====================================================================
 // GENERATION JOBS PIPELINE (Real AI + Atomic Credit Ledger)
 // ====================================================================
 
 // Create and trigger AI generation job
 app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
-  const { templateId, userPhotoUrl, aspectRatio } = req.body;
+  const {
+    templateId,
+    userPhotoUrl,
+    aspectRatio,
+    mode = 'template',
+    customReferenceUrl,
+    partnerPhotoUrl,
+    isPack = false
+  } = req.body;
   const userId = req.user!.id;
 
-  if (!templateId) {
-    return res.status(400).json({ error: 'Parametrul templateId este obligatoriu.' });
+  if (!templateId && !customReferenceUrl) {
+    return res.status(400).json({ error: 'Parametrul templateId sau customReferenceUrl este obligatoriu.' });
   }
 
   if (!userPhotoUrl) {
     return res.status(400).json({ error: 'Fotografia utilizatorului este obligatorie.' });
   }
 
-  // 1. Fetch template from database to obtain genuine cost and prompt
-  const { data: template, error: tmplError } = await supabaseAdmin
-    .from('templates')
-    .select('*')
-    .eq('id', templateId)
-    .single();
-
-  if (tmplError || !template) {
-    return res.status(404).json({ error: 'Șablonul specificat nu există.' });
+  // 1. Fetch template from database or create dynamic Pinterest reference config
+  let template: any = null;
+  if (templateId) {
+    const { data: tmpl, error: tmplError } = await supabaseAdmin
+      .from('templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
+    if (!tmplError && tmpl) {
+      template = tmpl;
+    }
   }
+
+  if (!template) {
+    template = {
+      id: 'custom-pinterest',
+      name_ro: 'Referință Pinterest Personalizată',
+      name_ru: 'Кастомный референс из Pinterest',
+      name_en: 'Custom Pinterest Reference',
+      credit_cost: 2,
+      aspect_ratio: aspectRatio || '3:4',
+      prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
+    };
+  }
+
+  const effectiveCreditCost = isPack ? Math.max(3, template.credit_cost + 2) : template.credit_cost;
 
   // Check if AI provider is configured
   if (!process.env.GEMINI_API_KEY || !aiClient) {
@@ -310,7 +366,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         progress: 10,
         current_step_message: 'Verificare credite și autorizare...',
         provider_id: 'gemini-genai',
-        credit_cost: template.credit_cost,
+        credit_cost: effectiveCreditCost,
         aspect_ratio: aspectRatio || template.aspect_ratio || '3:4'
       })
       .select('id')
@@ -326,14 +382,13 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     const { data: newBalance, error: deductError } = await supabaseAdmin
       .rpc('deduct_credits_for_generation', {
         p_user_id: userId,
-        p_amount: template.credit_cost,
+        p_amount: effectiveCreditCost,
         p_template_id: template.id,
-        p_template_name: template.name_ro,
+        p_template_name: template.name_ro || 'Photo Shoot',
         p_job_id: jobId
       });
 
     if (deductError) {
-      // If insufficient credits or failed, update job to failed
       await supabaseAdmin
         .from('generation_jobs')
         .update({
@@ -344,7 +399,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
       return res.status(402).json({
         error: 'Credite insuficiente. Încarcă-ți contul pentru a genera această fotografie.',
-        required: template.credit_cost
+        required: effectiveCreditCost
       });
     }
 
@@ -363,22 +418,37 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     let imageBase64Data: string | null = null;
     let mimeType = 'image/jpeg';
 
-    const fullPrompt = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
+    let promptContext = template.prompt;
+    if (mode === 'pinterest' || customReferenceUrl) {
+      promptContext = `Transfer the exact identity, facial structure, eyes, and skin details of the person in the user's selfie into the aesthetic style, outfit, lighting, pose, and background mood of the reference image. Maintain 100% facial resemblance while achieving pristine European editorial fashion photography, cinematic 85mm lens, 4k ultra-hd.`;
+    } else if (mode === 'couple' && partnerPhotoUrl) {
+      promptContext = `Create a breathtaking romantic couple photoshoot featuring both individuals from the provided photos. Person 1 is on the left and Person 2 is on the right, embracing warmly in a luxurious romantic setting: ${template.prompt}. Pristine facial resemblance for both persons, cinematic golden hour lighting, 85mm lens.`;
+    } else {
+      promptContext = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
+    }
 
-    const contentsParts: any[] = [{ text: fullPrompt }];
+    const contentsParts: any[] = [{ text: promptContext }];
 
-    // If userPhoto is dataURL, parse inlineData
-    if (userPhotoUrl.startsWith('data:image/')) {
-      const match = userPhotoUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (match) {
-        contentsParts.push({
-          inlineData: {
-            mimeType: match[1],
-            data: match[2]
-          }
-        });
+    // Primary user selfie
+    const primaryPart = await urlToGenerativePart(userPhotoUrl);
+    if (primaryPart) {
+      contentsParts.push(primaryPart);
+    }
+
+    // Secondary reference (Pinterest image or Couple partner photo)
+    if (customReferenceUrl) {
+      const refPart = await urlToGenerativePart(customReferenceUrl);
+      if (refPart) {
+        contentsParts.push(refPart);
+      }
+    } else if (partnerPhotoUrl) {
+      const partnerPart = await urlToGenerativePart(partnerPhotoUrl);
+      if (partnerPart) {
+        contentsParts.push(partnerPart);
       }
     }
+
+    const targetRatio = (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4';
 
     const genResponse = await aiClient.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
@@ -387,7 +457,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       },
       config: {
         imageConfig: {
-          aspectRatio: (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4'
+          aspectRatio: targetRatio
         }
       }
     });

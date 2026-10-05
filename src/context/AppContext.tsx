@@ -8,7 +8,10 @@ import {
   Language,
   Currency,
   TemplateCategory,
-  CreditPackage
+  CreditPackage,
+  StudioMode,
+  GenderCategory,
+  AspectRatio
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
 import { CREDIT_PACKAGES } from '../data/creditPackages';
@@ -59,8 +62,27 @@ interface AppContextType {
   // Generation Jobs (Real PostgreSQL asynchronous pipeline)
   jobs: GenerationJob[];
   activeJob: GenerationJob | null;
-  createGenerationJob: (templateId: string, userPhotoUrl: string, userPhotoId: string) => Promise<GenerationJob>;
+  createGenerationJob: (
+    templateId: string,
+    userPhotoUrl: string,
+    userPhotoId?: string,
+    options?: {
+      mode?: StudioMode;
+      customReferenceUrl?: string;
+      partnerPhotoUrl?: string;
+      isPack?: boolean;
+      aspectRatio?: AspectRatio;
+    }
+  ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
+
+  // Studio Mode & Gender Filter (PifPaf AI Features)
+  studioMode: StudioMode;
+  setStudioMode: (mode: StudioMode) => void;
+  genderFilter: GenderCategory;
+  setGenderFilter: (filter: GenderCategory) => void;
+  openCustomPinterest: () => void;
+  openCoupleStudio: () => void;
 
   // Credits & Transactions
   creditPackages: CreditPackage[];
@@ -107,6 +129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Navigation
   const [currentView, setCurrentView] = useState<'explore' | 'create' | 'gallery' | 'library' | 'admin'>('explore');
+
+  // Studio Mode & Gender Filter (PifPaf AI Features)
+  const [studioMode, setStudioMode] = useState<StudioMode>('template');
+  const [genderFilter, setGenderFilter] = useState<GenderCategory>('all');
 
   // Supabase Auth Session
   const [session, setSession] = useState<Session | null>(null);
@@ -471,6 +497,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Quick select template
   const quickSelectTemplate = (template: PhotoTemplate) => {
     setSelectedTemplate(template);
+    setStudioMode('template');
+    setIsCreateModalOpen(true);
+  };
+
+  const openCustomPinterest = () => {
+    setSelectedTemplate(null);
+    setStudioMode('pinterest');
+    setIsCreateModalOpen(true);
+  };
+
+  const openCoupleStudio = () => {
+    const coupleTmpl = templates.find((t) => t.category === 'Couple' || t.gender === 'couple') || templates[0];
+    setSelectedTemplate(coupleTmpl || null);
+    setStudioMode('couple');
     setIsCreateModalOpen(true);
   };
 
@@ -478,17 +518,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createGenerationJob = async (
     templateId: string,
     userPhotoUrl: string,
-    userPhotoId: string
+    userPhotoId: string = '',
+    options?: {
+      mode?: StudioMode;
+      customReferenceUrl?: string;
+      partnerPhotoUrl?: string;
+      isPack?: boolean;
+      aspectRatio?: AspectRatio;
+    }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
       setIsAuthModalOpen(true);
       throw new Error('Te rugăm să te autentifici pentru a genera fotografii.');
     }
 
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) throw new Error('Șablonul nu a fost găsit.');
+    const template = templates.find((t) => t.id === templateId) || {
+      id: templateId || 'custom-pinterest',
+      name: { ro: 'Stil Personalizat', ru: 'Свой стиль', en: 'Custom Style' },
+      previewImage: options?.customReferenceUrl || userPhotoUrl,
+      creditCost: 2,
+      aspectRatio: options?.aspectRatio || '3:4'
+    };
 
-    if (currentUser.creditBalance < template.creditCost) {
+    const cost = options?.isPack ? Math.max(3, template.creditCost + 2) : template.creditCost;
+
+    if (currentUser.creditBalance < cost) {
       setIsCreditModalOpen(true);
       throw new Error(t.insufficientCredits);
     }
@@ -498,10 +552,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        templateId,
+        templateId: template.id,
         userPhotoUrl,
         userPhotoId,
-        aspectRatio: template.aspectRatio
+        aspectRatio: options?.aspectRatio || template.aspectRatio,
+        mode: options?.mode || studioMode || 'template',
+        customReferenceUrl: options?.customReferenceUrl,
+        partnerPhotoUrl: options?.partnerPhotoUrl,
+        isPack: options?.isPack
       })
     });
 
@@ -525,14 +583,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       templatePreview: template.previewImage,
       userPhotoId,
       userPhotoUrl,
+      customReferenceUrl: options?.customReferenceUrl,
+      partnerPhotoUrl: options?.partnerPhotoUrl,
+      isPack: options?.isPack,
       status: 'completed',
       progress: 100,
       currentStepMessage: t.completed,
       resultImageUrl: data.resultImageUrl,
       providerId: 'gemini-genai',
       providerName: 'Google Gemini Image',
-      creditCost: template.creditCost,
-      aspectRatio: template.aspectRatio,
+      creditCost: cost,
+      aspectRatio: (options?.aspectRatio || template.aspectRatio) as AspectRatio,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString()
     };
@@ -716,6 +777,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeJob,
         createGenerationJob,
         retryJob,
+        studioMode,
+        setStudioMode,
+        genderFilter,
+        setGenderFilter,
+        openCustomPinterest,
+        openCoupleStudio,
         creditPackages,
         creditTransactions,
         purchaseCredits,

@@ -5,8 +5,35 @@ import pelesImg from '../assets/images/template_romania_peles_1791140786996.jpg'
 import execImg from '../assets/images/template_business_exec_1791140798767.jpg';
 import fashionImg from '../assets/images/template_fashion_milan_1791140809021.jpg';
 import goldenImg from '../assets/images/template_insta_golden_1791140819273.jpg';
+import coupleImg from '../assets/images/couple_editorial_sunset_1791210833350.jpg';
 
 export const INITIAL_TEMPLATES: PhotoTemplate[] = [
+  // Couple Featured Template
+  {
+    id: 'couple-chișinău-sunset',
+    name: {
+      ro: 'Romantism de Cuplu Editorial',
+      ru: 'Романтичный парный портрет',
+      en: 'Romantic Couple Editorial'
+    },
+    description: {
+      ro: 'Ședință foto de poveste pentru cupluri la apus de soare, iluminare caldă de cinema și ținută elegantă.',
+      ru: 'Атмосферная фотосессия для двоих на закате, тёплый кинематографичный свет и элегантный стиль.',
+      en: 'Dreamy sunset editorial photoshoot for two, warm cinematic golden hour light, high-fashion styling.'
+    },
+    category: 'Couple',
+    gender: 'couple',
+    previewImage: coupleImg,
+    prompt: 'Cinematic romantic couple editorial photoshoot at sunset, stylish couple embracing warmly, soft golden hour rim light, 85mm f/1.4 lens, European city terrace background, luxury editorial romance.',
+    negativePrompt: 'blurry, bad anatomy, deformed hands, awkward poses',
+    aspectRatio: '3:4',
+    creditCost: 2,
+    requiredInputType: 'couple_portrait',
+    isActive: true,
+    displayOrder: 0,
+    tags: ['couple', 'romance', 'sunset', 'wedding', 'love']
+  },
+
   // 1. Moldova Category (Featured)
   {
     id: 'moldova-orheiul-vechi',
@@ -21,6 +48,7 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
       en: 'Elegant editorial portrait against the dramatic limestone cliffs and canyon of Orheiul Vechi, Moldova.'
     },
     category: 'Moldova',
+    gender: 'unisex',
     previewImage: orheiImg,
     prompt: 'High-end editorial fashion portrait at sunset overlooking the panoramic limestone cliffs and river bend of Orheiul Vechi in Moldova, golden hour lighting, 85mm lens, authentic travel vogue styling.',
     negativePrompt: 'blurry, bad anatomy, overexposed, low quality, oversaturated cartoon',
@@ -47,7 +75,7 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
     },
     category: 'Romania',
     previewImage: pelesImg,
-    prompt: 'Aristocratic cinematic portrait in front of the neo-renaissance timbered Peleș Castle in Sinaia Romania, tailored dark luxury coat, soft misty mountain lighting, Vogue fashion editorial.',
+    prompt: 'Aristocratic cinematic portrait in front of the neo-renaissance timbered Peleș Castle in Sinaia Romania, tailored dark luxury coat, soft misty mountain lighting, high-fashion editorial.',
     negativePrompt: 'deformed, low quality, plastic face, blurry background noise',
     aspectRatio: '3:4',
     creditCost: 2,
@@ -86,9 +114,9 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
   {
     id: 'fashion-milan-streetwear',
     name: {
-      ro: 'Street Style Milan Vogue',
-      ru: 'Миланский Street Style Vogue',
-      en: 'Milan Street Style Vogue'
+      ro: 'Street Style Milan Editorial',
+      ru: 'Миланский Street Style',
+      en: 'Milan Street Style Editorial'
     },
     description: {
       ro: 'Stil cosmopolit pe străzile pavate din Milano, palton camel de lux și ochelari de soare iconici.',

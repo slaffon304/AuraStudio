@@ -6,6 +6,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { TemplateDetailModal } from './components/TemplateDetailModal';
 import { CreatePhotoModal } from './components/CreatePhotoModal';
+import { BeforeAfterSlider } from './components/BeforeAfterSlider';
 import { GalleryView } from './components/GalleryView';
 import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { CreditPurchaseModal } from './components/CreditPurchaseModal';
@@ -20,11 +21,14 @@ import {
   Zap,
   Camera,
   Layers,
-  Heart
+  Heart,
+  Users,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const {
+    language,
     t,
     currentView,
     setCurrentView,
@@ -36,24 +40,38 @@ const MainAppContent: React.FC = () => {
     setIsCreditModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
-    quickSelectTemplate
+    quickSelectTemplate,
+    openCustomPinterest,
+    openCoupleStudio,
+    genderFilter,
+    setGenderFilter
   } = useApp();
 
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter templates by category and search
+  // Filter templates by category, gender, and search
   const visibleTemplates = templates.filter((tmpl) => {
     if (!tmpl.isActive) return false;
     const matchesCategory =
       selectedCategory === 'All' || tmpl.category === selectedCategory;
+    const matchesGender =
+      genderFilter === 'all'
+        ? true
+        : genderFilter === 'women'
+        ? tmpl.gender === 'women' || tmpl.gender === 'unisex' || !tmpl.gender
+        : genderFilter === 'men'
+        ? tmpl.gender === 'men' || tmpl.gender === 'unisex'
+        : genderFilter === 'couples'
+        ? tmpl.category === 'Couple' || tmpl.gender === 'couple'
+        : true;
     const matchesSearch =
       searchQuery === '' ||
       tmpl.name.ro.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tmpl.name.ru.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tmpl.name.en.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tmpl.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesGender && matchesSearch;
   });
 
   const { isBackendConnected } = useApp();
@@ -101,29 +119,34 @@ const MainAppContent: React.FC = () => {
                   {t.heroSubhead}
                 </p>
 
-                {/* Primary CTA and Search */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
+                {/* Primary CTA and PifPaf Quick Actions */}
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-xl mx-auto">
                   <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-8 py-3.5 text-xs font-bold text-slate-950 shadow-xl shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-7 py-3 text-xs font-bold text-slate-950 shadow-xl shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all"
                   >
                     <Sparkles className="h-4 w-4" />
                     <span>{t.createPhotoAction}</span>
                   </button>
 
-                  <div className="w-full sm:w-64 relative">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Caută șablon..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-10 pr-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400/80 transition-colors"
-                    />
-                  </div>
+                  <button
+                    onClick={openCustomPinterest}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-xs font-bold text-amber-300 hover:bg-amber-500/20 active:scale-95 transition-all"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    <span>{language === 'ru' ? 'Свой Pinterest-референс' : 'Referință Pinterest'}</span>
+                  </button>
+
+                  <button
+                    onClick={openCoupleStudio}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-5 py-3 text-xs font-bold text-rose-300 hover:bg-rose-500/20 active:scale-95 transition-all"
+                  >
+                    <Users className="h-4 w-4" />
+                    <span>{language === 'ru' ? 'Для пары' : 'Pentru Cuplu'}</span>
+                  </button>
                 </div>
 
-                {/* 3 Value Pillars (Zero-pill text separators) */}
+                {/* 3 Value Pillars */}
                 <div className="pt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-slate-400">
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
@@ -132,7 +155,7 @@ const MainAppContent: React.FC = () => {
                   <span aria-hidden="true" className="text-slate-700 hidden sm:inline">·</span>
                   <div className="flex items-center gap-1.5">
                     <Zap className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Rezultat gata în 5 secunde</span>
+                    <span>Rezultat gata în 10 secunde</span>
                   </div>
                   <span aria-hidden="true" className="text-slate-700 hidden sm:inline">·</span>
                   <div className="flex items-center gap-1.5">
@@ -143,8 +166,55 @@ const MainAppContent: React.FC = () => {
               </div>
             </section>
 
+            {/* INTERACTIVE BEFORE/AFTER SLIDER (PIFPAF SHOWCASE) */}
+            <BeforeAfterSlider
+              language={language}
+              onSelectTemplate={(tmplId) => {
+                const found = templates.find((t) => t.id === tmplId);
+                if (found) quickSelectTemplate(found);
+                else setIsCreateModalOpen(true);
+              }}
+              onOpenCustomPinterest={openCustomPinterest}
+            />
+
             {/* TEMPLATES SHOWCASE SECTION */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+              {/* Audience / Gender Filter Bar (PifPaf Quick Filter) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-2xl border border-white/10">
+                  {[
+                    { id: 'all', ro: 'Toate', ru: 'Все', en: 'All' },
+                    { id: 'women', ro: 'Pentru Ea', ru: 'Для неё', en: 'Women' },
+                    { id: 'men', ro: 'Pentru El', ru: 'Для него', en: 'Men' },
+                    { id: 'couples', ro: 'Cupluri', ru: 'Пары', en: 'Couples' }
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setGenderFilter(filter.id as any)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        genderFilter === filter.id
+                          ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {filter[language]}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Bar */}
+                <div className="w-full sm:w-64 relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Caută stil sau oraș..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400/80 transition-colors"
+                  />
+                </div>
+              </div>
+
               {/* Category Filter Bar */}
               <div className="mb-6">
                 <CategoryFilter />
@@ -157,6 +227,7 @@ const MainAppContent: React.FC = () => {
                   <button
                     onClick={() => {
                       setSearchQuery('');
+                      setGenderFilter('all');
                     }}
                     className="mt-3 text-xs text-amber-400 hover:underline"
                   >
@@ -179,7 +250,7 @@ const MainAppContent: React.FC = () => {
           </div>
         )}
 
-        {/* VIEW 2: GALLERY */}
+        {/* VIEW 2: USER GALLERY */}
         {currentView === 'gallery' && <GalleryView />}
 
         {/* VIEW 3: PHOTO LIBRARY */}
@@ -208,17 +279,24 @@ const MainAppContent: React.FC = () => {
         </div>
       </footer>
 
+      {/* Bottom Floating Navigation (Mobile-first app feel) */}
+      <BottomNav />
+
       {/* MODALS */}
       <CreatePhotoModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        initialTemplate={previewTemplate}
       />
 
       <TemplateDetailModal
         template={previewTemplate}
-        isOpen={!!previewTemplate}
+        isOpen={Boolean(previewTemplate)}
         onClose={() => setPreviewTemplate(null)}
-        onSelect={(tmpl) => quickSelectTemplate(tmpl)}
+        onSelect={(tmpl) => {
+          setPreviewTemplate(null);
+          quickSelectTemplate(tmpl);
+        }}
       />
 
       <CreditPurchaseModal
@@ -230,17 +308,16 @@ const MainAppContent: React.FC = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
-
-      {/* MOBILE THUMB-ZONE BOTTOM NAVIGATION */}
-      <BottomNav />
     </div>
   );
 };
 
-export default function App() {
+export function App() {
   return (
     <AppProvider>
       <MainAppContent />
     </AppProvider>
   );
 }
+
+export default App;

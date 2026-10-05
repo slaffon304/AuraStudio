@@ -78,7 +78,7 @@ VALUES
     'Аристократичный портрет перед неоренессансным королевским замком Пелеш в Синае.',
     'Aristocratic regal portrait in front of the fairytale neo-renaissance Peleș Castle in Sinaia, Romania.',
     '/src/assets/images/template_romania_peles_1791140786996.jpg',
-    'Aristocratic cinematic portrait in front of the neo-renaissance timbered Peleș Castle in Sinaia Romania, tailored dark luxury coat, soft misty mountain lighting, Vogue fashion editorial.',
+    'Aristocratic cinematic portrait in front of the neo-renaissance timbered Peleș Castle in Sinaia Romania, tailored dark luxury coat, soft misty mountain lighting, high-fashion editorial.',
     'deformed, low quality, plastic face, blurry background noise',
     '3:4', 2, 'single_portrait', 'gemini-genai',
     ARRAY['romania', 'royalty', 'castle', 'luxury', 'carpathians'],
@@ -99,7 +99,7 @@ VALUES
   ),
   (
     'fashion-milan-streetwear', 'Fashion',
-    'Street Style Milan Vogue', 'Миланский Street Style Vogue', 'Milan Street Style Vogue',
+    'Street Style Milan Editorial', 'Миланский Street Style', 'Milan Street Style Editorial',
     'Stil cosmopolit pe străzile pavate din Milano, palton camel de lux și ochelari de soare iconici.',
     'Космополитичный уличный стиль на брусчатке Милана, роскошное пальто и трендовые аксессуары.',
     'Cosmopolitan high-fashion street portrait on European cobblestone avenues, camel trench coat, effortless chic.',

@@ -29,12 +29,17 @@ export interface LocalizedString {
   en: string;
 }
 
+export type StudioMode = 'template' | 'pinterest' | 'couple';
+export type GenderCategory = 'all' | 'women' | 'men' | 'couples';
+
 export interface PhotoTemplate {
   id: string;
   name: LocalizedString;
   description: LocalizedString;
   category: TemplateCategory;
+  gender?: 'women' | 'men' | 'unisex' | 'couple';
   previewImage: string;
+  beforeImage?: string;
   prompt: string;
   negativePrompt?: string;
   aspectRatio: AspectRatio;
@@ -54,6 +59,13 @@ export interface UserPhoto {
   uploadedAt: string;
   width?: number;
   height?: number;
+  label?: string; // e.g. "Me", "Partner"
+}
+
+export interface SavedFace {
+  id: string;
+  label: string;
+  photoUrl: string;
 }
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -66,10 +78,14 @@ export interface GenerationJob {
   templatePreview: string;
   userPhotoId: string;
   userPhotoUrl: string;
+  customReferenceUrl?: string;
+  partnerPhotoUrl?: string;
+  isPack?: boolean;
   status: JobStatus;
   progress: number; // 0 - 100
   currentStepMessage?: string;
   resultImageUrl?: string;
+  resultImagesPack?: string[];
   errorMessage?: string;
   providerId: string;
   providerName: string;
@@ -137,7 +153,11 @@ export interface AIProviderMeta {
 export interface GenerationRequestPayload {
   templateId: string;
   userPhotoUrl: string;
-  userPhotoId: string;
-  aspectRatio: AspectRatio;
+  userPhotoId?: string;
+  aspectRatio?: AspectRatio;
   customPromptOverride?: string;
+  mode?: StudioMode;
+  customReferenceUrl?: string;
+  partnerPhotoUrl?: string;
+  isPack?: boolean;
 }
