@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -6,42 +6,38 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { TemplateDetailModal } from './components/TemplateDetailModal';
 import { CreatePhotoModal } from './components/CreatePhotoModal';
-import { BeforeAfterSlider } from './components/BeforeAfterSlider';
-import { CarouselSection } from './components/CarouselSection';
 import { GalleryView } from './components/GalleryView';
 import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { CreditPurchaseModal } from './components/CreditPurchaseModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
-import { PhotoTemplate } from './types';
+import { PhotoTemplate, TemplateCategory } from './types';
 import {
-  Sparkles,
-  Search,
+  ArrowLeft,
   ArrowRight,
-  ShieldCheck,
-  Zap,
-  Camera,
-  Layers,
-  Heart,
-  Users,
-  Image as ImageIcon,
-  Flame,
-  Briefcase,
-  Shirt,
-  Coffee,
-  Castle,
-  CheckCircle2,
-  HelpCircle,
+  ArrowUpRight,
+  BriefcaseBusiness,
+  Check,
   ChevronDown,
-  LayoutGrid,
-  Columns3,
-  Coins
+  Heart,
+  ImagePlus,
+  MapPin,
+  Search,
+  LogOut,
+  Sparkles,
+  UserRound,
+  WandSparkles
 } from 'lucide-react';
 
-const MainAppContent: React.FC = () => {
+type Navigate = (path: '/' | '/app') => void;
+
+const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   const {
-    language,
     t,
+    language,
+    currency,
+    setLanguage,
+    setCurrency,
     currentView,
     setCurrentView,
     templates,
@@ -53,888 +49,492 @@ const MainAppContent: React.FC = () => {
     setIsCreditModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
+    isLocalPreviewMode,
+    currentUser,
+    signOut,
     quickSelectTemplate,
     openCustomPinterest,
     openCoupleStudio,
     genderFilter,
-    setGenderFilter,
-    currency,
-    isBackendConnected,
-    creditPackages
+    setGenderFilter
   } = useApp();
 
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'carousels' | 'grid'>('carousels');
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const trendingRailRef = useRef<HTMLDivElement>(null);
+  const railDragStartRef = useRef<{ x: number; left: number } | null>(null);
+  const railWasDraggedRef = useRef(false);
 
-  // Filter templates by gender and search query
-  const applyFilters = (list: PhotoTemplate[]) => {
-    return list.filter((tmpl) => {
-      if (!tmpl.isActive) return false;
-      const matchesGender =
-        genderFilter === 'all'
-          ? true
-          : genderFilter === 'women'
-          ? tmpl.gender === 'women' || tmpl.gender === 'unisex' || !tmpl.gender
-          : genderFilter === 'men'
-          ? tmpl.gender === 'men' || tmpl.gender === 'unisex'
-          : genderFilter === 'couples'
-          ? tmpl.category === 'Couple' || tmpl.gender === 'couple'
-          : true;
-      const matchesSearch =
-        searchQuery === '' ||
-        tmpl.name.ro.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tmpl.name.ru.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tmpl.name.en.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tmpl.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tmpl.tags && tmpl.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())));
-      return matchesGender && matchesSearch;
+  const activeTemplates = useMemo(() => templates.filter((template) => template.isActive), [templates]);
+  const visibleTemplates = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    return activeTemplates.filter((template) => {
+      const matchesCategory = selectedCategory === 'All' || template.category === selectedCategory;
+      const matchesGender = genderFilter === 'all'
+        || (genderFilter === 'women' && (template.gender === 'women' || template.gender === 'unisex' || !template.gender))
+        || (genderFilter === 'men' && (template.gender === 'men' || template.gender === 'unisex'))
+        || (genderFilter === 'couples' && (template.category === 'Couple' || template.gender === 'couple'));
+      const searchableText = [
+        template.name.ro,
+        template.name.ru,
+        template.name.en,
+        template.description.ro,
+        template.description.ru,
+        template.description.en,
+        template.category,
+        ...(template.tags || [])
+      ].join(' ').toLocaleLowerCase();
+      return matchesCategory && matchesGender && (!query || searchableText.includes(query));
     });
+  }, [activeTemplates, selectedCategory, searchQuery, genderFilter]);
+
+  const trendingTemplates = useMemo(() => {
+    const matchesGender = (template: PhotoTemplate) => genderFilter === 'all'
+      || (genderFilter === 'women' && (template.gender === 'women' || template.gender === 'unisex' || !template.gender))
+      || (genderFilter === 'men' && (template.gender === 'men' || template.gender === 'unisex'))
+      || (genderFilter === 'couples' && (template.category === 'Couple' || template.gender === 'couple'));
+    const curated = activeTemplates.filter((template) => matchesGender(template) && (
+      template.category === 'Trending' || (template.tags || []).some((tag) => tag.toLowerCase() === 'trending')
+    ));
+    const rest = activeTemplates.filter((template) => matchesGender(template) && !curated.some((item) => item.id === template.id));
+    return [...curated, ...rest].slice(0, 8);
+  }, [activeTemplates, genderFilter]);
+
+  const quickCollections: { category: TemplateCategory; label: string; image: PhotoTemplate | undefined; icon: React.ElementType }[] = [
+    { category: 'Heritage', label: t.appQuickMoldova, image: activeTemplates.find((template) => template.category === 'Heritage'), icon: MapPin },
+    { category: 'Couple', label: t.appQuickCouple, image: activeTemplates.find((template) => template.category === 'Couple'), icon: Heart },
+    { category: 'Business', label: t.appQuickBusiness, image: activeTemplates.find((template) => template.category === 'Business'), icon: BriefcaseBusiness }
+  ];
+
+  const scrollTrending = (direction: -1 | 1) => {
+    trendingRailRef.current?.scrollBy({ left: direction * 260, behavior: 'smooth' });
   };
 
-  const activeTemplates = templates.filter((t) => t.isActive);
+  const startTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    railDragStartRef.current = { x: event.clientX, left: trendingRailRef.current?.scrollLeft || 0 };
+    railWasDraggedRef.current = false;
+  };
 
-  // Carousel 1: Trending & Pinterest Aesthetics
-  const trendingTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Trending' ||
-        t.category === 'Instagram' ||
-        t.tags?.includes('trending') ||
-        t.tags?.includes('oldmoney')
-    )
-  );
-
-  // Carousel 2: Business & Executive Studio
-  const businessTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Business' ||
-        t.tags?.includes('business') ||
-        t.tags?.includes('studio') ||
-        t.id === 'studio-minimalist-bw'
-    )
-  );
-
-  // Carousel 3: High Fashion & Street Style
-  const fashionTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Fashion' ||
-        t.tags?.includes('fashion') ||
-        t.tags?.includes('vogue') ||
-        t.category === 'Editorial'
-    )
-  );
-
-  // Carousel 4: Couple & Romance
-  const coupleTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Couple' ||
-        t.gender === 'couple' ||
-        t.tags?.includes('couple') ||
-        t.tags?.includes('romance')
-    )
-  );
-
-  // Carousel 5: Lifestyle & Parisian Cafe
-  const lifestyleTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Lifestyle' ||
-        t.category === 'Travel' ||
-        t.tags?.includes('cafe') ||
-        t.tags?.includes('coffee')
-    )
-  );
-
-  // Carousel 6: Castles, Gala & Heritage
-  const heritageTemplates = applyFilters(
-    activeTemplates.filter(
-      (t) =>
-        t.category === 'Heritage' ||
-        t.tags?.includes('castle') ||
-        t.tags?.includes('gala') ||
-        t.tags?.includes('luxury')
-    )
-  );
-
-  const isSearching = searchQuery.trim().length > 0;
-  const isFilteringSpecificCategory = selectedCategory !== 'All';
-
-  const currentCategoryTemplates = applyFilters(
-    activeTemplates.filter((t) =>
-      isFilteringSpecificCategory ? t.category === selectedCategory : true
-    )
-  );
-
-  // Localized texts
-  const heroCopy = {
-    ro: {
-      headline: 'Ședințe Foto de Revistă ca pe Pinterest în 10 Secunde',
-      subhead: 'Fără fotografi, make-up sau setări complicate. Încarcă un selfie și obține instant cadre de studio cu iluminare impecabilă.',
-      trendingTitle: '🔥 Tendențe Pinterest & Instagram',
-      trendingSub: 'Cele mai căutate stiluri estetice și virale ale momentului',
-      businessTitle: '💼 Business & Portret Profesional',
-      businessSub: 'Portrete curate pentru LinkedIn, CV, site personal și presă',
-      fashionTitle: '👗 High Fashion & Street Style',
-      fashionSub: 'Estetică editorială inspirată din marile reviste de modă',
-      coupleTitle: '🤍 Ședințe de Cuplu & Romance',
-      coupleSub: 'Fotografii calde de poveste pentru tine și persoana iubită',
-      lifestyleTitle: '☕ Lifestyle & Cafenele Chic',
-      lifestyleSub: 'Cadre naturale din cafenele, terase însorite și călătorii',
-      heritageTitle: '🏰 Castele & Evenimente de Gală',
-      heritageSub: 'Locații aristocratice, palate istorice și ținute black-tie',
-      customBtn: 'Pinterest Reference',
-      coupleBtn: 'Pentru Cuplu',
-      howTitle: 'Cum Funcționează',
-      howSub: 'Trei pași simpli până la noua ta fotografie de profil',
-      step1Title: 'Încarcă 1 Selfie',
-      step1Desc: 'Orice fotografie clară de pe telefon, făcută la lumină naturală.',
-      step2Title: 'Alege Stilul sau Referința',
-      step2Desc: 'Alege un șablon din studio sau încarcă orice poză de pe Pinterest/Instagram.',
-      step3Title: 'Descarcă în 10 Secunde',
-      step3Desc: 'Inteligența artificială păstrează 100% trăsăturile feței tale în rezoluție Ultra-HD.',
-      packTitle: 'Pachete Foto (Photo Packs)',
-      packSub: 'Creează o serie completă de 4 fotografii în același stil cu unghiuri și ipostaze diferite.',
-      pricingTitle: 'Tarife Transparente',
-      pricingSub: 'Plătești doar când generezi. Fără abonamente ascunse.',
-      faqTitle: 'Întrebări Frecvente',
-      carouselsMode: 'Карусели',
-      gridMode: 'Сетка'
-    },
-    ru: {
-      headline: 'Студийные фотосессии как из Pinterest за 10 секунд',
-      subhead: 'Без фотографов, визажистов и сложных промптов. Загрузи своё фото и примерь десятки студийных образов в 1 клик.',
-      trendingTitle: '🔥 Тренды Pinterest и Instagram',
-      trendingSub: 'Самые популярные и вирусные образы этой недели',
-      businessTitle: '💼 Бизнес, резюме и LinkedIn',
-      businessSub: 'Безупречные студийные портреты для карьеры, резюме и экспертного блога',
-      fashionTitle: '👗 High Fashion и Street Style',
-      fashionSub: 'Высокая мода, стильный глянец и миланский стритстайл',
-      coupleTitle: '🤍 Парные и романтические фотосессии',
-      coupleSub: 'Романтичные истории любви для двоих на закате',
-      lifestyleTitle: '☕ Уютный лайфстайл и кофе',
-      lifestyleSub: 'Атмосферные террасы парижских бистро, утро с кофе и путешествия',
-      heritageTitle: '🏰 Замки, дворцы и вечерний шик',
-      heritageSub: 'Королевская эстетика, старинные замки и вечерние гала-приёмы',
-      customBtn: 'Свой референс из Pinterest',
-      coupleBtn: 'Для пары',
-      howTitle: 'Как это работает',
-      howSub: 'Три простых шага до идеальной фотосессии',
-      step1Title: '1. Загрузи 1 фото',
-      step1Desc: 'Подойдет обычное селфи с телефона при дневном свете. Без обработки.',
-      step2Title: '2. Выбери стиль или референс',
-      step2Desc: 'Выбери готовый образ из карусели или вставь картинку из Pinterest/Instagram.',
-      step3Title: '3. Получи фото за 10 секунд',
-      step3Desc: 'ИИ создаст реалистичный кадр с идеальным светом и 100% сохранением твоих черт.',
-      packTitle: 'Фотопаки (серия из 4 кадров)',
-      packSub: 'Хотите разнообразие ракурсов? Выберите фотопак: 4 гармоничных снимка в едином стиле.',
-      pricingTitle: 'Честные тарифы без подписок',
-      pricingSub: 'Покупайте кредиты когда удобно. 2 первые генерации бесплатно.',
-      faqTitle: 'Часто задаваемые вопросы',
-      carouselsMode: 'Карусели',
-      gridMode: 'Сетка'
-    },
-    en: {
-      headline: 'Studio-Quality Photoshoots Like Pinterest in 10 Seconds',
-      subhead: 'No photographers, makeup artists or complex prompts needed. Upload your selfie and get magazine-grade portraits in seconds.',
-      trendingTitle: '🔥 Trending on Pinterest & Instagram',
-      trendingSub: 'The most popular and viral aesthetic looks of the week',
-      businessTitle: '💼 Executive, Resume & LinkedIn',
-      businessSub: 'Clean and confident studio headshots for LinkedIn and personal websites',
-      fashionTitle: '👗 High Fashion & Street Style',
-      fashionSub: 'High-fashion editorial looks inspired by world fashion capitals',
-      coupleTitle: '🤍 Couples & Romance',
-      coupleSub: 'Dreamy romantic photoshoot for you and your partner',
-      lifestyleTitle: '☕ Cozy Lifestyle & Artisan Coffee',
-      lifestyleSub: 'Natural candid moments from European bistros and travels',
-      heritageTitle: '🏰 Castles, Palaces & Royal Gala',
-      heritageSub: 'Aristocratic palaces and timeless historic locations',
-      customBtn: 'Pinterest Reference',
-      coupleBtn: 'Couple Shoot',
-      howTitle: 'How It Works',
-      howSub: 'Three simple steps to your magazine-grade portraits',
-      step1Title: '1. Upload 1 Selfie',
-      step1Desc: 'Any clear smartphone selfie in natural lighting will do.',
-      step2Title: '2. Pick Style or Reference',
-      step2Desc: 'Choose from curated styles or upload any inspiration from Pinterest.',
-      step3Title: '3. Get Photos in 10 Seconds',
-      step3Desc: 'Studio lighting and 100% facial likeness preserved in 4K Ultra-HD.',
-      packTitle: 'Photo Packs (4-Photo Series)',
-      packSub: 'Want multiple angles? Generate a series of 4 matching photos in one style.',
-      pricingTitle: 'Simple Transparent Pricing',
-      pricingSub: 'Pay only when you generate. No recurring monthly subscriptions.',
-      faqTitle: 'Frequently Asked Questions',
-      carouselsMode: 'Carousels',
-      gridMode: 'Grid'
+  const moveTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    const start = railDragStartRef.current;
+    if (!start || event.buttons !== 1 || !trendingRailRef.current) return;
+    const distance = event.clientX - start.x;
+    if (Math.abs(distance) > 4) railWasDraggedRef.current = true;
+    if (railWasDraggedRef.current) {
+      event.preventDefault();
+      trendingRailRef.current.scrollLeft = start.left - distance;
     }
-  }[language];
+  };
 
-  // FAQ Items
-  const faqItems = {
-    ro: [
-      {
-        q: 'Cât de mult va semăna fotografia generată cu mine?',
-        a: 'Modelul nostru AI analizează cu precizie structura feței tale (ochi, buze, pomeți, privire) și o integrează perfect în stilul ales. Rezultatul arată natural, fără efect de plastic sau deformări.'
-      },
-      {
-        q: 'Sunt fotografiile mele private și în siguranță?',
-        a: 'Da, 100%. Imaginile încărcate și generate sunt stocate exclusiv în contul tău privat securizat și nu sunt niciodată făcute publice sau utilizate pentru antrenarea modelelor publice.'
-      },
-      {
-        q: 'Pot încărca propria mea poză de pe Pinterest sau Instagram?',
-        a: 'Absolut! Folosește modul „Pinterest Reference”. Încarcă poza ta și fotografia stilului dorit de pe Pinterest sau Instagram, iar AI-ul va transfera compoziția și iluminarea pe fața ta.'
-      },
-      {
-        q: 'Ce înseamnă versiunea gratuită?',
-        a: 'Primești 2 generări gratuite pentru a testa calitatea. Imaginile gratuite includ un subtil marcaj de apă. La activarea pachetelor de credite, fotografiile se descarcă în Ultra-HD 4K fără watermark.'
-      },
-      {
-        q: 'Cum pot plăti?',
-        a: 'Acceptăm carduri bancare (Visa, Mastercard), transferuri locale și Apple Pay în MDL, RON sau EUR.'
-      }
-    ],
-    ru: [
-      {
-        q: 'Насколько сгенерированное фото будет похоже на меня?',
-        a: 'Наш ИИ детально анализирует черты лица, форму глаз, скулы и улыбку, органично встраивая вашу внешность в выбранный стиль. Результат выглядит как настоящая фотосессия с профессиональным светом.'
-      },
-      {
-        q: 'Безопасны ли загруженные фотографии?',
-        a: 'Полностью безопасны. Ваши исходные селфи и готовые результаты доступны только в вашем личном кабинете. Мы не передаем файлы третьим лицам и не обучаем на них открытые модели.'
-      },
-      {
-        q: 'Можно ли использовать референс из Pinterest или Instagram?',
-        a: 'Да! Для этого есть режим «Свой референс из Pinterest». Загрузите своё фото и картинку-образец, и ИИ перенесет композицию, одежду и свет на ваш портрет.'
-      },
-      {
-        q: 'Как работает бесплатный пробный период?',
-        a: 'Каждому новому пользователю доступны первые 2 фотосессии бесплатно с легким водяным знаком. С пакетами кредитов вы получаете Ultra-HD качество без водяных знаков.'
-      },
-      {
-        q: 'Какие способы оплаты поддерживаются?',
-        a: 'Банковские карты (Visa, Mastercard), Apple Pay и прямые банковские переводы в MDL, RON или EUR.'
-      }
-    ],
-    en: [
-      {
-        q: 'How realistic will the generated photo look like me?',
-        a: 'Our AI model carefully maps your facial geometry, eye shape, and proportions, blending them naturally into the chosen aesthetic with authentic studio lighting.'
-      },
-      {
-        q: 'Are my uploaded photos safe and private?',
-        a: '100% private. Your uploaded photos and results belong strictly to your account and are never shared or used to train public AI models.'
-      },
-      {
-        q: 'Can I upload a custom inspiration photo from Pinterest?',
-        a: 'Yes! Use the "Pinterest Reference" mode. Upload your selfie and any reference picture, and the AI will replicate the lighting and pose.'
-      },
-      {
-        q: 'Is there a free trial?',
-        a: 'You get 2 trial generations with a subtle watermark to see the quality for yourself. Credit packages unlock crystal-clear 4K downloads with no watermark.'
-      },
-      {
-        q: 'What payment methods are supported?',
-        a: 'All major credit and debit cards, Apple Pay, and local bank transfers in MDL, RON, or EUR.'
-      }
-    ]
-  }[language];
+  const endTrendingDrag = () => {
+    railDragStartRef.current = null;
+    window.setTimeout(() => { railWasDraggedRef.current = false; }, 0);
+  };
+
+  const preventClickAfterDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (railWasDraggedRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  const openPrivateView = (view: 'gallery' | 'library' | 'profile') => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setCurrentView(view);
+  };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 flex flex-col pb-20 md:pb-10 transition-colors">
-      {/* Top Header */}
-      <Header />
-
-      {/* Supabase Notice Banner (If env vars pending) */}
-      {!isBackendConnected && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-800 dark:text-amber-300">
-          <span>⚠️ Supabase is not configured. Configurează <code>VITE_SUPABASE_URL</code> și <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> pentru a activa salvarea utilizatorilor.</span>
+    <div className="min-h-screen bg-[#eef1f8] pb-28 text-[#1d2540] transition-colors md:pb-8 dark:bg-[#090a0f] dark:text-slate-100">
+      <Header variant="app" onNavigateHome={() => navigate('/')} onNavigateApp={() => navigate('/app')} />
+      {isLocalPreviewMode && (
+        <div role="status" className="mx-auto mt-3 max-w-[1180px] px-4 text-[10px] leading-relaxed text-indigo-700 sm:px-6 dark:text-indigo-300">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-400/20 dark:bg-indigo-400/[0.06]">
+            {t.localPreviewBanner}
+          </div>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1">
-        {/* VIEW 1: EXPLORE & BROWSE */}
+      <main className="mx-auto w-full max-w-[1180px] px-4 sm:px-6">
         {currentView === 'explore' && (
           <div>
-            {/* HERO SECTION (Clean, White / Light Aesthetic, High-Conversion) */}
-            <section className="relative overflow-hidden border-b border-slate-200/80 dark:border-white/[0.06] bg-[#fafafa] dark:bg-gradient-to-b dark:from-[#11131c] dark:via-[#0b0c12] dark:to-[#090a0f] pt-12 pb-14 sm:pt-16 sm:pb-20 px-4 sm:px-6 lg:px-8">
-              {/* Subtle ambient gradient */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-amber-400/[0.07] dark:bg-amber-500/[0.05] rounded-full blur-3xl pointer-events-none" />
-
-              <div className="relative max-w-4xl mx-auto text-center space-y-6">
-                {/* Badge */}
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/10 shadow-2xs text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  <span>
-                    {language === 'ru' && 'Студийные фотосессии нового поколения'}
-                    {language === 'ro' && 'Studio foto AI de generație nouă'}
-                    {language === 'en' && 'Next-Generation AI Photo Studio'}
-                  </span>
-                </div>
-
-                {/* Primary Headline */}
-                <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white max-w-3xl mx-auto leading-[1.12]">
-                  {heroCopy.headline}
-                </h1>
-
-                {/* Subtitle */}
-                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
-                  {heroCopy.subhead}
-                </p>
-
-                {/* Primary CTA and Fast Action Buttons */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-xl mx-auto">
-                  <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-500 px-7 py-3.5 text-xs font-bold text-white dark:text-slate-950 shadow-xl shadow-slate-900/10 dark:shadow-amber-500/25 active:scale-95 transition-all"
-                  >
-                    <Sparkles className="h-4 w-4 text-amber-400 dark:text-slate-950" />
-                    <span>{t.createPhotoAction}</span>
-                  </button>
-
-                  <button
-                    onClick={openCustomPinterest}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl border border-slate-200/90 dark:border-amber-500/40 bg-white dark:bg-amber-500/10 hover:bg-slate-50 dark:hover:bg-amber-500/20 px-5 py-3.5 text-xs font-bold text-slate-800 dark:text-amber-300 active:scale-95 transition-all shadow-xs"
-                  >
-                    <ImageIcon className="h-4 w-4 text-amber-500" />
-                    <span>{heroCopy.customBtn}</span>
-                  </button>
-
-                  <button
-                    onClick={openCoupleStudio}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl border border-slate-200/90 dark:border-rose-500/40 bg-white dark:bg-rose-500/10 hover:bg-slate-50 dark:hover:bg-rose-500/20 px-5 py-3.5 text-xs font-bold text-slate-800 dark:text-rose-300 active:scale-95 transition-all shadow-xs"
-                  >
-                    <Users className="h-4 w-4 text-rose-500" />
-                    <span>{heroCopy.coupleBtn}</span>
-                  </button>
-                </div>
-
-                {/* 4 Value Pillars */}
-                <div className="pt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <Zap className="h-3.5 w-3.5 text-amber-500" />
-                    <span>10 секунд</span>
-                  </div>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
-                  <div className="flex items-center gap-1.5">
-                    <Camera className="h-3.5 w-3.5 text-slate-700 dark:text-amber-300" />
-                    <span>100+ образов</span>
-                  </div>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>100% конфиденциально</span>
-                  </div>
-                  <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                    <span>2 фото бесплатно</span>
-                  </div>
-                </div>
+            <div className="mx-auto max-w-[720px] pt-4 sm:pt-6">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#9aa2b2]" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t.appSearchPlaceholder}
+                  className="h-11 w-full rounded-full border border-[#e3e7f0] bg-white px-11 text-[12px] text-[#29324c] shadow-[0_2px_8px_rgba(42,55,91,.035)] outline-none placeholder:text-[#a0a7b6] focus:border-[#aebafb] focus:ring-4 focus:ring-[#536dfe]/[0.08] sm:h-12 sm:text-[13px] dark:border-white/10 dark:bg-[#141724] dark:text-slate-100 dark:placeholder:text-slate-500"
+                />
+              </label>
+              <div className="mt-2 sm:mt-3">
+                <CategoryFilter />
               </div>
-            </section>
-
-            {/* INTERACTIVE BEFORE/AFTER SLIDER (CENTERPIECE SHOWCASE) */}
-            <div id="before-after-showcase">
-              <BeforeAfterSlider
-                language={language}
-                onSelectTemplate={(tmplId) => {
-                  const found = templates.find((t) => t.id === tmplId);
-                  if (found) quickSelectTemplate(found);
-                  else setIsCreateModalOpen(true);
-                }}
-                onOpenCustomPinterest={openCustomPinterest}
-              />
+              <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label={t.genderFilterLabel}>
+                {[
+                  { id: 'all' as const, label: t.genderFilterAll },
+                  { id: 'women' as const, label: t.genderFilterWomen },
+                  { id: 'men' as const, label: t.genderFilterMen },
+                  { id: 'couples' as const, label: t.genderFilterCouples }
+                ].map((item) => (
+                  <button key={item.id} type="button" onClick={() => setGenderFilter(item.id)} aria-pressed={genderFilter === item.id} className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold transition sm:text-[11px] ${genderFilter === item.id ? 'border-[#536dfe] bg-[#536dfe] text-white' : 'border-[#e2e6ef] bg-white text-[#7f899e] hover:border-[#b8c1e1] dark:border-white/10 dark:bg-[#141724] dark:text-slate-400 dark:hover:border-white/20'}`}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* HOW IT WORKS: 3 INTERACTIVE STEPS */}
-            <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-100 dark:border-white/5">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
-                  {heroCopy.howTitle}
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {heroCopy.howSub}
-                </p>
+            <section aria-label={t.appCollectionsLabel} className="mt-4 grid grid-cols-3 gap-2.5 sm:mt-5 sm:gap-3">
+              {quickCollections.map(({ category, label, image, icon: Icon }) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setSelectedCategory(category)}
+                  className="group relative h-[88px] overflow-hidden rounded-[18px] bg-white text-left ring-1 ring-[#e5e8f0] transition active:scale-[.985] sm:h-[112px] sm:rounded-[20px] dark:bg-[#141724] dark:ring-white/10"
+                >
+                  {image && <img src={image.previewImage} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />}
+                  <span className="absolute inset-0 bg-gradient-to-t from-[#10182d]/80 via-[#10182d]/18 to-[#10182d]/5" />
+                  <span className="absolute left-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-[#5268ec] shadow-sm sm:left-3 sm:top-3 sm:h-7 sm:w-7">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="absolute inset-x-2 bottom-2.5 line-clamp-2 text-[9px] font-bold leading-tight text-white sm:inset-x-3 sm:bottom-3 sm:text-[11px]">
+                    {label}
+                  </span>
+                </button>
+              ))}
+            </section>
+
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={openCustomPinterest} className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e1e5ef] bg-white px-3 text-[10px] font-bold text-[#65718c] transition hover:border-[#bfc8ef] hover:text-[#5169e8] sm:text-xs dark:border-white/10 dark:bg-[#141724] dark:text-slate-300">
+                <ImagePlus className="h-3.5 w-3.5" />{t.openPinterestStudio}
+              </button>
+              <button type="button" onClick={openCoupleStudio} className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-[#e1e5ef] bg-white px-3 text-[10px] font-bold text-[#65718c] transition hover:border-[#e8c2ce] hover:text-[#b34c6b] sm:text-xs dark:border-white/10 dark:bg-[#141724] dark:text-slate-300">
+                <Heart className="h-3.5 w-3.5" />{t.openCoupleStudio}
+              </button>
+            </div>
+
+            <section className="mt-6 sm:mt-8" aria-labelledby="trending-title">
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
+                <h1 id="trending-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl dark:text-white">{t.appTrendingTitle}</h1>
+                <div className="hidden items-center gap-1.5 sm:flex">
+                  <button onClick={() => scrollTrending(-1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8] dark:bg-[#141724] dark:text-slate-300 dark:ring-white/10" aria-label={t.scrollTrendingLeft}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => scrollTrending(1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8] dark:bg-[#141724] dark:text-slate-300 dark:ring-white/10" aria-label={t.scrollTrendingRight}>
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Step 1 */}
-                <div className="relative rounded-2xl bg-white dark:bg-[#12141c] p-6 border border-slate-200/80 dark:border-white/5 shadow-2xs hover:shadow-md transition-shadow group">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm mb-4">
-                    1
+              <div
+                ref={trendingRailRef}
+                className="no-scrollbar -mx-4 flex snap-x snap-mandatory select-none gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 touch-pan-x cursor-grab active:cursor-grabbing sm:mx-0 sm:gap-3 sm:px-0"
+                style={{ scrollPaddingLeft: '1rem' }}
+                onMouseDown={startTrendingDrag}
+                onMouseMove={moveTrendingDrag}
+                onMouseUp={endTrendingDrag}
+                onClickCapture={preventClickAfterDrag}
+              >
+                {trendingTemplates.map((template) => (
+                  <div key={template.id} className="w-[104px] flex-none sm:w-[128px] lg:w-[142px]">
+                    <TemplateCard template={template} variant="carousel" onPreview={setPreviewTemplate} />
                   </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-                    {heroCopy.step1Title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                    {heroCopy.step1Desc}
-                  </p>
-                </div>
-
-                {/* Step 2 */}
-                <div className="relative rounded-2xl bg-white dark:bg-[#12141c] p-6 border border-slate-200/80 dark:border-white/5 shadow-2xs hover:shadow-md transition-shadow group">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm mb-4">
-                    2
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-                    {heroCopy.step2Title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                    {heroCopy.step2Desc}
-                  </p>
-                </div>
-
-                {/* Step 3 */}
-                <div className="relative rounded-2xl bg-white dark:bg-[#12141c] p-6 border border-slate-200/80 dark:border-white/5 shadow-2xs hover:shadow-md transition-shadow group">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm mb-4">
-                    3
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-                    {heroCopy.step3Title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                    {heroCopy.step3Desc}
-                  </p>
-                </div>
+                ))}
               </div>
             </section>
 
-            {/* QUICK FILTERS, AUDIENCE SELECTOR & VIEW MODE TOGGLE */}
-            <div id="templates-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                {/* Gender / Audience Pills */}
-                <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-2xs">
-                  {[
-                    { id: 'all', ro: 'Toate', ru: '✨ Все', en: 'All' },
-                    { id: 'women', ro: 'Pentru Ea', ru: '👩 Для неё', en: 'Women' },
-                    { id: 'men', ro: 'Pentru El', ru: '👨 Для него', en: 'Men' },
-                    { id: 'couples', ro: 'Cupluri', ru: '👩‍❤️‍👨 Пары', en: 'Couples' }
-                  ].map((filter) => (
-                    <button
-                      key={filter.id}
-                      onClick={() => setGenderFilter(filter.id as any)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        genderFilter === filter.id
-                          ? 'bg-white text-slate-950 dark:bg-amber-500 dark:text-black shadow-xs font-bold'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      {filter[language]}
-                    </button>
+            <section className="mt-7 sm:mt-9" aria-labelledby="try-title">
+              <div className="mb-3 flex items-end justify-between sm:mb-4">
+                <div>
+                  <h2 id="try-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl dark:text-white">{t.appTryTitle}</h2>
+                  <p className="mt-1 text-[10px] text-[#9299aa] sm:text-xs dark:text-slate-400">{t.landingSamplesSub}</p>
+                </div>
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="text-[10px] font-semibold text-[#5268ed] sm:text-xs">
+                    {t.clearSearch}
+                  </button>
+                )}
+              </div>
+
+              {visibleTemplates.length === 0 ? (
+                <div className="rounded-2xl border border-[#e3e7f0] bg-white px-5 py-12 text-center dark:border-white/10 dark:bg-[#141724]">
+                  <p className="text-sm font-semibold text-[#404b68] dark:text-slate-200">{t.noTemplatesFound}</p>
+                  <button onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }} className="mt-2 text-xs font-semibold text-[#536dfe]">{t.resetFilters}</button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  {visibleTemplates.map((template) => (
+                    <TemplateCard key={template.id} template={template} onPreview={setPreviewTemplate} />
                   ))}
                 </div>
-
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  {/* View Mode Toggle: Carousels vs Grid */}
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-2xs">
-                    <button
-                      onClick={() => setViewMode('carousels')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        viewMode === 'carousels'
-                          ? 'bg-white text-slate-950 dark:bg-amber-500 dark:text-black shadow-xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                      title={heroCopy.carouselsMode}
-                    >
-                      <Columns3 className="w-3.5 h-3.5" />
-                      <span>{heroCopy.carouselsMode}</span>
-                    </button>
-
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        viewMode === 'grid'
-                          ? 'bg-white text-slate-950 dark:bg-amber-500 dark:text-black shadow-xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                      title={heroCopy.gridMode}
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      <span>{heroCopy.gridMode}</span>
-                    </button>
-                  </div>
-
-                  {/* Search Bar */}
-                  <div className="flex-1 sm:w-64 relative">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder={language === 'ru' ? 'Поиск стиля...' : 'Caută stil...'}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-10 pr-4 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-amber-500 shadow-2xs transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Horizontal Category Switcher Chips */}
-              <CategoryFilter />
-            </div>
-
-            {/* MAIN CONTENT: HORIZONTAL CAROUSELS VS FILTERED GRID */}
-            {isSearching || (isFilteringSpecificCategory && viewMode === 'grid') || viewMode === 'grid' ? (
-              /* GRID VIEW (When user chooses grid or searches) */
-              <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
-                      {isSearching
-                        ? `${language === 'ru' ? 'Результаты поиска' : 'Rezultatele căutării'}: "${searchQuery}"`
-                        : (t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory)}
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {currentCategoryTemplates.length} {language === 'ru' ? 'образов доступно' : 'stiluri disponibile'}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setViewMode('carousels');
-                      setSelectedCategory('All');
-                      setSearchQuery('');
-                      setGenderFilter('all');
-                    }}
-                    className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
-                  >
-                    {language === 'ru' ? '← Вернуться к каруселям' : '← Înapoi la carusele'}
-                  </button>
-                </div>
-
-                {currentCategoryTemplates.length === 0 ? (
-                  <div className="text-center py-20 rounded-3xl border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.01]">
-                    <p className="text-xs text-slate-400">
-                      {language === 'ru' ? 'Ничего не найдено по данному запросу.' : 'Nu am găsit șabloane pentru selecția curentă.'}
-                    </p>
-                    <button
-                      onClick={() => {
-                        setSearchQuery('');
-                        setSelectedCategory('All');
-                      }}
-                      className="mt-3 text-xs text-amber-600 dark:text-amber-400 font-bold hover:underline"
-                    >
-                      {language === 'ru' ? 'Показать все стили' : 'Resetează filtrele'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                    {currentCategoryTemplates.map((template) => (
-                      <TemplateCard
-                        key={template.id}
-                        template={template}
-                        onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                        onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            ) : (
-              /* THEMATIC HORIZONTAL CAROUSELS (PIFPAF STYLE) */
-              <div className="space-y-4 sm:space-y-6 pb-12">
-                {/* 1. Trending Now Carousel */}
-                <CarouselSection
-                  icon={<Flame className="w-5 h-5 text-amber-500" />}
-                  title={heroCopy.trendingTitle}
-                  subtitle={heroCopy.trendingSub}
-                  badge="Хит"
-                  templates={trendingTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-
-                {/* 2. Business & LinkedIn Carousel */}
-                <CarouselSection
-                  icon={<Briefcase className="w-5 h-5 text-blue-500" />}
-                  title={heroCopy.businessTitle}
-                  subtitle={heroCopy.businessSub}
-                  templates={businessTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-
-                {/* 3. High Fashion & Street Style Carousel */}
-                <CarouselSection
-                  icon={<Shirt className="w-5 h-5 text-violet-500" />}
-                  title={heroCopy.fashionTitle}
-                  subtitle={heroCopy.fashionSub}
-                  templates={fashionTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-
-                {/* 4. Couple & Romance Carousel */}
-                <CarouselSection
-                  icon={<Heart className="w-5 h-5 text-rose-500" />}
-                  title={heroCopy.coupleTitle}
-                  subtitle={heroCopy.coupleSub}
-                  badge="Love"
-                  templates={coupleTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-
-                {/* 5. Lifestyle & Artisan Coffee Carousel */}
-                <CarouselSection
-                  icon={<Coffee className="w-5 h-5 text-amber-600" />}
-                  title={heroCopy.lifestyleTitle}
-                  subtitle={heroCopy.lifestyleSub}
-                  templates={lifestyleTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-
-                {/* 6. Castles & Gala Heritage Carousel */}
-                <CarouselSection
-                  icon={<Castle className="w-5 h-5 text-emerald-500" />}
-                  title={heroCopy.heritageTitle}
-                  subtitle={heroCopy.heritageSub}
-                  templates={heritageTemplates}
-                  onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                  onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                />
-              </div>
-            )}
-
-            {/* PHOTO PACKS SHOWCASE BANNER */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-              <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-slate-100 dark:from-amber-500/15 dark:via-purple-500/10 dark:to-[#12141c] border border-amber-500/20 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="space-y-3 max-w-xl">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{heroCopy.packTitle}</span>
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white">
-                    {language === 'ru' && 'Хотите полноценную фотосессию?'}
-                    {language === 'ro' && 'Vrei o ședință foto completă?'}
-                    {language === 'en' && 'Want a full photoshoot series?'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {heroCopy.packSub}
-                  </p>
-                </div>
-
-                <div className="shrink-0">
-                  <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="px-6 py-3.5 rounded-2xl bg-slate-900 hover:bg-black dark:bg-amber-400 dark:text-black text-white text-xs font-bold shadow-lg shadow-black/10 active:scale-95 transition-all flex items-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-400 dark:text-black" />
-                    <span>
-                      {language === 'ru' && 'Создать фотопак'}
-                      {language === 'ro' && 'Creează pachet foto'}
-                      {language === 'en' && 'Create photo pack'}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* PRICING & CREDIT SHOP */}
-            <section id="pricing-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-slate-100 dark:border-white/5">
-              <div className="text-center mb-10">
-                <h2 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
-                  {heroCopy.pricingTitle}
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {heroCopy.pricingSub}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {creditPackages.map((pkg) => {
-                  const isPopular = pkg.isPopular;
-                  return (
-                    <div
-                      key={pkg.id}
-                      className={`relative rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all ${
-                        isPopular
-                          ? 'bg-slate-900 text-white dark:bg-gradient-to-b dark:from-[#1b1c28] dark:to-[#12141c] border-2 border-amber-500 shadow-xl dark:shadow-amber-500/10'
-                          : 'bg-white dark:bg-[#12141c] text-slate-900 dark:text-white border border-slate-200/90 dark:border-white/10 shadow-xs'
-                      }`}
-                    >
-                      {isPopular && (
-                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold uppercase tracking-wider shadow-sm">
-                          {t.popularBadge}
-                        </div>
-                      )}
-
-                      <div>
-                        <h3 className="font-display text-lg font-bold">
-                          {pkg.name[language] || pkg.name.ro}
-                        </h3>
-                        <p className={`text-xs mt-1 ${isPopular ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {pkg.credits + pkg.bonusCredits} {language === 'ru' ? 'студийных фотосессий' : language === 'en' ? 'studio photoshoot credits' : 'credite foto de studio'}
-                        </p>
-
-                        <div className="mt-6 flex items-baseline gap-2">
-                          <span className="text-3xl sm:text-4xl font-extrabold font-display tabular-nums">
-                            {pkg.credits}
-                          </span>
-                          <span className="text-xs font-semibold uppercase opacity-75">
-                            {t.credits}
-                          </span>
-                          {pkg.bonusCredits > 0 && (
-                            <span className="text-xs font-bold text-amber-400">
-                              +{pkg.bonusCredits} bonus
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-2 text-2xl font-bold font-display tabular-nums">
-                          {currency === 'MDL' ? pkg.priceMDL : currency === 'RON' ? pkg.priceRON : pkg.priceEUR} {currency}
-                        </div>
-
-                        <div className="mt-6 space-y-2.5 text-xs">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className={`w-4 h-4 ${isPopular ? 'text-amber-400' : 'text-emerald-500'}`} />
-                            <span>{pkg.credits} студийных генераций</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className={`w-4 h-4 ${isPopular ? 'text-amber-400' : 'text-emerald-500'}`} />
-                            <span>Ultra-HD 4K без водяного знака</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className={`w-4 h-4 ${isPopular ? 'text-amber-400' : 'text-emerald-500'}`} />
-                            <span>Доступ ко всем шаблонам и Pinterest</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => setIsCreditModalOpen(true)}
-                        className={`mt-8 w-full py-3 rounded-2xl text-xs font-bold transition-all active:scale-95 ${
-                          isPopular
-                            ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 shadow-md font-extrabold'
-                            : 'bg-slate-900 hover:bg-black text-white dark:bg-white/10 dark:hover:bg-white/20'
-                        }`}
-                      >
-                        {t.buyCredits}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* INTERACTIVE FAQ ACCORDION */}
-            <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-xs font-semibold mb-2">
-                  <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
-                  <span>FAQ</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
-                  {heroCopy.faqTitle}
-                </h2>
-              </div>
-
-              <div className="space-y-3">
-                {faqItems.map((item, idx) => {
-                  const isOpen = openFaqIndex === idx;
-                  return (
-                    <div
-                      key={idx}
-                      className="rounded-2xl border border-slate-200/80 dark:border-white/5 bg-white dark:bg-[#12141c] overflow-hidden transition-all shadow-2xs"
-                    >
-                      <button
-                        onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                        className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 text-xs sm:text-sm font-bold text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
-                      >
-                        <span>{item.q}</span>
-                        <ChevronDown
-                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
-                            isOpen ? 'rotate-180 text-amber-500' : ''
-                          }`}
-                        />
-                      </button>
-                      {isOpen && (
-                        <div className="px-5 pb-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-white/5 pt-3 animate-in fade-in duration-150">
-                          {item.a}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              )}
             </section>
           </div>
         )}
 
-        {/* VIEW 2: USER GALLERY */}
         {currentView === 'gallery' && <GalleryView />}
-
-        {/* VIEW 3: PHOTO LIBRARY */}
         {currentView === 'library' && <PhotoLibraryView />}
-
-        {/* VIEW 4: ADMIN DASHBOARD */}
         {currentView === 'admin' && <AdminDashboard />}
+
+        {currentView === 'profile' && currentUser && (
+          <section className="mx-auto max-w-xl py-7 sm:py-10">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#202844] dark:text-white">{t.profileTitle}</h1>
+            <p className="mt-1 text-sm text-[#858ea2] dark:text-slate-400">{t.profileSub}</p>
+            <div className="mt-5 rounded-[22px] border border-[#e3e7f0] bg-white p-5 shadow-[0_6px_25px_rgba(42,55,91,.04)] dark:border-white/10 dark:bg-[#141724]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8ecff] text-[#536dfe]"><UserRound className="h-5 w-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-[#27314f] dark:text-slate-100">{currentUser.name}</p>
+                  <p className="truncate text-xs text-[#8a92a4] dark:text-slate-400">{currentUser.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsCreditModalOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-[#f3f5ff] px-4 py-3 text-left dark:bg-white/5">
+                <span className="text-xs font-medium text-[#747f99]">{t.currentBalance}</span>
+                <span className="text-sm font-extrabold text-[#4e64e6]">{currentUser.creditBalance} {t.credits}</span>
+              </button>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button onClick={() => setCurrentView('library')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.profilePhotos}</button>
+                <button onClick={() => setCurrentView('gallery')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.myGallery}</button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2] dark:bg-white/5 dark:text-slate-400">
+                  {t.profileLanguage}
+                  <select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none dark:text-slate-200">
+                    <option value="ro">Română</option><option value="ru">Русский</option><option value="en">English</option>
+                  </select>
+                </label>
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2] dark:bg-white/5 dark:text-slate-400">
+                  {t.profileCurrency}
+                  <select value={currency} onChange={(event) => setCurrency(event.target.value as typeof currency)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none dark:text-slate-200">
+                    <option value="MDL">MDL</option><option value="RON">RON</option><option value="EUR">EUR</option>
+                  </select>
+                </label>
+              </div>
+              {!isLocalPreviewMode && (
+                <button onClick={() => { void signOut(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-semibold text-rose-500 hover:bg-rose-50">
+                  <LogOut className="h-4 w-4" /> {t.profileSignOut}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* FOOTER (Clean, Quiet, Anti-Slop, No Countries Plastered) */}
-      <footer className="mt-auto border-t border-slate-200/80 dark:border-white/[0.06] bg-white dark:bg-[#07080b] py-8 text-center text-xs text-slate-500 px-4 transition-colors">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-display font-bold text-slate-900 dark:text-white text-sm">AuraStudio</span>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
-            <span className="text-[11px] text-slate-400">AI Photo Studio</span>
-          </div>
-
-          <div className="text-[11px] text-slate-400">
-            {t.footerTagline}
-          </div>
-
-          <div className="text-[11px] text-slate-400">
-            © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
-          </div>
-        </div>
-      </footer>
-
-      {/* Bottom Floating Navigation (Mobile-first app feel) */}
       <BottomNav />
 
-      {/* MODALS */}
-      <CreatePhotoModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        initialTemplate={previewTemplate}
-      />
-
+      <CreatePhotoModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
       <TemplateDetailModal
         template={previewTemplate}
-        isOpen={Boolean(previewTemplate)}
+        isOpen={!!previewTemplate}
         onClose={() => setPreviewTemplate(null)}
-        onSelect={(tmpl) => {
+        onSelect={(template) => {
           setPreviewTemplate(null);
-          quickSelectTemplate(tmpl);
+          setCurrentView('explore');
+          quickSelectTemplate(template);
         }}
       />
-
-      <CreditPurchaseModal
-        isOpen={isCreditModalOpen}
-        onClose={() => setIsCreditModalOpen(false)}
-      />
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
+      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 };
 
-export function App() {
+const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
+  const { t, language, templates, setCurrentView, isAuthModalOpen, setIsAuthModalOpen, isCreditModalOpen, setIsCreditModalOpen } = useApp();
+  const [faqOpen, setFaqOpen] = useState<number | null>(0);
+  const activeTemplates = templates.filter((template) => template.isActive);
+  const heroTemplate = activeTemplates[0];
+  const sideTemplates = activeTemplates.slice(1, 3);
+
+  const openApp = () => navigate('/app');
+  const showTemplate = () => {
+    setCurrentView('explore');
+    openApp();
+  };
+
+  return (
+    <div className="min-h-screen bg-[#eef1f8] text-[#18203b] dark:bg-[#090a0f] dark:text-slate-100">
+      <Header variant="marketing" onNavigateApp={openApp} onNavigateHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+
+      <main>
+        <section className="mx-auto max-w-[980px] px-5 pb-8 pt-8 sm:px-8 sm:pb-12 sm:pt-12 lg:pt-16">
+          <div className="mx-auto max-w-[760px] text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-[9px] font-bold tracking-[.13em] text-[#6675d4] ring-1 ring-[#e2e7f2] sm:text-[10px]">
+              <Sparkles className="h-3 w-3" /> {t.landingBadge}
+            </span>
+            <h1 className="mt-5 text-[34px] font-extrabold leading-[1.06] tracking-[-.045em] text-[#151d38] sm:mt-6 sm:text-5xl md:text-[58px] dark:text-white">
+              <span className="block">{t.landingHeadlineLead}</span>
+              <span className="mt-1 block text-[#5269f5]">{t.landingHeadlineHighlight}</span>
+            </h1>
+            <p className="mx-auto mt-4 max-w-[590px] text-[12px] leading-[1.75] text-[#7d879d] sm:mt-5 sm:text-sm dark:text-slate-400">
+              {t.landingSubhead}
+            </p>
+            <button
+              type="button"
+              onClick={openApp}
+              className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#4e67f7] px-7 text-xs font-bold text-white shadow-[0_8px_20px_rgba(78,103,247,.22)] transition hover:-translate-y-0.5 hover:bg-[#4059e8] active:translate-y-0 sm:mt-6 sm:min-h-12 sm:px-8 sm:text-sm"
+            >
+              {t.landingCta}<ArrowRight className="h-4 w-4" />
+            </button>
+            <p className="mt-2 text-[10px] text-[#9aa2b3]">{t.landingFreeNote}</p>
+          </div>
+
+          <div className="relative mx-auto mt-8 h-[295px] max-w-[470px] sm:mt-10 sm:h-[390px] md:mt-12">
+            {heroTemplate && (
+              <div className="absolute bottom-2 right-[6%] top-0 w-[67%] overflow-hidden rounded-[26px] bg-white shadow-[0_20px_55px_rgba(34,47,80,.18)] ring-1 ring-white/70 sm:rounded-[32px]">
+                <img src={heroTemplate.previewImage} alt={heroTemplate.name[language] || heroTemplate.name.ro} className="h-full w-full object-cover" />
+                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4e5a76] shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:text-[10px]">
+                  <Sparkles className="h-3 w-3 text-[#566cf4]" /> {t.landingSamplesTitle}
+                </span>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#11182d]/65 to-transparent px-4 pb-4 pt-12 text-white sm:px-5 sm:pb-5">
+                  <p className="text-[10px] font-medium text-white/80">{t.categories[heroTemplate.category] || heroTemplate.category}</p>
+                  <p className="mt-1 text-sm font-bold sm:text-base">{heroTemplate.name[language] || heroTemplate.name.ro}</p>
+                </div>
+              </div>
+            )}
+            {sideTemplates[0] && (
+              <div className="absolute bottom-[10%] left-[2%] z-10 h-[46%] w-[37%] rotate-[-4deg] overflow-hidden rounded-[19px] bg-white p-1.5 shadow-[0_15px_35px_rgba(34,47,80,.2)] sm:rounded-[22px] sm:p-2">
+                <img src={sideTemplates[0].previewImage} alt={sideTemplates[0].name[language] || sideTemplates[0].name.ro} className="h-full w-full rounded-[14px] object-cover sm:rounded-[16px]" />
+                <span className="absolute bottom-3 left-3 right-3 truncate rounded-full bg-white/90 px-2 py-1 text-center text-[8px] font-bold text-[#44516e] sm:text-[9px]">
+                  {sideTemplates[0].name[language] || sideTemplates[0].name.ro}
+                </span>
+              </div>
+            )}
+            {sideTemplates[1] && (
+              <div className="absolute right-[2%] top-[8%] z-10 h-[27%] w-[27%] rotate-[5deg] overflow-hidden rounded-[17px] bg-white p-1.5 shadow-[0_12px_28px_rgba(34,47,80,.18)] sm:rounded-[20px] sm:p-2">
+                <img src={sideTemplates[1].previewImage} alt={sideTemplates[1].name[language] || sideTemplates[1].name.ro} className="h-full w-full rounded-[12px] object-cover sm:rounded-[15px]" />
+              </div>
+            )}
+            <div className="absolute bottom-[1%] right-[0%] z-20 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-[9px] font-semibold text-[#5d6984] shadow-[0_8px_25px_rgba(34,47,80,.14)] sm:bottom-[4%] sm:px-4 sm:py-2.5 sm:text-[10px]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#edf0ff] text-[#546af4]"><Check className="h-3 w-3" /></span>
+              {t.landingStep1Body.split('.')[0]}
+            </div>
+          </div>
+        </section>
+
+        <section id="examples" className="border-y border-[#e4e8f1] bg-white/65 py-8 sm:py-11 dark:border-white/10 dark:bg-white/[0.02]">
+          <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
+            <div className="mb-4 flex items-end justify-between gap-4 sm:mb-5">
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl dark:text-white">{t.landingSamplesTitle}</h2>
+                <p className="mt-1 text-[11px] text-[#9098aa] sm:text-xs dark:text-slate-400">{t.landingSamplesSub}</p>
+              </div>
+              <button onClick={openApp} className="hidden items-center gap-1 text-xs font-bold text-[#5269f5] sm:inline-flex">
+                {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+              {activeTemplates.slice(0, 4).map((template) => (
+                <TemplateCard key={template.id} template={template} onPreview={showTemplate} />
+              ))}
+            </div>
+            <button onClick={openApp} className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#5269f5] sm:hidden">
+              {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="mx-auto max-w-[1020px] px-4 py-10 sm:px-6 sm:py-14">
+          <div className="mx-auto max-w-[560px] text-center">
+            <span className="text-[9px] font-bold uppercase tracking-[.15em] text-[#7180dc]">AuraStudio</span>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1c2541] sm:text-3xl dark:text-white">{t.landingHowTitle}</h2>
+            <p className="mt-2 text-[11px] text-[#8c95a9] sm:text-sm dark:text-slate-400">{t.landingHowSub}</p>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
+            {[
+              { number: '01', title: t.step1Template, body: t.landingStep1Body, icon: <WandSparkles className="h-4 w-4" /> },
+              { number: '02', title: t.step2Photo, body: t.landingStep2Body, icon: <ImagePlus className="h-4 w-4" /> },
+              { number: '03', title: t.step3Generate, body: t.landingStep3Body, icon: <Sparkles className="h-4 w-4" /> }
+            ].map((step) => (
+              <div key={step.number} className="rounded-[20px] border border-[#e8ebf2] bg-white p-4 shadow-[0_5px_18px_rgba(42,55,91,.035)] sm:p-5 dark:border-white/10 dark:bg-[#141724]">
+                <div className="flex items-center justify-between">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f0f3ff] text-[#576df3]">{step.icon}</span>
+                  <span className="text-sm font-extrabold text-[#cad0df]">{step.number}</span>
+                </div>
+                <h3 className="mt-4 text-[12px] font-bold text-[#27314e] sm:text-sm dark:text-slate-100">{step.title}</h3>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-[#8a93a7] sm:text-xs dark:text-slate-400">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="px-4 pb-10 sm:px-6 sm:pb-14">
+          <div className="mx-auto flex max-w-[1020px] flex-col items-center justify-between gap-5 rounded-[24px] bg-[#111832] px-5 py-7 text-center text-white sm:flex-row sm:px-9 sm:py-8 sm:text-left">
+            <div>
+              <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">{t.landingHeadlineLead}</h2>
+              <p className="mt-1.5 text-[11px] text-white/60 sm:text-sm">{t.landingFreeNote}</p>
+            </div>
+            <button onClick={openApp} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#536dfe] px-6 text-xs font-bold text-white shadow-md shadow-black/20 transition hover:bg-[#6680ff]">
+              {t.landingCta}<ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[760px] px-4 pb-10 sm:px-6 sm:pb-14">
+          <div className="mb-4 text-center">
+            <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl">{t.landingFaqTitle}</h2>
+          </div>
+          <div className="space-y-2">
+            {[
+              [t.landingFaqPromptQ, t.landingFaqPromptA],
+              [t.landingFaqFormatsQ, t.landingFaqFormatsA],
+              [t.landingFaqPrivacyQ, t.landingFaqPrivacyA],
+              [t.landingFaqRatioQ, t.landingFaqRatioA]
+            ].map(([question, answer], index) => (
+              <details key={question} open={faqOpen === index} onToggle={(event) => {
+                if ((event.currentTarget as HTMLDetailsElement).open) setFaqOpen(index);
+                else if (faqOpen === index) setFaqOpen(null);
+              }} className="group rounded-2xl border border-[#e4e8f0] bg-white px-4 py-3.5 open:shadow-[0_5px_18px_rgba(42,55,91,.04)] sm:px-5 dark:border-white/10 dark:bg-[#141724]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold text-[#303a57] sm:text-xs dark:text-slate-100">
+                  {question}<ChevronDown className="h-4 w-4 shrink-0 text-[#8792aa] transition group-open:rotate-180" />
+                </summary>
+                <p className="pt-2.5 text-[10px] leading-relaxed text-[#858ea2] sm:text-xs dark:text-slate-400">{answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-[#e2e6ef] px-4 py-5 text-center text-[10px] text-[#9aa2b2] sm:py-6 dark:border-white/10 dark:text-slate-400">
+        <div className="font-bold text-[#56617c]">AuraStudio <span className="font-normal text-[#a4abba]">· Moldova & România</span></div>
+        <p className="mt-1">© {new Date().getFullYear()} AuraStudio. {t.rightsReserved}</p>
+      </footer>
+
+      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+    </div>
+  );
+};
+
+const AppRouter: React.FC = () => {
+  const { setCurrentView } = useApp();
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  const navigate = useCallback<Navigate>((path) => {
+    if (path === '/app') setCurrentView('explore');
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setPathname(path);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [setCurrentView]);
+
+  useEffect(() => {
+    const syncPath = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', syncPath);
+    return () => window.removeEventListener('popstate', syncPath);
+  }, []);
+
+  return pathname === '/app' || pathname.startsWith('/app/')
+    ? <MainAppContent navigate={navigate} />
+    : <MarketingLanding navigate={navigate} />;
+};
+
+export default function App() {
   return (
     <AppProvider>
-      <MainAppContent />
+      <AppRouter />
     </AppProvider>
   );
 }
-
-export default App;

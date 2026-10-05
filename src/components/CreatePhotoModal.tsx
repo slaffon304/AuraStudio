@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { getPhotoFileValidationError, readPhotoFileAsDataUrl } from '../lib/photo-files';
 import { PhotoTemplate, StudioMode, AspectRatio } from '../types';
 import {
   X,
@@ -44,7 +45,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setIsAuthModalOpen,
     setCurrentView,
     studioMode,
-    setStudioMode
+    setStudioMode,
+    isLocalPreviewMode,
+    selectedTemplate: contextSelectedTemplate
   } = useApp();
 
   const [selectedTemplate, setSelectedTemplate] = useState<PhotoTemplate | null>(() => {
@@ -61,11 +64,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   // Secondary inputs for PifPaf features
   const [customReferenceUrl, setCustomReferenceUrl] = useState<string>('');
+  const [customReferencePhotoId, setCustomReferencePhotoId] = useState<string>('');
   const [partnerPhotoUrl, setPartnerPhotoUrl] = useState<string>('');
   const [partnerPhotoId, setPartnerPhotoId] = useState<string>('');
 
   // Generation pack & aspect ratio
-  const [isPhotoPack, setIsPhotoPack] = useState(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
   const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
 
@@ -81,13 +84,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   // Sync initial template when opened
   useEffect(() => {
-    if (initialTemplate) {
-      setSelectedTemplate(initialTemplate);
-      if (initialTemplate.category === 'Couple' || initialTemplate.gender === 'couple') {
+    const activeTemplate = initialTemplate || contextSelectedTemplate;
+    if (activeTemplate) {
+      setSelectedTemplate(activeTemplate);
+      if (activeTemplate.category === 'Couple' || activeTemplate.gender === 'couple') {
         setStudioMode('couple');
       }
     }
-  }, [initialTemplate, setStudioMode]);
+  }, [initialTemplate, contextSelectedTemplate, setStudioMode]);
 
   // Sync userPhotos when available
   useEffect(() => {
@@ -100,8 +104,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   if (!isOpen) return null;
 
   const currentTemplate = selectedTemplate || templates[0];
-  const baseCost = studioMode === 'pinterest' ? 2 : (currentTemplate?.creditCost || 2);
-  const totalCost = isPhotoPack ? Math.max(3, baseCost + 2) : baseCost;
+  const baseCost = currentTemplate?.creditCost || 2;
+  const totalCost = baseCost;
   const hasEnoughCredits = (currentUser?.creditBalance || 0) >= totalCost;
 
   // Localized copy
@@ -110,16 +114,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       studioTab: 'Șabloane Studio',
       pinterestTab: 'Referință Pinterest',
       coupleTab: 'Ședință de Cuplu',
-      packSingle: '1 Fotografie (HD)',
-      packSet: 'Photo Pack (4 Poze)',
-      packDiscount: 'Economisești 25%',
       selectSavedFace: 'Fața ta salvată:',
       uploadSelfie: 'Încarcă un selfie clar',
       uploadPinterest: 'Încarcă poza din Pinterest / Instagram',
       uploadPartner: 'Încarcă poza partenerului/ei',
       partnerFace: 'Partener:',
       ratio: 'Format imagine:',
-      generateBtn: isPhotoPack ? `Generează Photo Pack (${totalCost} credite)` : `Generează Fotografia (${totalCost} credite)`,
+      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
       watermarkPreview: 'Comută filigran',
       downloadClean: 'Descarcă Ultra-HD (Fără filigran)'
     },
@@ -127,16 +128,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       studioTab: 'Каталог студии',
       pinterestTab: 'Свой Pinterest референс',
       coupleTab: 'Парная фотосессия',
-      packSingle: '1 Фотография (HD)',
-      packSet: 'Фотопак (4 Фото)',
-      packDiscount: 'Выгода 25%',
       selectSavedFace: 'Выбери сохранённое лицо:',
       uploadSelfie: 'Загрузи чёткое селфи',
       uploadPinterest: 'Загрузи фото из Pinterest / Instagram',
       uploadPartner: 'Загрузи фото партнёра',
       partnerFace: 'Партнёр:',
       ratio: 'Формат фото:',
-      generateBtn: isPhotoPack ? `Сгенерировать Фотопак (${totalCost} кредита)` : `Сгенерировать Фото (${totalCost} кредита)`,
+      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
       watermarkPreview: 'Показать водяной знак',
       downloadClean: 'Скачать Ultra-HD (Без водяного знака)'
     },
@@ -144,16 +142,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       studioTab: 'Studio Styles',
       pinterestTab: 'Pinterest Reference',
       coupleTab: 'Couple Studio',
-      packSingle: '1 Photo (HD)',
-      packSet: 'Photo Pack (4 Photos)',
-      packDiscount: 'Save 25%',
       selectSavedFace: 'Select saved face:',
       uploadSelfie: 'Upload clean selfie',
       uploadPinterest: 'Upload Pinterest / Instagram reference',
       uploadPartner: 'Upload partner photo',
       partnerFace: 'Partner:',
       ratio: 'Aspect ratio:',
-      generateBtn: isPhotoPack ? `Generate Photo Pack (${totalCost} credits)` : `Generate Photo (${totalCost} credits)`,
+      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
       watermarkPreview: 'Toggle watermark',
       downloadClean: 'Download Ultra-HD (Watermark-free)'
     }
@@ -165,44 +160,46 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     fileInputRef.current?.click();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
+
+    const validationError = getPhotoFileValidationError(file);
+    if (validationError) {
+      setErrorMessage(validationError === 'too-large' ? t.photoTooLarge : t.photoUnsupported);
+      input.value = '';
+      return;
+    }
 
     if (!currentUser) {
       setIsAuthModalOpen(true);
+      input.value = '';
       return;
     }
 
     setIsUploading(true);
     setErrorMessage(null);
-
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const dataUrl = event.target?.result as string;
-          if (uploadTarget === 'pinterest') {
-            setCustomReferenceUrl(dataUrl);
-          } else if (uploadTarget === 'partner') {
-            const uploaded = await uploadPhoto(dataUrl, `Partner_${file.name}`);
-            setPartnerPhotoUrl(uploaded.url);
-            setPartnerPhotoId(uploaded.id);
-          } else {
-            const uploaded = await uploadPhoto(dataUrl, file.name);
-            setSelectedPhotoUrl(uploaded.url);
-            setSelectedPhotoId(uploaded.id);
-          }
-        } catch (uploadErr: any) {
-          setErrorMessage(uploadErr.message || 'Eroare la încărcarea imaginii.');
-        } finally {
-          setIsUploading(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
+      const dataUrl = await readPhotoFileAsDataUrl(file);
+      const filename = uploadTarget === 'partner' ? `Partner_${file.name}` : uploadTarget === 'pinterest' ? `Reference_${file.name}` : file.name;
+      const uploaded = await uploadPhoto(dataUrl, filename);
+
+      if (uploadTarget === 'pinterest') {
+        setCustomReferenceUrl(uploaded.url);
+        setCustomReferencePhotoId(uploaded.id);
+      } else if (uploadTarget === 'partner') {
+        setPartnerPhotoUrl(uploaded.url);
+        setPartnerPhotoId(uploaded.id);
+      } else {
+        setSelectedPhotoUrl(uploaded.url);
+        setSelectedPhotoId(uploaded.id);
+      }
+    } catch (uploadError: any) {
+      setErrorMessage(uploadError?.message || t.photoUploadFailed);
+    } finally {
       setIsUploading(false);
-      setErrorMessage(err.message);
+      input.value = '';
     }
   };
 
@@ -218,17 +215,17 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       return;
     }
 
-    if (!selectedPhotoUrl) {
+    if (!selectedPhotoUrl || !selectedPhotoId) {
       setErrorMessage(language === 'ru' ? 'Загрузи или выбери своё селфи.' : 'Te rugăm să încarci un selfie clar.');
       return;
     }
 
-    if (studioMode === 'pinterest' && !customReferenceUrl) {
+    if (studioMode === 'pinterest' && (!customReferenceUrl || !customReferencePhotoId)) {
       setErrorMessage(language === 'ru' ? 'Загрузи картинку-референс из Pinterest.' : 'Încarcă imaginea de referință din Pinterest.');
       return;
     }
 
-    if (studioMode === 'couple' && !partnerPhotoUrl) {
+    if (studioMode === 'couple' && (!partnerPhotoUrl || !partnerPhotoId)) {
       setErrorMessage(language === 'ru' ? 'Загрузи фото второго человека для пары.' : 'Încarcă fotografia partenerului/ei.');
       return;
     }
@@ -255,8 +252,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         {
           mode: studioMode,
           customReferenceUrl: studioMode === 'pinterest' ? customReferenceUrl : undefined,
+          customReferencePhotoId: studioMode === 'pinterest' ? customReferencePhotoId : undefined,
           partnerPhotoUrl: studioMode === 'couple' ? partnerPhotoUrl : undefined,
-          isPack: isPhotoPack,
+          partnerPhotoId: studioMode === 'couple' ? partnerPhotoId : undefined,
           aspectRatio: selectedAspectRatio
         }
       );
@@ -315,6 +313,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 sm:p-6 max-h-[80vh] overflow-y-auto">
+          {isLocalPreviewMode && (
+            <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[10px] leading-relaxed text-indigo-700">
+              {t.localPreviewPhotoNote} {t.localPreviewGenerationUnavailable}
+            </div>
+          )}
           {!currentUser ? (
             /* USER NOT LOGGED IN */
             <div className="py-10 text-center space-y-4">
@@ -477,7 +480,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setStudioMode('pinterest')}
+                  onClick={() => {
+                    setStudioMode('pinterest');
+                    const portraitTemplate = templates.find((item) => item.category !== 'Couple' && item.gender !== 'couple');
+                    if (portraitTemplate) setSelectedTemplate(portraitTemplate);
+                  }}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
                     studioMode === 'pinterest'
                       ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
@@ -491,7 +498,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setStudioMode('couple')}
+                  onClick={() => {
+                    setStudioMode('couple');
+                    const coupleTemplate = templates.find((item) => item.category === 'Couple' || item.gender === 'couple');
+                    if (coupleTemplate) setSelectedTemplate(coupleTemplate);
+                  }}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
                     studioMode === 'couple'
                       ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
@@ -556,7 +567,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                         <img src={customReferenceUrl} alt="Pinterest Reference" className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => setCustomReferenceUrl('')}
+                          onClick={() => { setCustomReferenceUrl(''); setCustomReferencePhotoId(''); }}
                           className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white hover:bg-red-500"
                         >
                           <X className="w-3 h-3" />
@@ -621,7 +632,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                             <img src={partnerPhotoUrl} alt="Person 2" className="w-full h-full object-cover" />
                             <button
                               type="button"
-                              onClick={() => setPartnerPhotoUrl('')}
+                              onClick={() => { setPartnerPhotoUrl(''); setPartnerPhotoId(''); }}
                               className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white hover:bg-red-500"
                             >
                               <X className="w-3 h-3" />
@@ -701,58 +712,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 </div>
               )}
 
-              {/* 4. Generation Options: Single vs Photo Pack (PifPaf Feature) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsPhotoPack(false)}
-                  className={`p-3.5 rounded-2xl border text-left transition-all ${
-                    !isPhotoPack
-                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
-                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white">{labels.packSingle}</span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      {baseCost} credite
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {language === 'ru' ? '1 идеальный портрет в максимальном качестве' : '1 portret editorial în calitate maximă'}
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsPhotoPack(true)}
-                  className={`p-3.5 rounded-2xl border text-left transition-all relative ${
-                    isPhotoPack
-                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
-                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
-                  }`}
-                >
-                  <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-slate-950 shadow-md">
-                    {labels.packDiscount}
-                  </span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-amber-500" />
-                      {labels.packSet}
-                    </span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      {Math.max(3, baseCost + 2)} credite
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {language === 'ru' ? 'Сет из 4 ракурсов в едином стиле' : 'Set complet din 4 cadre din diverse unghiuri'}
-                  </p>
-                </button>
-              </div>
-
-              {/* 5. Aspect Ratio Selector */}
+              {/* Aspect ratio selector */}
               <div>
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
                   {labels.ratio}
@@ -820,7 +780,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           className="hidden"
           onChange={handleFileUpload}
         />

@@ -81,7 +81,6 @@ export interface GenerationJob {
   userPhotoUrl: string;
   customReferenceUrl?: string;
   partnerPhotoUrl?: string;
-  isPack?: boolean;
   status: JobStatus;
   progress: number; // 0 - 100
   currentStepMessage?: string;
@@ -153,12 +152,9 @@ export interface AIProviderMeta {
 
 export interface GenerationRequestPayload {
   templateId: string;
-  userPhotoUrl: string;
-  userPhotoId?: string;
+  userPhotoId: string;
   aspectRatio?: AspectRatio;
-  customPromptOverride?: string;
   mode?: StudioMode;
-  customReferenceUrl?: string;
-  partnerPhotoUrl?: string;
-  isPack?: boolean;
+  customReferencePhotoId?: string;
+  partnerPhotoId?: string;
 }

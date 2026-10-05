@@ -33,12 +33,13 @@ interface AppContextType {
 
   // Supabase Backend Status
   isBackendConnected: boolean;
+  isLocalPreviewMode: boolean;
   session: Session | null;
   authToken: string | null;
 
   // Current view & navigation
-  currentView: 'explore' | 'create' | 'gallery' | 'library' | 'admin';
-  setCurrentView: (view: 'explore' | 'create' | 'gallery' | 'library' | 'admin') => void;
+  currentView: 'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin';
+  setCurrentView: (view: 'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin') => void;
 
   // User & Real Supabase Auth
   currentUser: UserAccount | null;
@@ -73,8 +74,9 @@ interface AppContextType {
     options?: {
       mode?: StudioMode;
       customReferenceUrl?: string;
+      customReferencePhotoId?: string;
       partnerPhotoUrl?: string;
-      isPack?: boolean;
+      partnerPhotoId?: string;
       aspectRatio?: AspectRatio;
     }
   ) => Promise<GenerationJob>;
@@ -108,6 +110,19 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const LOCAL_PREVIEW_USER: UserAccount = {
+  id: 'local-preview-user',
+  name: 'AuraStudio Preview',
+  email: 'preview@local.invalid',
+  avatar: '',
+  role: 'user',
+  creditBalance: 15,
+  preferredLanguage: 'ro',
+  preferredCurrency: 'MDL',
+  country: 'Moldova',
+  createdAt: new Date().toISOString()
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Harmless client preferences in localStorage
@@ -155,18 +170,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const t = TRANSLATIONS[language];
 
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   // Navigation
-  const [currentView, setCurrentView] = useState<'explore' | 'create' | 'gallery' | 'library' | 'admin'>('explore');
+  const [currentView, setCurrentView] = useState<'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin'>('explore');
 
   // Studio Mode & Gender Filter (PifPaf AI Features)
   const [studioMode, setStudioMode] = useState<StudioMode>('template');
   const [genderFilter, setGenderFilter] = useState<GenderCategory>('all');
 
-  // Supabase Auth Session
-  const [session, setSession] = useState<Session | null>(null);
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
+  // Supabase Auth Session. Development may use a clearly marked in-memory preview identity.
   const isBackendConnected = isSupabaseConfigured();
+  const isLocalPreviewMode = import.meta.env.DEV && !isBackendConnected;
+  const [session, setSession] = useState<Session | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
+    isLocalPreviewMode ? LOCAL_PREVIEW_USER : null
+  );
+  const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
 
   // Templates from Database
   const [templates, setTemplates] = useState<PhotoTemplate[]>(INITIAL_TEMPLATES);
@@ -208,22 +230,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const dbTemplates = await res.json();
         if (Array.isArray(dbTemplates) && dbTemplates.length > 0) {
-          const mapped: PhotoTemplate[] = dbTemplates.map((item: any) => ({
-            id: item.id,
-            category: item.category_id,
-            name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
-            description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
-            previewImage: item.preview_image_url,
-            prompt: item.prompt,
-            negativePrompt: item.negative_prompt,
-            aspectRatio: item.aspect_ratio,
-            creditCost: item.credit_cost,
-            requiredInputType: item.required_input_type,
-            providerHint: item.provider_hint,
-            tags: item.tags || [],
-            isActive: item.is_active,
-            displayOrder: item.display_order
-          }));
+          const mapped: PhotoTemplate[] = dbTemplates.map((item: any) => {
+            const bundledFallback = INITIAL_TEMPLATES.find((template) => template.id === item.id);
+            const databasePreviewUrl = item.preview_image_url || '';
+            const databaseCategory = String(item.category_id || bundledFallback?.category || 'Editorial');
+            const normalizedCategory = databaseCategory === 'Moldova' || databaseCategory === 'Romania'
+              ? 'Heritage'
+              : databaseCategory;
+            const previewImage = databasePreviewUrl.startsWith('/src/assets/') && bundledFallback
+              ? bundledFallback.previewImage
+              : databasePreviewUrl;
+
+            return {
+              id: item.id,
+              category: normalizedCategory as TemplateCategory,
+              name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
+              description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
+              previewImage,
+              gender: item.gender || bundledFallback?.gender,
+              beforeImage: item.before_image_url || bundledFallback?.beforeImage,
+              prompt: item.prompt,
+              negativePrompt: item.negative_prompt,
+              aspectRatio: item.aspect_ratio,
+              creditCost: item.credit_cost,
+              requiredInputType: item.required_input_type,
+              providerHint: item.provider_hint,
+              tags: item.tags || [],
+              isActive: item.is_active,
+              displayOrder: item.display_order
+            };
+          });
           setTemplates(mapped);
           return;
         }
@@ -486,8 +522,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView('explore');
   };
 
-  // Upload user photo to real Supabase Storage via backend
+  // Upload user photo to private storage, or keep an in-memory copy in local preview.
   const uploadPhoto = async (dataUrl: string, filename = 'My_Photo.jpg'): Promise<UserPhoto> => {
+    if (isLocalPreviewMode && !session) {
+      const localPhoto: UserPhoto = {
+        id: `local-${crypto.randomUUID()}`,
+        userId: LOCAL_PREVIEW_USER.id,
+        url: dataUrl,
+        filename,
+        uploadedAt: new Date().toISOString()
+      };
+      setUserPhotos((prev) => [localPhoto, ...prev]);
+      return localPhoto;
+    }
     if (!session) {
       setIsAuthModalOpen(true);
       throw new Error('Autentificare necesară.');
@@ -511,6 +558,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Delete user photo
   const deletePhoto = async (id: string) => {
+    if (isLocalPreviewMode && !session) {
+      setUserPhotos((prev) => prev.filter((photo) => photo.id !== id));
+      return;
+    }
     if (!session) return;
     try {
       const res = await authFetch(`/api/photos/${id}`, { method: 'DELETE' });
@@ -530,7 +581,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openCustomPinterest = () => {
-    setSelectedTemplate(null);
+    const portraitTemplate = templates.find((template) => template.category !== 'Couple' && template.gender !== 'couple') || templates[0] || null;
+    setSelectedTemplate(portraitTemplate);
     setStudioMode('pinterest');
     setIsCreateModalOpen(true);
   };
@@ -550,11 +602,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     options?: {
       mode?: StudioMode;
       customReferenceUrl?: string;
+      customReferencePhotoId?: string;
       partnerPhotoUrl?: string;
-      isPack?: boolean;
+      partnerPhotoId?: string;
       aspectRatio?: AspectRatio;
     }
   ): Promise<GenerationJob> => {
+    if (isLocalPreviewMode && !session) {
+      throw new Error(t.localPreviewGenerationUnavailable);
+    }
     if (!session || !currentUser) {
       setIsAuthModalOpen(true);
       throw new Error('Te rugăm să te autentifici pentru a genera fotografii.');
@@ -568,7 +624,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aspectRatio: options?.aspectRatio || '3:4'
     };
 
-    const cost = options?.isPack ? Math.max(3, template.creditCost + 2) : template.creditCost;
+    const cost = template.creditCost;
 
     if (currentUser.creditBalance < cost) {
       setIsCreditModalOpen(true);
@@ -581,13 +637,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         templateId: template.id,
-        userPhotoUrl,
         userPhotoId,
         aspectRatio: options?.aspectRatio || template.aspectRatio,
         mode: options?.mode || studioMode || 'template',
-        customReferenceUrl: options?.customReferenceUrl,
-        partnerPhotoUrl: options?.partnerPhotoUrl,
-        isPack: options?.isPack
+        customReferencePhotoId: options?.customReferencePhotoId,
+        partnerPhotoId: options?.partnerPhotoId
       })
     });
 
@@ -613,7 +667,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userPhotoUrl,
       customReferenceUrl: options?.customReferenceUrl,
       partnerPhotoUrl: options?.partnerPhotoUrl,
-      isPack: options?.isPack,
       status: 'completed',
       progress: 100,
       currentStepMessage: t.completed,
@@ -641,6 +694,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     packageId: string,
     _paymentMethod: string
   ): Promise<{ success: boolean; message?: string }> => {
+    if (isLocalPreviewMode && !session) {
+      return { success: false, message: t.localPreviewPaymentUnavailable };
+    }
     if (!session) {
       setIsAuthModalOpen(true);
       return { success: false, message: 'Autentificare necesară.' };
@@ -783,6 +839,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTheme,
         t,
         isBackendConnected,
+        isLocalPreviewMode,
         session,
         authToken,
         currentView,
