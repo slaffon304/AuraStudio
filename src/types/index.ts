@@ -1,5 +1,6 @@
 export type Language = 'ro' | 'ru' | 'en';
 export type Currency = 'MDL' | 'RON' | 'EUR';
+export type Theme = 'light' | 'dark';
 
 export type TemplateCategory =
   | 'Trending'
@@ -11,8 +12,8 @@ export type TemplateCategory =
   | 'Birthday'
   | 'Travel'
   | 'Lifestyle'
-  | 'Moldova'
-  | 'Romania';
+  | 'Heritage'
+  | 'Editorial';
 
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 

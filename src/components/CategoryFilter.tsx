@@ -10,34 +10,31 @@ export const CategoryFilter: React.FC = () => {
 
   return (
     <div className="w-full overflow-x-auto no-scrollbar py-2">
-      <div className="flex items-center gap-1.5 min-w-max px-4 sm:px-0">
+      <div className="flex items-center gap-2 min-w-max px-4 sm:px-0">
         {allCategories.map(cat => {
           const isSelected = selectedCategory === cat;
-          const label = cat === 'All' ? t.categories.All : t.categories[cat];
+          const label = cat === 'All' ? t.categories.All : (t.categories[cat] || cat);
           const count = cat === 'All' 
             ? templates.filter(tmpl => tmpl.isActive).length 
             : templates.filter(tmpl => tmpl.category === cat && tmpl.isActive).length;
-
-          // Special highlight styling for regional categories Moldova and Romania
-          const isRegional = cat === 'Moldova' || cat === 'Romania';
 
           return (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`min-h-[44px] px-3.5 py-2 text-xs font-medium rounded-xl transition-all duration-200 flex items-center gap-2 whitespace-nowrap active:scale-95 ${
+              className={`px-4 py-2 text-xs font-semibold rounded-full transition-all duration-150 flex items-center gap-2 whitespace-nowrap active:scale-95 ${
                 isSelected
-                  ? 'bg-amber-400 text-slate-950 font-semibold shadow-md shadow-amber-500/20'
-                  : isRegional
-                  ? 'bg-white/[0.06] text-amber-300 border border-amber-500/25 hover:bg-white/[0.1] hover:text-white'
-                  : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white'
+                  ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-md font-bold'
+                  : 'bg-white dark:bg-slate-850 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 shadow-2xs'
               }`}
             >
               <span>{label}</span>
               {count > 0 && (
                 <span
-                  className={`text-[10px] tabular-nums font-semibold ${
-                    isSelected ? 'text-slate-800' : 'text-slate-500'
+                  className={`text-[10px] tabular-nums px-1.5 py-0.2 rounded-full font-bold ${
+                    isSelected
+                      ? 'bg-white/20 dark:bg-black/20 text-white dark:text-slate-950'
+                      : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {count}

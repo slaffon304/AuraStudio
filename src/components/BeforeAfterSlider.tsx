@@ -43,11 +43,11 @@ const PRESETS: BeforeAfterPreset[] = [
   {
     id: 'orhei-sunset',
     name: {
-      ro: 'Apus de Aur Orheiul Vechi',
-      ru: 'Закат в Старом Орхее',
-      en: 'Sunset at Old Orhei'
+      ro: 'Apus de Aur Panoramic',
+      ru: 'Золотой закат на скалах',
+      en: 'Golden Sunset Cliffs'
     },
-    category: 'Moldova',
+    category: 'Scenic Sunset',
     before: beforeSelfieImg,
     after: afterOrheiImg,
     templateId: 'moldova-orheiul-vechi'
@@ -140,16 +140,16 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
     <div className="relative w-full max-w-5xl mx-auto my-8 px-4">
       {/* Header Info */}
       <div className="text-center mb-6">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wide uppercase mb-3">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold tracking-wide uppercase mb-3">
+          <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 animate-pulse" />
           <span>{labels.title}</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
           {language === 'ro' && 'Rezultate Reale: De la Selfie la Artă'}
           {language === 'ru' && 'Реальный результат: Из селфи в глянец'}
           {language === 'en' && 'Real Results: From Casual Selfie to Art'}
         </h2>
-        <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-2">
+        <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-2">
           {labels.subtitle}
         </p>
 
@@ -163,8 +163,8 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
                 onClick={() => setActivePresetIndex(index)}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
                   isActive
-                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-semibold'
-                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60'
+                    ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-black shadow-md font-semibold'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs'
                 }`}
               >
                 {preset.name[language]}
@@ -175,7 +175,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
       </div>
 
       {/* Interactive Slider Showcase */}
-      <div className="relative rounded-2xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-2xl select-none">
+      <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl select-none">
         <div
           ref={containerRef}
           onClick={handleContainerClick}
@@ -209,13 +209,13 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
 
           {/* Badges */}
           <div className="absolute top-4 left-4 z-10 pointer-events-none">
-            <span className="px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-black/70 backdrop-blur-md text-slate-300 border border-white/10 shadow-lg">
+            <span className="px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-black/70 backdrop-blur-md text-slate-200 border border-white/10 shadow-lg">
               {labels.before}
             </span>
           </div>
 
           <div className="absolute top-4 right-4 z-10 pointer-events-none">
-            <span className="px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-amber-500/90 text-black shadow-lg shadow-amber-500/30 flex items-center gap-1.5">
+            <span className="px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-amber-500 text-black shadow-lg shadow-amber-500/30 flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-black" />
               {labels.after}
             </span>
@@ -232,22 +232,22 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
           </div>
 
           {/* Bottom Drag Helper */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none bg-black/60 backdrop-blur-sm text-slate-300 text-[11px] px-3 py-1 rounded-full border border-white/10">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none bg-black/60 backdrop-blur-sm text-slate-200 text-[11px] px-3 py-1 rounded-full border border-white/10">
             {labels.dragHint}
           </div>
         </div>
 
         {/* Bottom CTA Bar */}
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-white flex items-center gap-2">
-              <Wand2 className="w-4 h-4 text-amber-400" />
+            <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-amber-500" />
               <span>{activePreset.name[language]}</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                 {activePreset.category}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               {language === 'ro' && 'Gata în ~10 secunde • Păstrează trăsăturile feței tale 100%'}
               {language === 'ru' && 'Готово за ~10 секунд • 100% сохранение черт твоего лица'}
               {language === 'en' && 'Ready in ~10 seconds • 100% facial identity preservation'}
@@ -258,7 +258,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
             {onOpenCustomPinterest && (
               <button
                 onClick={onOpenCustomPinterest}
-                className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-2xs"
               >
                 <span>{labels.customUpload}</span>
               </button>
@@ -266,7 +266,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
 
             <button
               onClick={() => onSelectTemplate(activePreset.templateId)}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 group"
+              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 dark:text-black transition-all shadow-md flex items-center justify-center gap-2 group"
             >
               <span>{labels.tryThis}</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

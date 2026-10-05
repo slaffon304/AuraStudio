@@ -74,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
           <div>
             <h2 className="text-base font-bold text-white font-display">AuraStudio</h2>
-            <p className="text-[11px] text-slate-400">Cont Studio · Moldova & România</p>
+            <p className="text-[11px] text-slate-400">Cont Studio AI</p>
           </div>
         </div>
 
@@ -184,15 +184,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           {mode === 'signup' && (
             <div>
               <label className="text-[11px] font-medium text-slate-300 block mb-1">
-                Țară & Monedă Implicită
+                Monedă Cont
               </label>
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value as 'Moldova' | 'Romania')}
                 className="w-full rounded-xl border border-white/10 bg-[#161924] px-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
               >
-                <option value="Moldova">🇲🇩 Moldova (MDL - Leu Moldovenesc)</option>
-                <option value="Romania">🇷🇴 România (RON - Leu Românesc)</option>
+                <option value="Moldova">MDL (Leu)</option>
+                <option value="Romania">RON (Leu)</option>
               </select>
             </div>
           )}

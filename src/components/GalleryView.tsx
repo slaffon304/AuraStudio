@@ -70,44 +70,44 @@ export const GalleryView: React.FC = () => {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/[0.08] pb-6">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             {t.galleryTitle}
           </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-400">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
             {t.gallerySub}
           </p>
         </div>
 
         {/* Filter Controls (Segmented Buttons) */}
-        <div className="flex items-center gap-1 p-1 bg-white/[0.04] rounded-xl border border-white/5 self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-white/[0.04] rounded-xl border border-slate-200 dark:border-white/5 self-start sm:self-auto">
           <button
             onClick={() => setFilter('all')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               filter === 'all'
-                ? 'bg-amber-400 text-slate-950 font-semibold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Toate ({jobs.length})
           </button>
           <button
             onClick={() => setFilter('completed')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               filter === 'completed'
-                ? 'bg-amber-400 text-slate-950 font-semibold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Finalizate ({jobs.filter((j) => j.status === 'completed').length})
           </button>
           <button
             onClick={() => setFilter('failed')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               filter === 'failed'
-                ? 'bg-amber-400 text-slate-950 font-semibold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Eșuate ({jobs.filter((j) => j.status === 'failed').length})
@@ -118,20 +118,20 @@ export const GalleryView: React.FC = () => {
       {/* Grid or Empty State */}
       {filteredJobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mb-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-500 mb-4">
             <Sparkles className="h-8 w-8" />
           </div>
-          <h3 className="font-display text-lg font-bold text-white">
+          <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">
             {t.emptyGalleryTitle}
           </h3>
-          <p className="mt-1 text-xs text-slate-400 max-w-sm">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-sm">
             {t.emptyGallerySub}
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="mt-6 flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-95"
+            className="mt-6 flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-500 dark:to-amber-400 px-6 py-2.5 text-xs font-bold text-white dark:text-slate-950 shadow-md active:scale-95 transition-all"
           >
-            <Sparkles className="h-4 w-4" />
+            <Sparkles className="h-4 w-4 text-amber-400 dark:text-slate-950" />
             <span>{t.createPhotoAction}</span>
           </button>
         </div>
@@ -147,10 +147,10 @@ export const GalleryView: React.FC = () => {
             return (
               <div
                 key={job.id}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#12141c] hover:border-amber-500/30 transition-all duration-300"
+                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#12141c] hover:border-amber-500/40 shadow-xs hover:shadow-xl transition-all duration-300"
               >
                 {/* Visual Image Slot */}
-                <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-950">
+                <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-100 dark:bg-slate-950">
                   <img
                     src={displayImage}
                     alt={job.templateName}
@@ -235,25 +235,25 @@ export const GalleryView: React.FC = () => {
                 {/* Metadata Row */}
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
-                    <h3 className="font-display text-sm font-bold text-white line-clamp-1">
+                    <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
                       {job.templateName}
                     </h3>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                       <span>{job.aspectRatio}</span>
                       <span>·</span>
                       <span className="flex items-center gap-1">
-                        <Coins className="h-3 w-3 text-amber-400" />
+                        <Coins className="h-3 w-3 text-amber-500" />
                         <span>{job.creditCost} {t.credits}</span>
                       </span>
                     </div>
                   </div>
 
                   {/* Footer actions */}
-                  <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs">
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs">
                     {job.resultImageUrl ? (
                       <button
                         onClick={() => setComparingJob(job)}
-                        className="text-slate-400 hover:text-amber-400 transition-colors"
+                        className="text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 font-medium transition-colors"
                       >
                         Vezi detalii
                       </button>

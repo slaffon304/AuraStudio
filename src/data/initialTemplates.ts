@@ -6,6 +6,10 @@ import execImg from '../assets/images/template_business_exec_1791140798767.jpg';
 import fashionImg from '../assets/images/template_fashion_milan_1791140809021.jpg';
 import goldenImg from '../assets/images/template_insta_golden_1791140819273.jpg';
 import coupleImg from '../assets/images/couple_editorial_sunset_1791210833350.jpg';
+import studioBwImg from '../assets/images/studio_bw_portrait_1791214266378.jpg';
+import cafeImg from '../assets/images/cafe_parisian_candid_1791214280164.jpg';
+import vogueImg from '../assets/images/vogue_editorial_glam_1791214294002.jpg';
+import oldMoneyImg from '../assets/images/old_money_aesthetic_1791214304391.jpg';
 
 export const INITIAL_TEMPLATES: PhotoTemplate[] = [
   // Couple Featured Template
@@ -34,55 +38,55 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
     tags: ['couple', 'romance', 'sunset', 'wedding', 'love']
   },
 
-  // 1. Moldova Category (Featured)
+  // 1. Limestone Canyon Editorial (Featured)
   {
     id: 'moldova-orheiul-vechi',
     name: {
-      ro: 'Apus de Aur la Orheiul Vechi',
-      ru: 'Золотой закат в Старом Орхее',
-      en: 'Golden Sunset at Old Orhei'
+      ro: 'Apus de Aur pe Canion',
+      ru: 'Золотой закат на каньоне',
+      en: 'Golden Sunset at Limestone Canyon'
     },
     description: {
-      ro: 'Portret editorial elegant pe fundalul canionului Răut și al bisericii rupestre din Orheiul Vechi.',
-      ru: 'Элегантный эдиториал портрет на фоне каньона реки Реут и скального монастыря Старого Орхея.',
-      en: 'Elegant editorial portrait against the dramatic limestone cliffs and canyon of Orheiul Vechi, Moldova.'
+      ro: 'Portret editorial elegant pe fundalul unui canion maiestuos scăldat în lumina apusului.',
+      ru: 'Элегантный эдиториал портрет на фоне живописного каньона в лучах заходящего солнца.',
+      en: 'Elegant editorial portrait overlooking a dramatic sunlit limestone canyon.'
     },
-    category: 'Moldova',
+    category: 'Editorial',
     gender: 'unisex',
     previewImage: orheiImg,
-    prompt: 'High-end editorial fashion portrait at sunset overlooking the panoramic limestone cliffs and river bend of Orheiul Vechi in Moldova, golden hour lighting, 85mm lens, authentic travel vogue styling.',
+    prompt: 'High-end editorial fashion portrait at sunset overlooking panoramic limestone cliffs and river bend, golden hour lighting, 85mm lens, authentic travel vogue styling.',
     negativePrompt: 'blurry, bad anatomy, overexposed, low quality, oversaturated cartoon',
     aspectRatio: '3:4',
     creditCost: 2,
     requiredInputType: 'single_portrait',
     isActive: true,
     displayOrder: 1,
-    tags: ['moldova', 'travel', 'sunset', 'heritage', 'editorial']
+    tags: ['travel', 'sunset', 'heritage', 'editorial', 'nature']
   },
 
-  // 2. Romania Category (Featured)
+  // 2. Royal Castle Elegance (Featured)
   {
     id: 'romania-peles-castle',
     name: {
-      ro: 'Eleganță Regală la Castelul Peleș',
-      ru: 'Королевская элегантность в Замке Пелеш',
-      en: 'Royal Elegance at Peleș Castle'
+      ro: 'Eleganță Regală la Castel',
+      ru: 'Королевская элегантность в замке',
+      en: 'Fairytale Royal Castle Elegance'
     },
     description: {
-      ro: 'Portret aristocratic de colecție în fața palatului regal din Sinaia, învăluit în aerul carpatin.',
-      ru: 'Аристократичный портрет перед неоренессансным королевским замком Пелеш в Синае.',
-      en: 'Aristocratic regal portrait in front of the fairytale neo-renaissance Peleș Castle in Sinaia, Romania.'
+      ro: 'Portret aristocratic de colecție în fața unui palat regal de basm, învăluit în aer de munte.',
+      ru: 'Аристократичный портрет перед сказочным королевским дворцом в окружении хвойных гор.',
+      en: 'Aristocratic regal portrait in front of a fairytale neo-renaissance mountain palace.'
     },
-    category: 'Romania',
+    category: 'Heritage',
     previewImage: pelesImg,
-    prompt: 'Aristocratic cinematic portrait in front of the neo-renaissance timbered Peleș Castle in Sinaia Romania, tailored dark luxury coat, soft misty mountain lighting, high-fashion editorial.',
+    prompt: 'Aristocratic cinematic portrait in front of a neo-renaissance fairytale castle in the mountains, tailored dark luxury coat, soft misty mountain lighting, high-fashion editorial.',
     negativePrompt: 'deformed, low quality, plastic face, blurry background noise',
     aspectRatio: '3:4',
     creditCost: 2,
     requiredInputType: 'single_portrait',
     isActive: true,
     displayOrder: 2,
-    tags: ['romania', 'royalty', 'castle', 'luxury', 'carpathians']
+    tags: ['royalty', 'castle', 'luxury', 'palace']
   },
 
   // 3. Business Category (Featured)
@@ -174,7 +178,7 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
       en: 'Refined quiet luxury portrait in crisp linen garments at an exclusive Mediterranean seaside club.'
     },
     category: 'Trending',
-    previewImage: fashionImg,
+    previewImage: oldMoneyImg,
     prompt: 'Old money quiet luxury aesthetic portrait on the terrace of a historic Riviera villa, ivory linen shirt, Mediterranean cypress trees, gentle sea breeze, muted film tones, timeless elegance.',
     negativePrompt: 'garish logos, neon, fast fashion, plastic sheen, lowres',
     aspectRatio: '3:4',
@@ -299,7 +303,7 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
       en: 'Cozy morning in an aesthetic Scandinavian coffee shop, warm ceramic latte cup, gentle natural window light.'
     },
     category: 'Lifestyle',
-    previewImage: fashionImg,
+    previewImage: cafeImg,
     prompt: 'Cozy candid lifestyle portrait inside a modern minimalist specialty cafe, holding a ceramic latte cup, large window with soft morning light, stylish oversized sweater, authentic editorial portrait.',
     negativePrompt: 'artificial studio look, cluttered, stiff pose',
     aspectRatio: '3:4',
@@ -310,54 +314,158 @@ export const INITIAL_TEMPLATES: PhotoTemplate[] = [
     tags: ['lifestyle', 'coffee', 'cozy', 'minimal', 'morning']
   },
 
-  // 12. Romania: Castelul Bran Transylvania
+  // 12. Ancient Castle Twilight
   {
     id: 'romania-bran-twilight',
     name: {
-      ro: 'Mister la Castelul Bran',
-      ru: 'Мистика Замка Бран',
-      en: 'Transylvanian Mystery at Bran'
+      ro: 'Mister la Castelul din Pădure',
+      ru: 'Мистика старинного замка',
+      en: 'Ancient Castle Twilight'
     },
     description: {
-      ro: 'Atmosferă gotică sofisticată și romantică pe creasta stâncoasă din Transilvania.',
-      ru: 'Изысканная готическая романтика на фоне легендарного замка Бран в Трансильвании.',
-      en: 'Sophisticated gothic romance portrait near the historic Bran Castle perched atop the craggy Transylvanian rocks.'
+      ro: 'Atmosferă gotică sofisticată și romantică pe creasta stâncoasă înconjurată de cețuri.',
+      ru: 'Изысканная готическая романтика на фоне старинного замка на скалистом утёсе.',
+      en: 'Sophisticated gothic romance portrait near an ancient fortress perched atop misty crags.'
     },
-    category: 'Romania',
+    category: 'Heritage',
     previewImage: pelesImg,
-    prompt: 'Cinematic moody portrait near Bran Castle in Transylvania at twilight, dramatic mist weaving through pine trees, dark wool tailored coat, subtle rim lighting, mysterious and enchanting.',
+    prompt: 'Cinematic moody portrait near an ancient stone castle at twilight, dramatic mist weaving through pine trees, dark wool tailored coat, subtle rim lighting, mysterious and enchanting.',
     negativePrompt: 'cheesy halloween props, cartoon bats, horror face, lowres',
     aspectRatio: '3:4',
     creditCost: 2,
     requiredInputType: 'single_portrait',
     isActive: true,
     displayOrder: 12,
-    tags: ['romania', 'bran', 'transylvania', 'gothic', 'cinematic']
+    tags: ['castle', 'gothic', 'cinematic', 'mystery']
   },
 
-  // 13. Moldova: Cricova Wine Cellar Gala
+  // 13. Subterranean Royal Gala
   {
     id: 'moldova-cricova-gala',
     name: {
-      ro: 'Gala Beciurilor Cricova',
-      ru: 'Гала-вечер в подвалах Крикова',
-      en: 'Cricova Royal Cellar Gala'
+      ro: 'Gala Beciurilor Regale',
+      ru: 'Вечерний королевский гала-приём',
+      en: 'Subterranean Royal Gala'
     },
     description: {
-      ro: 'Eleganță de seară în faimoasele galerii subterane din piatră de var din Cricova, cu lumânări și vin nobil.',
-      ru: 'Вечерняя роскошь в знаменитых известняковых подземных галереях Крикова при мерцании свечей.',
-      en: 'Black-tie gala portrait within the famous limestone underground subterranean wine city of Cricova, Moldova.'
+      ro: 'Eleganță de seară în galerii subterane din piatră nobilă, cu candelabre și ținută black-tie.',
+      ru: 'Вечерняя роскошь в старинных подземных галереях при мерцании хрустальных люстр и свечей.',
+      en: 'Black-tie gala portrait within historic vaulted subterranean halls, warm candle chandelier lighting.'
     },
-    category: 'Moldova',
+    category: 'Heritage',
     previewImage: orheiImg,
-    prompt: 'Opulent evening gala portrait inside the historic vaulted limestone cellars of Cricova in Moldova, warm candle chandelier lighting, black-tie formal attire, fine wine glass, prestige atmosphere.',
+    prompt: 'Opulent evening gala portrait inside historic vaulted limestone cellars, warm candle chandelier lighting, black-tie formal attire, fine wine glass, prestige atmosphere.',
     negativePrompt: 'dusty, dark murky shadows, amateur camera flash',
     aspectRatio: '3:4',
     creditCost: 2,
     requiredInputType: 'single_portrait',
     isActive: true,
     displayOrder: 13,
-    tags: ['moldova', 'cricova', 'wine', 'luxury', 'gala']
+    tags: ['wine', 'luxury', 'gala', 'evening']
+  },
+
+  // 14. Minimalist Studio B&W (Rembrandt Lighting)
+  {
+    id: 'studio-minimalist-bw',
+    name: {
+      ro: 'Portret Studio Alb-Negru Minimalist',
+      ru: 'Студийный черно-белый минимализм',
+      en: 'Minimalist B&W Studio Portrait'
+    },
+    description: {
+      ro: 'Iluminare dramatică sculpturală Rembrandt, contrast fin și textură autentică Leica de 50mm.',
+      ru: 'Скульптурный драматичный свет Рембрандта, глубокие тени и плёночная текстура Leica.',
+      en: 'Sculptural dramatic Rembrandt lighting, high-contrast B&W film grain and Leica 50mm depth.'
+    },
+    category: 'Business',
+    gender: 'unisex',
+    previewImage: studioBwImg,
+    prompt: 'Minimalist high-fashion black and white studio portrait, sculptural dramatic Rembrandt shadow and rim lighting, authentic film grain texture, Leica 50mm f/1.4 aesthetic, timeless editorial simplicity.',
+    negativePrompt: 'flat lighting, blurry, distorted features, cartoon look',
+    aspectRatio: '3:4',
+    creditCost: 1,
+    requiredInputType: 'single_portrait',
+    isActive: true,
+    displayOrder: 14,
+    tags: ['studio', 'bw', 'blackandwhite', 'minimalist', 'rembrandt', 'business']
+  },
+
+  // 15. Vogue High Fashion Editorial
+  {
+    id: 'vogue-editorial-glam',
+    name: {
+      ro: 'Copertă Editorială Vogue Glam',
+      ru: 'Обложка глянца Vogue Glamour',
+      en: 'Vogue Glamour Magazine Cover'
+    },
+    description: {
+      ro: 'Estetică strălucitoare de modă înaltă, lumină directă de blitz și costum structurat din mătase.',
+      ru: 'Глянцевый студийный свет со вспышкой, шёлковый блейзер и уверенный взгляд супермодели.',
+      en: 'High-fashion luxury magazine cover portrait, glossy studio flash illumination and silk structured blazer.'
+    },
+    category: 'Fashion',
+    gender: 'women',
+    previewImage: vogueImg,
+    prompt: 'High-fashion luxury magazine cover editorial portrait, glossy studio flash illumination, silk structured blazer, clean neutral studio backdrop, Vogue Harper\'s Bazaar aesthetic, 4k ultra-detailed.',
+    negativePrompt: 'casual clothing, bad makeup, plastic doll face',
+    aspectRatio: '3:4',
+    creditCost: 2,
+    requiredInputType: 'single_portrait',
+    isActive: true,
+    displayOrder: 15,
+    tags: ['fashion', 'vogue', 'glamour', 'editorial', 'model']
+  },
+
+  // 16. Parisian Terrace Candid
+  {
+    id: 'lifestyle-parisian-candid',
+    name: {
+      ro: 'Terasă Parisiană Soare de Dimineață',
+      ru: 'Парижская терраса в утреннем свете',
+      en: 'Parisian Morning Cafe Terrace'
+    },
+    description: {
+      ro: 'Momente spontane la o cafenea cochetă din Paris, masă rotundă de marmură și lumină caldă de soare.',
+      ru: 'Непринуждённый лайфстайл-кадр за круглым мраморным столиком бистро в золотых лучах утра.',
+      en: 'Aesthetic candid lifestyle portrait at a Parisian artisan cafe terrace in morning golden light.'
+    },
+    category: 'Lifestyle',
+    gender: 'unisex',
+    previewImage: cafeImg,
+    prompt: 'Aesthetic candid lifestyle portrait at a Parisian artisan cafe terrace in morning golden light, sipping espresso at round marble bistro table, relaxed natural smile, warm linen tones, Pinterest lifestyle photography.',
+    negativePrompt: 'stiff posing, unnatural smile, dark shadows',
+    aspectRatio: '3:4',
+    creditCost: 1,
+    requiredInputType: 'single_portrait',
+    isActive: true,
+    displayOrder: 16,
+    tags: ['lifestyle', 'paris', 'cafe', 'candid', 'morning']
+  },
+
+  // 17. Old Money Country Club
+  {
+    id: 'trending-country-club',
+    name: {
+      ro: 'Eleganță Clasică Country Club',
+      ru: 'Классика Old Money Country Club',
+      en: 'Classic Country Club Elegance'
+    },
+    description: {
+      ro: 'Polo din cașmir crem, parc aristocrat privat și lumină difuză naturală de după-amiază.',
+      ru: 'Свитер из кремового кашемира, зелень загородного клуба и утончённая эстетика тихой роскоши.',
+      en: 'Classic Old Money aesthetic portrait outdoors, cream knit cashmere polo, manicured estate garden.'
+    },
+    category: 'Trending',
+    gender: 'unisex',
+    previewImage: oldMoneyImg,
+    prompt: 'Classic Old Money aesthetic portrait outdoors, cream knit cashmere polo, manicured estate garden background, soft diffused natural daylight, timeless quiet luxury Ralph Lauren style.',
+    negativePrompt: 'cheap clothing, logos, saturated colors',
+    aspectRatio: '3:4',
+    creditCost: 2,
+    requiredInputType: 'single_portrait',
+    isActive: true,
+    displayOrder: 17,
+    tags: ['trending', 'oldmoney', 'quietluxury', 'countryclub', 'classic']
   }
 ];
 
@@ -367,10 +475,10 @@ export const CATEGORIES_LIST = [
   'Business',
   'Instagram',
   'Couple',
-  'Family',
-  'Birthday',
-  'Travel',
+  'Heritage',
   'Lifestyle',
-  'Moldova',
-  'Romania'
+  'Editorial',
+  'Travel',
+  'Family',
+  'Birthday'
 ] as const;

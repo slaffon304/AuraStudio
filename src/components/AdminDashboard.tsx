@@ -171,7 +171,7 @@ export const AdminDashboard: React.FC = () => {
               Admin Console · Supabase Connected
             </span>
             <span className="text-slate-600">·</span>
-            <span className="text-xs text-slate-400">Moldova & România Hub</span>
+            <span className="text-xs text-slate-400">Studio Operations Hub</span>
           </div>
           <h1 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
             {t.adminTitle}

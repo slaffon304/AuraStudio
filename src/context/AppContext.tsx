@@ -11,7 +11,8 @@ import {
   CreditPackage,
   StudioMode,
   GenderCategory,
-  AspectRatio
+  AspectRatio,
+  Theme
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
 import { CREDIT_PACKAGES } from '../data/creditPackages';
@@ -25,6 +26,9 @@ interface AppContextType {
   setLanguage: (lang: Language) => void;
   currency: Currency;
   setCurrency: (curr: Currency) => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   t: TranslationSchema;
 
   // Supabase Backend Status
@@ -40,7 +44,7 @@ interface AppContextType {
   currentUser: UserAccount | null;
   allUsers: UserAccount[];
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string, country: 'Moldova' | 'Romania') => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, country?: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 
   // Templates (Database is source of truth)
@@ -124,6 +128,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrencyState(curr);
     localStorage.setItem('aurastudio_curr', curr);
   };
+
+  const [theme, setThemeState] = useState<Theme>(() => {
+    return (localStorage.getItem('aurastudio_theme') as Theme) || 'light';
+  });
+
+  const setTheme = (t: Theme) => {
+    setThemeState(t);
+    localStorage.setItem('aurastudio_theme', t);
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+  }, [theme]);
 
   const t = TRANSLATIONS[language];
 
@@ -408,7 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     email: string,
     password: string,
     name: string,
-    country: 'Moldova' | 'Romania'
+    country: string = 'MDL'
   ): Promise<{ success: boolean; error?: string }> => {
     if (!isBackendConnected) {
       return {
@@ -750,6 +778,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLanguage,
         currency,
         setCurrency,
+        theme,
+        setTheme,
+        toggleTheme,
         t,
         isBackendConnected,
         session,

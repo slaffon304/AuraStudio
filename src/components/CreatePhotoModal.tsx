@@ -282,22 +282,22 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl my-auto overflow-hidden rounded-3xl border border-white/10 bg-[#10121a] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl my-auto overflow-hidden rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#10121a] shadow-2xl text-slate-900 dark:text-white">
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-4 bg-[#141724]">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/[0.08] px-6 py-4 bg-slate-50 dark:bg-[#141724]">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-display flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
                 <span>{isGenerating ? t.generating : 'AuraStudio AI Creator'}</span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/20 dark:border-amber-500/30">
                   {studioMode === 'pinterest' ? 'Pinterest AI' : studioMode === 'couple' ? 'Couple Studio' : 'Studio Shoot'}
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {t.heroSubhead}
               </p>
             </div>
@@ -306,7 +306,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           {!isGenerating && (
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -318,20 +318,20 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           {!currentUser ? (
             /* USER NOT LOGGED IN */
             <div className="py-10 text-center space-y-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 mx-auto">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 mx-auto">
                 <LogIn className="h-7 w-7" />
               </div>
-              <h3 className="text-lg font-bold text-white font-display">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white font-display">
                 {language === 'ru' ? 'Войдите для создания фотосессий' : 'Autentifică-te pentru a crea fotografii'}
               </h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                 {language === 'ru'
                   ? 'Каждый новый пользователь получает 15 бесплатных кредитов в подарок при регистрации.'
                   : 'Fiecare utilizator nou primește 15 credite cadou de bun venit la înregistrare.'}
               </p>
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 px-7 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 px-7 py-3 text-xs font-bold text-white dark:text-slate-950 shadow-lg active:scale-95 transition-all"
               >
                 <span>{language === 'ru' ? 'Войти или Зарегистрироваться' : 'Conectează-te sau Înregistrează-te'}</span>
                 <ArrowRight className="h-4 w-4" />
@@ -460,14 +460,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             /* CONFIGURATION VIEW (PIFPAF STYLE) */
             <div className="space-y-6">
               {/* 1. Mode Selector Tabs */}
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-white/10">
+              <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setStudioMode('template')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
                     studioMode === 'template'
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <Wand2 className="w-4 h-4" />
@@ -478,10 +478,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStudioMode('pinterest')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
                     studioMode === 'pinterest'
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <ImageIcon className="w-4 h-4" />
@@ -492,10 +492,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStudioMode('couple')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
                     studioMode === 'couple'
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <Users className="w-4 h-4" />
@@ -507,9 +507,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               {/* 2. Mode-Specific Target Settings */}
               {studioMode === 'template' && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
                     <span>{language === 'ru' ? 'Выбранный стиль фотосессии:' : 'Stilul ales:'}</span>
-                    <span className="text-[11px] text-amber-400 font-bold">{currentTemplate.name[language]}</span>
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">{currentTemplate.name[language]}</span>
                   </label>
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
                     {templates.map((tmpl) => {
@@ -521,14 +521,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                           onClick={() => setSelectedTemplate(tmpl)}
                           className={`relative flex-shrink-0 w-24 rounded-xl overflow-hidden border-2 transition-all ${
                             isSelected
-                              ? 'border-amber-400 ring-2 ring-amber-400/30 scale-102'
-                              : 'border-white/10 opacity-70 hover:opacity-100'
+                              ? 'border-slate-900 dark:border-amber-400 ring-2 ring-slate-900/20 dark:ring-amber-400/30 scale-102'
+                              : 'border-slate-200 dark:border-white/10 opacity-70 hover:opacity-100'
                           }`}
                         >
                           <div className="aspect-[3/4]">
                             <img src={tmpl.previewImage} alt={tmpl.name[language]} className="w-full h-full object-cover" />
                           </div>
-                          <div className="p-1 text-[10px] font-semibold text-white bg-slate-900/90 truncate text-center">
+                          <div className="p-1 text-[10px] font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-900/90 truncate text-center">
                             {tmpl.name[language]}
                           </div>
                         </button>
@@ -708,18 +708,18 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   onClick={() => setIsPhotoPack(false)}
                   className={`p-3.5 rounded-2xl border text-left transition-all ${
                     !isPhotoPack
-                      ? 'border-amber-400 bg-amber-500/10 ring-1 ring-amber-400/30'
-                      : 'border-white/10 bg-slate-900/60 hover:bg-slate-900'
+                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">{labels.packSingle}</span>
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">{labels.packSingle}</span>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                       <Coins className="w-3.5 h-3.5" />
                       {baseCost} credite
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     {language === 'ru' ? '1 идеальный портрет в максимальном качестве' : '1 portret editorial în calitate maximă'}
                   </p>
                 </button>
@@ -729,24 +729,24 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   onClick={() => setIsPhotoPack(true)}
                   className={`p-3.5 rounded-2xl border text-left transition-all relative ${
                     isPhotoPack
-                      ? 'border-amber-400 bg-amber-500/10 ring-1 ring-amber-400/30'
-                      : 'border-white/10 bg-slate-900/60 hover:bg-slate-900'
+                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
                   }`}
                 >
-                  <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-black shadow-md">
+                  <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-slate-950 shadow-md">
                     {labels.packDiscount}
                   </span>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-amber-500" />
                       {labels.packSet}
                     </span>
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                       <Coins className="w-3.5 h-3.5" />
                       {Math.max(3, baseCost + 2)} credite
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     {language === 'ru' ? 'Сет из 4 ракурсов в едином стиле' : 'Set complet din 4 cadre din diverse unghiuri'}
                   </p>
                 </button>
@@ -754,7 +754,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
               {/* 5. Aspect Ratio Selector */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-2 block">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
                   {labels.ratio}
                 </label>
                 <div className="grid grid-cols-5 gap-2">
@@ -765,8 +765,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                       onClick={() => setSelectedAspectRatio(ratio)}
                       className={`py-2 rounded-xl text-xs font-semibold border transition-all ${
                         selectedAspectRatio === ratio
-                          ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                          : 'border-white/10 bg-slate-900 text-slate-400 hover:text-white'
+                          ? 'border-slate-900 bg-slate-900 text-white dark:border-amber-400 dark:bg-amber-500/20 dark:text-amber-300 shadow-2xs font-bold'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:text-white'
                       }`}
                     >
                       {ratio}
@@ -777,25 +777,25 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
               {/* Error Alert */}
               {errorMessage && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
               {/* Footer CTA */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/[0.08]">
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-white/[0.08]">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Sold:</span>
-                  <span className="font-bold text-amber-400 flex items-center gap-1">
-                    <Coins className="w-3.5 h-3.5" />
+                  <span className="text-slate-500 dark:text-slate-400">Sold:</span>
+                  <span className="font-bold text-slate-900 dark:text-amber-400 flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-500" />
                     {currentUser.creditBalance} credite
                   </span>
                   {!hasEnoughCredits && (
                     <button
                       type="button"
                       onClick={() => setIsCreditModalOpen(true)}
-                      className="text-xs text-amber-300 underline font-semibold ml-2 hover:text-white"
+                      className="text-xs text-amber-600 dark:text-amber-300 underline font-semibold ml-2 hover:text-amber-700 dark:hover:text-white"
                     >
                       Încarcă contul
                     </button>
@@ -806,9 +806,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   type="button"
                   onClick={handleStartGeneration}
                   disabled={isUploading}
-                  className="w-full sm:w-auto px-8 py-3 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full sm:w-auto px-8 py-3 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 dark:text-slate-950 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4 text-amber-400 dark:text-slate-950" />
                   <span>{labels.generateBtn}</span>
                 </button>
               </div>

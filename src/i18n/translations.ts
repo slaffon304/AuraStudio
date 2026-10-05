@@ -3,7 +3,7 @@ import { Language } from '../types';
 export const TRANSLATIONS = {
   ro: {
     appName: 'AuraStudio',
-    appTagline: 'Studio Foto AI pentru Moldova și România',
+    appTagline: 'Studio Foto AI & Ședințe Foto Instant',
     heroHeadline: 'Creează fotografii pe care vei dori să le postezi.',
     heroSubhead: 'Alege un șablon exclusiv, selectează fotografia ta și obține imagini de studio profesionale în câteva secunde.',
     createPhotoAction: 'Creează o Fotografie',
@@ -34,8 +34,8 @@ export const TRANSLATIONS = {
       Birthday: 'Zile de Naștere',
       Travel: 'Călătorii',
       Lifestyle: 'Lifestyle',
-      Moldova: 'Moldova',
-      Romania: 'România'
+      Heritage: 'Castele & Palate',
+      Editorial: 'Editorial'
     },
 
     // Generation Flow
@@ -108,8 +108,8 @@ export const TRANSLATIONS = {
     popularBadge: 'CEL MAI ALES',
     bestValueBadge: 'OFERTĂ PRO',
     payWith: 'Metodă de plată',
-    paymentMoldova: 'Moldova (Card bancar, MAIB, VictoriaBank, RunPay)',
-    paymentRomania: 'România (Card bancar, BT, BCR, Revolut, Apple Pay)',
+    paymentMoldova: 'Plată în MDL (Card bancar, Transfer, Apple Pay)',
+    paymentRomania: 'Plată în RON (Card bancar, Revolut, Apple Pay)',
     instantCheckout: 'Finalizează Plata & Primește Creditele',
     purchaseSuccessTitle: 'Credite adăugate cu succes!',
     transactionHistoryTitle: 'Istoric Tranzacții',
@@ -144,13 +144,13 @@ export const TRANSLATIONS = {
     testProvider: 'Testează Generare',
 
     // Footer & Misc
-    footerTagline: 'AuraStudio · Experiență foto premium creată pentru Moldova și România.',
+    footerTagline: 'AuraStudio · Ședințe foto de studio și avatare de revistă în 10 secunde.',
     rightsReserved: 'Toate drepturile rezervate.'
   },
 
   ru: {
     appName: 'AuraStudio',
-    appTagline: 'AI Фотостудия для Молдовы и Румынии',
+    appTagline: 'ИИ-Фотостудия и Студийные Фотосессии за 10 секунд',
     heroHeadline: 'Создавай фото, которыми хочется делиться.',
     heroSubhead: 'Выбери готовый стильный шаблон, загрузи свое фото и получи премиальный результат студийного качества за секунды.',
     createPhotoAction: 'Создать Фото',
@@ -181,8 +181,8 @@ export const TRANSLATIONS = {
       Birthday: 'День Рождения',
       Travel: 'Путешествия',
       Lifestyle: 'Лайфстайл',
-      Moldova: 'Молдова',
-      Romania: 'Румыния'
+      Heritage: 'Замки и Дворцы',
+      Editorial: 'Эдиториал'
     },
 
     // Generation Flow
@@ -255,8 +255,8 @@ export const TRANSLATIONS = {
     popularBadge: 'ПОПУЛЯРНЫЙ',
     bestValueBadge: 'ВЫГОДНЫЙ',
     payWith: 'Способ оплаты',
-    paymentMoldova: 'Молдова (Банковская карта, MAIB, VictoriaBank, RunPay)',
-    paymentRomania: 'Румыния (Банковская карта, BT, BCR, Revolut, Apple Pay)',
+    paymentMoldova: 'Оплата в MDL (Банковская карта, Apple Pay, Transfer)',
+    paymentRomania: 'Оплата в RON (Банковская карта, Revolut, Apple Pay)',
     instantCheckout: 'Оплатить и получить кредиты',
     purchaseSuccessTitle: 'Кредиты успешно зачислены!',
     transactionHistoryTitle: 'История Транзакций',
@@ -291,13 +291,13 @@ export const TRANSLATIONS = {
     testProvider: 'Тест генерации',
 
     // Footer & Misc
-    footerTagline: 'AuraStudio · Премиальная фотостудия для пользователей Молдовы и Румынии.',
+    footerTagline: 'AuraStudio · Студийные фотосессии и аватарки журнального качества за 10 секунд.',
     rightsReserved: 'Все права защищены.'
   },
 
   en: {
     appName: 'AuraStudio',
-    appTagline: 'AI Photo Studio for Moldova & Romania',
+    appTagline: 'AI Photo Studio & Instant Professional Photoshoots',
     heroHeadline: "Create photos you'll want to post.",
     heroSubhead: 'Choose a curated AI template, pick your photo, and get professional studio-grade results in seconds.',
     createPhotoAction: 'Create Photo',
@@ -328,8 +328,8 @@ export const TRANSLATIONS = {
       Birthday: 'Birthday',
       Travel: 'Travel',
       Lifestyle: 'Lifestyle',
-      Moldova: 'Moldova',
-      Romania: 'Romania'
+      Heritage: 'Castles & Palaces',
+      Editorial: 'Editorial'
     },
 
     // Generation Flow
@@ -402,8 +402,8 @@ export const TRANSLATIONS = {
     popularBadge: 'MOST POPULAR',
     bestValueBadge: 'BEST VALUE',
     payWith: 'Payment method',
-    paymentMoldova: 'Moldova (Bank card, MAIB, VictoriaBank, RunPay)',
-    paymentRomania: 'Romania (Bank card, BT, BCR, Revolut, Apple Pay)',
+    paymentMoldova: 'Pay in MDL (Bank card, Apple Pay, Transfer)',
+    paymentRomania: 'Pay in RON (Bank card, Revolut, Apple Pay)',
     instantCheckout: 'Complete Payment & Get Credits',
     purchaseSuccessTitle: 'Credits successfully added!',
     transactionHistoryTitle: 'Transaction History',
@@ -438,7 +438,7 @@ export const TRANSLATIONS = {
     testProvider: 'Test Generation',
 
     // Footer & Misc
-    footerTagline: 'AuraStudio · Premium AI photo creation for Moldova and Romania.',
+    footerTagline: 'AuraStudio · Studio-grade photoshoots and magazine avatars in 10 seconds.',
     rightsReserved: 'All rights reserved.'
   }
 } as const;
