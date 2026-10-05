@@ -8,9 +8,9 @@ import { TemplateDetailModal } from './components/TemplateDetailModal';
 import { CreatePhotoModal } from './components/CreatePhotoModal';
 import { GalleryView } from './components/GalleryView';
 import { PhotoLibraryView } from './components/PhotoLibraryView';
-import { CreditPurchaseModal } from './components/CreditPurchaseModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
+import auraStudioLogo from './assets/images/aurastudio-logo.png';
 import { PhotoTemplate, TemplateCategory } from './types';
 import {
   ArrowLeft,
@@ -45,8 +45,6 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
     setSelectedCategory,
     isCreateModalOpen,
     setIsCreateModalOpen,
-    isCreditModalOpen,
-    setIsCreditModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
     isLocalPreviewMode,
@@ -62,7 +60,7 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const trendingRailRef = useRef<HTMLDivElement>(null);
-  const railDragStartRef = useRef<{ x: number; left: number } | null>(null);
+  const railDragStartRef = useRef<{ pointerId: number; x: number; left: number } | null>(null);
   const railWasDraggedRef = useRef(false);
 
   const activeTemplates = useMemo(() => templates.filter((template) => template.isActive), [templates]);
@@ -110,15 +108,19 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
     trendingRailRef.current?.scrollBy({ left: direction * 260, behavior: 'smooth' });
   };
 
-  const startTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    railDragStartRef.current = { x: event.clientX, left: trendingRailRef.current?.scrollLeft || 0 };
+  const startTrendingDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || !trendingRailRef.current) return;
+    railDragStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      left: trendingRailRef.current.scrollLeft
+    };
     railWasDraggedRef.current = false;
   };
 
-  const moveTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+  const moveTrendingDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     const start = railDragStartRef.current;
-    if (!start || event.buttons !== 1 || !trendingRailRef.current) return;
+    if (!start || start.pointerId !== event.pointerId || !trendingRailRef.current) return;
     const distance = event.clientX - start.x;
     if (Math.abs(distance) > 4) railWasDraggedRef.current = true;
     if (railWasDraggedRef.current) {
@@ -127,7 +129,9 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
     }
   };
 
-  const endTrendingDrag = () => {
+  const endTrendingDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = railDragStartRef.current;
+    if (start && start.pointerId !== event.pointerId) return;
     railDragStartRef.current = null;
     window.setTimeout(() => { railWasDraggedRef.current = false; }, 0);
   };
@@ -234,9 +238,12 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
                 ref={trendingRailRef}
                 className="no-scrollbar -mx-4 flex snap-x snap-mandatory select-none gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 touch-pan-x cursor-grab active:cursor-grabbing sm:mx-0 sm:gap-3 sm:px-0"
                 style={{ scrollPaddingLeft: '1rem' }}
-                onMouseDown={startTrendingDrag}
-                onMouseMove={moveTrendingDrag}
-                onMouseUp={endTrendingDrag}
+                onPointerDown={startTrendingDrag}
+                onPointerMove={moveTrendingDrag}
+                onPointerUp={endTrendingDrag}
+                onPointerCancel={endTrendingDrag}
+                onPointerLeave={endTrendingDrag}
+                onDragStart={(event) => event.preventDefault()}
                 onClickCapture={preventClickAfterDrag}
               >
                 {trendingTemplates.map((template) => (
@@ -292,10 +299,6 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
                   <p className="truncate text-xs text-[#8a92a4] dark:text-slate-400">{currentUser.email}</p>
                 </div>
               </div>
-              <button onClick={() => setIsCreditModalOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-[#f3f5ff] px-4 py-3 text-left dark:bg-white/5">
-                <span className="text-xs font-medium text-[#747f99]">{t.currentBalance}</span>
-                <span className="text-sm font-extrabold text-[#4e64e6]">{currentUser.creditBalance} {t.credits}</span>
-              </button>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button onClick={() => setCurrentView('library')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.profilePhotos}</button>
                 <button onClick={() => setCurrentView('gallery')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{t.myGallery}</button>
@@ -337,174 +340,224 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
           quickSelectTemplate(template);
         }}
       />
-      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 };
 
 const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
-  const { t, language, templates, setCurrentView, isAuthModalOpen, setIsAuthModalOpen, isCreditModalOpen, setIsCreditModalOpen } = useApp();
-  const [faqOpen, setFaqOpen] = useState<number | null>(0);
-  const activeTemplates = templates.filter((template) => template.isActive);
+  const { t, language, currency, templates, setCurrentView, isAuthModalOpen, setIsAuthModalOpen } = useApp();
+  const activeTemplates = templates
+    .filter((template) => template.isActive)
+    .sort((left, right) => left.displayOrder - right.displayOrder);
   const heroTemplate = activeTemplates[0];
   const sideTemplates = activeTemplates.slice(1, 3);
 
   const openApp = () => navigate('/app');
-  const showTemplate = () => {
+  const goToCatalog = () => {
     setCurrentView('explore');
     openApp();
   };
 
+  const steps = [
+    { number: '01', title: t.landingStep1Title, body: t.landingStep1Body, icon: <WandSparkles className="h-5 w-5" /> },
+    { number: '02', title: t.landingStep2Title, body: t.landingStep2Body, icon: <ImagePlus className="h-5 w-5" /> },
+    { number: '03', title: t.landingStep3Title, body: t.landingStep3Body, icon: <Sparkles className="h-5 w-5" /> }
+  ];
+
+  const photoPackages = [
+    { title: t.landingPackagePortrait, image: heroTemplate?.previewImage },
+    { title: t.landingPackageCouple, image: sideTemplates[0]?.previewImage },
+    { title: t.landingPackageEditorial, image: sideTemplates[1]?.previewImage }
+  ];
+
+  const faqItems = [
+    [t.landingFaqExpiryQ, t.landingFaqExpiryA],
+    [t.landingFaqPaymentQ, t.landingFaqPaymentA],
+    [t.landingFaqResultQ, t.landingFaqResultA],
+    [t.landingFaqWatermarkQ, t.landingFaqWatermarkA],
+    [t.landingFaqCommercialQ, t.landingFaqCommercialA],
+    [t.landingFaqPhotoQ, t.landingFaqPhotoA]
+  ];
+
   return (
-    <div className="min-h-screen bg-[#eef1f8] text-[#18203b] dark:bg-[#090a0f] dark:text-slate-100">
-      <Header variant="marketing" onNavigateApp={openApp} onNavigateHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+    <div className="min-h-screen bg-[#faf9f6] text-[#18203b] dark:bg-[#090a0f] dark:text-slate-100">
+      <Header variant="marketing" onNavigateApp={goToCatalog} onNavigateHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
 
       <main>
-        <section className="mx-auto max-w-[980px] px-5 pb-8 pt-8 sm:px-8 sm:pb-12 sm:pt-12 lg:pt-16">
-          <div className="mx-auto max-w-[760px] text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-[9px] font-bold tracking-[.13em] text-[#6675d4] ring-1 ring-[#e2e7f2] sm:text-[10px]">
-              <Sparkles className="h-3 w-3" /> {t.landingBadge}
-            </span>
-            <h1 className="mt-5 text-[34px] font-extrabold leading-[1.06] tracking-[-.045em] text-[#151d38] sm:mt-6 sm:text-5xl md:text-[58px] dark:text-white">
-              <span className="block">{t.landingHeadlineLead}</span>
-              <span className="mt-1 block text-[#5269f5]">{t.landingHeadlineHighlight}</span>
-            </h1>
-            <p className="mx-auto mt-4 max-w-[590px] text-[12px] leading-[1.75] text-[#7d879d] sm:mt-5 sm:text-sm dark:text-slate-400">
-              {t.landingSubhead}
-            </p>
-            <button
-              type="button"
-              onClick={openApp}
-              className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#4e67f7] px-7 text-xs font-bold text-white shadow-[0_8px_20px_rgba(78,103,247,.22)] transition hover:-translate-y-0.5 hover:bg-[#4059e8] active:translate-y-0 sm:mt-6 sm:min-h-12 sm:px-8 sm:text-sm"
-            >
-              {t.landingCta}<ArrowRight className="h-4 w-4" />
-            </button>
-            <p className="mt-2 text-[10px] text-[#9aa2b3]">{t.landingFreeNote}</p>
-          </div>
+        <section className="relative overflow-hidden">
+          <div className="pointer-events-none absolute -left-48 top-12 h-[420px] w-[420px] rounded-full bg-[#e7eaff]/70 blur-3xl dark:bg-[#536dfe]/[.08]" />
+          <div className="pointer-events-none absolute -right-48 top-24 h-[420px] w-[420px] rounded-full bg-[#f2e8ff]/70 blur-3xl dark:bg-[#a855f7]/[.07]" />
+          <div className="relative mx-auto grid w-full max-w-[1440px] items-center gap-8 px-4 py-9 sm:px-7 sm:py-14 lg:grid-cols-[.94fr_1.06fr] lg:gap-10 lg:px-10 lg:py-16 xl:py-20">
+            <div className="mx-auto max-w-[650px] lg:mx-0">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#e8e9f2] bg-white/85 px-3 py-1.5 text-[9px] font-bold tracking-[.12em] text-[#606ed3] shadow-sm sm:text-[10px] dark:border-white/10 dark:bg-white/[.04] dark:text-indigo-300">
+                <Sparkles className="h-3.5 w-3.5" /> {t.landingBadge}
+              </span>
+              <h1 className="mt-5 max-w-[660px] font-display text-[40px] font-extrabold leading-[1.04] tracking-[-.055em] text-[#181d32] sm:mt-6 sm:text-5xl lg:text-[58px] xl:text-[66px] dark:text-white">
+                <span className="block">{t.landingHeadlineLead}</span>
+                <span className="mt-1 block bg-gradient-to-r from-[#4c63ed] via-[#784ee8] to-[#b93bc6] bg-clip-text text-transparent">{t.landingHeadlineHighlight}</span>
+              </h1>
+              <p className="mt-4 max-w-[540px] text-[13px] leading-[1.8] text-[#777f92] sm:mt-5 sm:text-[15px] dark:text-slate-400">
+                {t.landingSubhead}
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-7">
+                <button
+                  type="button"
+                  onClick={goToCatalog}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#5368f3] px-6 text-xs font-bold text-white shadow-[0_10px_26px_rgba(83,104,243,.24)] transition hover:-translate-y-0.5 hover:bg-[#455be8] active:translate-y-0 sm:px-7 sm:text-sm"
+                >
+                  {t.landingCta}<ArrowRight className="h-4 w-4" />
+                </button>
+                <a href="#how-it-works" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#687187] transition hover:text-[#465be0] sm:text-sm dark:text-slate-300 dark:hover:text-white">
+                  {t.landingHowTitle}<ArrowUpRight className="h-4 w-4" />
+                </a>
+              </div>
+              <p className="mt-4 max-w-[430px] text-[10px] leading-relaxed text-[#9a9eaa] sm:text-[11px] dark:text-slate-500">{t.landingHeroNote}</p>
+            </div>
 
-          <div className="relative mx-auto mt-8 h-[295px] max-w-[470px] sm:mt-10 sm:h-[390px] md:mt-12">
-            {heroTemplate && (
-              <div className="absolute bottom-2 right-[6%] top-0 w-[67%] overflow-hidden rounded-[26px] bg-white shadow-[0_20px_55px_rgba(34,47,80,.18)] ring-1 ring-white/70 sm:rounded-[32px]">
-                <img src={heroTemplate.previewImage} alt={heroTemplate.name[language] || heroTemplate.name.ro} className="h-full w-full object-cover" />
-                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4e5a76] shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:text-[10px]">
-                  <Sparkles className="h-3 w-3 text-[#566cf4]" /> {t.landingSamplesTitle}
+            <div className="relative mx-auto w-full max-w-[590px] px-2 pb-7 pt-1 sm:px-5 sm:pb-10 lg:mr-0">
+              <div className="pointer-events-none absolute inset-x-[12%] bottom-[8%] top-[4%] rounded-full bg-gradient-to-br from-[#dce2ff] via-[#f4e3ff] to-[#ffe7d8] opacity-80 blur-3xl dark:from-[#536dfe]/20 dark:via-[#9d4edd]/15 dark:to-[#ee80a6]/10" />
+              <div className="relative ml-auto aspect-[4/4.7] w-[78%] overflow-hidden rounded-[30px] bg-[#dce0eb] shadow-[0_28px_70px_rgba(30,35,70,.2)] ring-1 ring-white/80 sm:rounded-[38px] dark:ring-white/10">
+                {heroTemplate && (
+                  <img
+                    src={heroTemplate.previewImage}
+                    alt={heroTemplate.name[language] || heroTemplate.name.ro}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#10152b]/70 via-transparent to-[#10152b]/5" />
+                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4d5875] shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:px-3 sm:text-[10px]">
+                  <Sparkles className="h-3.5 w-3.5 text-[#586df2]" /> {t.landingHeroExample}
                 </span>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#11182d]/65 to-transparent px-4 pb-4 pt-12 text-white sm:px-5 sm:pb-5">
-                  <p className="text-[10px] font-medium text-white/80">{t.categories[heroTemplate.category] || heroTemplate.category}</p>
-                  <p className="mt-1 text-sm font-bold sm:text-base">{heroTemplate.name[language] || heroTemplate.name.ro}</p>
+                {heroTemplate && (
+                  <div className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-14 text-white sm:px-6 sm:pb-6">
+                    <p className="text-[10px] font-medium text-white/70">{t.categories[heroTemplate.category] || heroTemplate.category}</p>
+                    <p className="mt-1 text-sm font-bold sm:text-lg">{heroTemplate.name[language] || heroTemplate.name.ro}</p>
+                  </div>
+                )}
+              </div>
+
+              {sideTemplates[0] && (
+                <div className="absolute bottom-[13%] left-0 z-10 aspect-[.82] w-[35%] -rotate-6 overflow-hidden rounded-[20px] border-[5px] border-white bg-white shadow-[0_18px_40px_rgba(30,35,70,.18)] sm:bottom-[14%] sm:left-1 sm:rounded-[25px] sm:border-[7px]">
+                  <img src={sideTemplates[0].previewImage} alt={sideTemplates[0].name[language] || sideTemplates[0].name.ro} className="h-full w-full rounded-[14px] object-cover sm:rounded-[18px]" />
                 </div>
+              )}
+              <div className="absolute bottom-[3%] right-[1%] z-20 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white px-3 py-2 text-[9px] font-semibold text-[#525d78] shadow-[0_8px_26px_rgba(32,39,75,.16)] sm:bottom-[5%] sm:px-4 sm:py-2.5 sm:text-[10px] dark:border-white/10 dark:bg-[#171b2d] dark:text-slate-200">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#edf0ff] text-[#5269ef] dark:bg-indigo-400/10 dark:text-indigo-300"><Check className="h-3.5 w-3.5" /></span>
+                {t.landingHeroBadge}
               </div>
-            )}
-            {sideTemplates[0] && (
-              <div className="absolute bottom-[10%] left-[2%] z-10 h-[46%] w-[37%] rotate-[-4deg] overflow-hidden rounded-[19px] bg-white p-1.5 shadow-[0_15px_35px_rgba(34,47,80,.2)] sm:rounded-[22px] sm:p-2">
-                <img src={sideTemplates[0].previewImage} alt={sideTemplates[0].name[language] || sideTemplates[0].name.ro} className="h-full w-full rounded-[14px] object-cover sm:rounded-[16px]" />
-                <span className="absolute bottom-3 left-3 right-3 truncate rounded-full bg-white/90 px-2 py-1 text-center text-[8px] font-bold text-[#44516e] sm:text-[9px]">
-                  {sideTemplates[0].name[language] || sideTemplates[0].name.ro}
-                </span>
-              </div>
-            )}
-            {sideTemplates[1] && (
-              <div className="absolute right-[2%] top-[8%] z-10 h-[27%] w-[27%] rotate-[5deg] overflow-hidden rounded-[17px] bg-white p-1.5 shadow-[0_12px_28px_rgba(34,47,80,.18)] sm:rounded-[20px] sm:p-2">
-                <img src={sideTemplates[1].previewImage} alt={sideTemplates[1].name[language] || sideTemplates[1].name.ro} className="h-full w-full rounded-[12px] object-cover sm:rounded-[15px]" />
-              </div>
-            )}
-            <div className="absolute bottom-[1%] right-[0%] z-20 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-[9px] font-semibold text-[#5d6984] shadow-[0_8px_25px_rgba(34,47,80,.14)] sm:bottom-[4%] sm:px-4 sm:py-2.5 sm:text-[10px]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#edf0ff] text-[#546af4]"><Check className="h-3 w-3" /></span>
-              {t.landingStep1Body.split('.')[0]}
             </div>
           </div>
         </section>
 
-        <section id="examples" className="border-y border-[#e4e8f1] bg-white/65 py-8 sm:py-11 dark:border-white/10 dark:bg-white/[0.02]">
-          <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
-            <div className="mb-4 flex items-end justify-between gap-4 sm:mb-5">
-              <div>
-                <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl dark:text-white">{t.landingSamplesTitle}</h2>
-                <p className="mt-1 text-[11px] text-[#9098aa] sm:text-xs dark:text-slate-400">{t.landingSamplesSub}</p>
-              </div>
-              <button onClick={openApp} className="hidden items-center gap-1 text-xs font-bold text-[#5269f5] sm:inline-flex">
-                {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
-              </button>
+        <section id="how-it-works" className="scroll-mt-24 border-y border-[#ececf1] bg-white/70 py-11 sm:py-16 dark:border-white/10 dark:bg-white/[.02]">
+          <div className="mx-auto w-full max-w-[1240px] px-4 sm:px-7 lg:px-10">
+            <div className="mx-auto max-w-[620px] text-center">
+              <span className="text-[9px] font-bold uppercase tracking-[.16em] text-[#737ee0] sm:text-[10px]">{t.landingStepsEyebrow}</span>
+              <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-.035em] text-[#1c2541] sm:text-3xl dark:text-white">{t.landingHowTitle}</h2>
+              <p className="mt-2 text-[11px] leading-relaxed text-[#8991a3] sm:text-sm dark:text-slate-400">{t.landingHowSub}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-              {activeTemplates.slice(0, 4).map((template) => (
-                <TemplateCard key={template.id} template={template} onPreview={showTemplate} />
+            <div className="mt-7 grid gap-3 sm:mt-9 sm:grid-cols-3 sm:gap-4">
+              {steps.map((step) => (
+                <article key={step.number} className="group rounded-[22px] border border-[#e9eaf0] bg-[#fff] p-4 shadow-[0_8px_24px_rgba(35,42,75,.035)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_15px_34px_rgba(35,42,75,.08)] sm:p-6 dark:border-white/10 dark:bg-[#141724]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eff1ff] text-[#596df0] dark:bg-indigo-400/10 dark:text-indigo-300">{step.icon}</span>
+                    <span className="font-display text-sm font-extrabold tracking-widest text-[#c8ccda] dark:text-slate-600">{step.number}</span>
+                  </div>
+                  <h3 className="mt-5 text-[13px] font-bold text-[#26304c] sm:text-sm dark:text-slate-100">{step.title}</h3>
+                  <p className="mt-2 text-[11px] leading-[1.75] text-[#8790a4] sm:text-xs dark:text-slate-400">{step.body}</p>
+                </article>
               ))}
             </div>
-            <button onClick={openApp} className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#5269f5] sm:hidden">
-              {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
           </div>
         </section>
 
-        <section id="how-it-works" className="mx-auto max-w-[1020px] px-4 py-10 sm:px-6 sm:py-14">
-          <div className="mx-auto max-w-[560px] text-center">
-            <span className="text-[9px] font-bold uppercase tracking-[.15em] text-[#7180dc]">AuraStudio</span>
-            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1c2541] sm:text-3xl dark:text-white">{t.landingHowTitle}</h2>
-            <p className="mt-2 text-[11px] text-[#8c95a9] sm:text-sm dark:text-slate-400">{t.landingHowSub}</p>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
-            {[
-              { number: '01', title: t.step1Template, body: t.landingStep1Body, icon: <WandSparkles className="h-4 w-4" /> },
-              { number: '02', title: t.step2Photo, body: t.landingStep2Body, icon: <ImagePlus className="h-4 w-4" /> },
-              { number: '03', title: t.step3Generate, body: t.landingStep3Body, icon: <Sparkles className="h-4 w-4" /> }
-            ].map((step) => (
-              <div key={step.number} className="rounded-[20px] border border-[#e8ebf2] bg-white p-4 shadow-[0_5px_18px_rgba(42,55,91,.035)] sm:p-5 dark:border-white/10 dark:bg-[#141724]">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f0f3ff] text-[#576df3]">{step.icon}</span>
-                  <span className="text-sm font-extrabold text-[#cad0df]">{step.number}</span>
+        <section id="photo-packages" className="scroll-mt-24 px-4 py-11 sm:px-7 sm:py-16 lg:px-10">
+          <div className="relative mx-auto max-w-[1240px] overflow-hidden rounded-[28px] bg-[#11162c] px-5 py-7 text-white shadow-[0_24px_70px_rgba(27,32,66,.12)] sm:rounded-[36px] sm:px-9 sm:py-10 lg:px-11 lg:py-12">
+            <div className="pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full bg-[#6954ef]/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-36 left-[28%] h-72 w-72 rounded-full bg-[#a937bb]/15 blur-3xl" />
+            <div className="relative">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                <div className="max-w-[650px]">
+                  <span className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.16em] text-[#aab4ff] sm:text-[10px]">
+                    <ImagePlus className="h-3.5 w-3.5" /> {t.landingPackagesEyebrow}
+                  </span>
+                  <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-.035em] sm:text-3xl">{t.landingPackagesTitle}</h2>
+                  <p className="mt-2 max-w-[600px] text-[11px] leading-relaxed text-white/60 sm:text-sm">{t.landingPackagesSub}</p>
                 </div>
-                <h3 className="mt-4 text-[12px] font-bold text-[#27314e] sm:text-sm dark:text-slate-100">{step.title}</h3>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-[#8a93a7] sm:text-xs dark:text-slate-400">{step.body}</p>
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[.06] px-3 py-2 text-[10px] font-semibold text-white/75">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#a9b4ff]" /> {t.landingPackagesStatus}
+                </div>
               </div>
-            ))}
-          </div>
-        </section>
 
-        <section className="px-4 pb-10 sm:px-6 sm:pb-14">
-          <div className="mx-auto flex max-w-[1020px] flex-col items-center justify-between gap-5 rounded-[24px] bg-[#111832] px-5 py-7 text-center text-white sm:flex-row sm:px-9 sm:py-8 sm:text-left">
-            <div>
-              <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">{t.landingHeadlineLead}</h2>
-              <p className="mt-1.5 text-[11px] text-white/60 sm:text-sm">{t.landingFreeNote}</p>
+              <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 xl:grid-cols-3">
+                {photoPackages.map((photoPackage) => (
+                  <article key={photoPackage.title} className="relative overflow-hidden rounded-[22px] border border-white/[.11] bg-white/[.055] p-4 backdrop-blur-sm sm:p-5">
+                    {photoPackage.image && (
+                      <img src={photoPackage.image} alt="" loading="lazy" className="absolute right-0 top-0 h-32 w-24 object-cover opacity-[.18] [mask-image:linear-gradient(to_left,black,transparent)]" />
+                    )}
+                    <div className="relative flex items-center justify-between gap-2">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-[#b5bfff]"><Sparkles className="h-4 w-4" /></span>
+                      <span className="rounded-full border border-white/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[.12em] text-white/55">{t.landingPackageDraft}</span>
+                    </div>
+                    <h3 className="relative mt-4 text-[13px] font-bold text-white sm:text-sm">{photoPackage.title}</h3>
+                    <div className="relative mt-4 space-y-2.5 border-t border-white/10 pt-3 text-[10px] sm:text-[11px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-white/55">{t.landingPackagePhotoCount}</span>
+                        <span className="text-right font-semibold text-white/85">{t.landingPackagePending}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-white/55">{t.landingPackagePrice}</span>
+                        <span className="text-right font-semibold text-white/85">{t.landingPackagePending} · {currency}</span>
+                      </div>
+                    </div>
+                    <button type="button" disabled className="relative mt-4 inline-flex min-h-10 w-full cursor-not-allowed items-center justify-center rounded-full border border-white/10 bg-white/[.04] px-4 text-[10px] font-bold text-white/40 sm:text-[11px]">
+                      {t.landingPackageUnavailable}
+                    </button>
+                  </article>
+                ))}
+              </div>
             </div>
-            <button onClick={openApp} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#536dfe] px-6 text-xs font-bold text-white shadow-md shadow-black/20 transition hover:bg-[#6680ff]">
-              {t.landingCta}<ArrowRight className="h-4 w-4" />
-            </button>
           </div>
         </section>
 
-        <section className="mx-auto max-w-[760px] px-4 pb-10 sm:px-6 sm:pb-14">
-          <div className="mb-4 text-center">
-            <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl">{t.landingFaqTitle}</h2>
+        <section id="faq" className="scroll-mt-24 mx-auto w-full max-w-[900px] px-4 pb-11 sm:px-7 sm:pb-16 lg:px-10">
+          <div className="mx-auto mb-6 max-w-[560px] text-center">
+            <span className="text-[9px] font-bold uppercase tracking-[.16em] text-[#737ee0] sm:text-[10px]">{t.landingFaqEyebrow}</span>
+            <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-.035em] text-[#1d2540] sm:text-3xl dark:text-white">{t.landingFaqTitle}</h2>
           </div>
-          <div className="space-y-2">
-            {[
-              [t.landingFaqPromptQ, t.landingFaqPromptA],
-              [t.landingFaqFormatsQ, t.landingFaqFormatsA],
-              [t.landingFaqPrivacyQ, t.landingFaqPrivacyA],
-              [t.landingFaqRatioQ, t.landingFaqRatioA]
-            ].map(([question, answer], index) => (
-              <details key={question} open={faqOpen === index} onToggle={(event) => {
-                if ((event.currentTarget as HTMLDetailsElement).open) setFaqOpen(index);
-                else if (faqOpen === index) setFaqOpen(null);
-              }} className="group rounded-2xl border border-[#e4e8f0] bg-white px-4 py-3.5 open:shadow-[0_5px_18px_rgba(42,55,91,.04)] sm:px-5 dark:border-white/10 dark:bg-[#141724]">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold text-[#303a57] sm:text-xs dark:text-slate-100">
+          <div className="space-y-2.5">
+            {faqItems.map(([question, answer]) => (
+              <details key={question} className="group rounded-[18px] border border-[#e7e8ee] bg-white px-4 py-4 shadow-[0_4px_18px_rgba(38,43,72,.025)] open:shadow-[0_10px_28px_rgba(38,43,72,.06)] sm:px-5 dark:border-white/10 dark:bg-[#141724]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold leading-relaxed text-[#303a57] sm:text-xs dark:text-slate-100">
                   {question}<ChevronDown className="h-4 w-4 shrink-0 text-[#8792aa] transition group-open:rotate-180" />
                 </summary>
-                <p className="pt-2.5 text-[10px] leading-relaxed text-[#858ea2] sm:text-xs dark:text-slate-400">{answer}</p>
+                <p className="max-w-[760px] pt-3 text-[10px] leading-[1.8] text-[#7f889b] sm:text-xs dark:text-slate-400">{answer}</p>
               </details>
             ))}
           </div>
         </section>
+
+        <section className="px-4 pb-12 sm:px-7 sm:pb-16 lg:px-10">
+          <div className="relative mx-auto flex max-w-[1240px] flex-col items-center justify-between gap-5 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#e8ebff] via-[#f0e9ff] to-[#f9eaf1] px-5 py-8 text-center sm:flex-row sm:px-9 sm:py-9 sm:text-left dark:from-[#14182d] dark:via-[#19142c] dark:to-[#211725]">
+            <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#8b5cf6]/15 blur-3xl" />
+            <div className="relative max-w-[640px]">
+              <h2 className="font-display text-xl font-extrabold tracking-tight text-[#1b2340] sm:text-2xl dark:text-white">{t.landingFinalTitle}</h2>
+              <p className="mt-2 text-[11px] leading-relaxed text-[#727b91] sm:text-sm dark:text-slate-400">{t.landingFinalBody}</p>
+            </div>
+            <button type="button" onClick={goToCatalog} className="relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[#5368f3] px-6 text-xs font-bold text-white shadow-[0_8px_20px_rgba(83,104,243,.2)] transition hover:bg-[#455be8] sm:text-sm">
+              {t.landingCta}<ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
       </main>
 
-      <footer className="border-t border-[#e2e6ef] px-4 py-5 text-center text-[10px] text-[#9aa2b2] sm:py-6 dark:border-white/10 dark:text-slate-400">
-        <div className="font-bold text-[#56617c]">AuraStudio <span className="font-normal text-[#a4abba]">· Moldova & România</span></div>
-        <p className="mt-1">© {new Date().getFullYear()} AuraStudio. {t.rightsReserved}</p>
+      <footer className="border-t border-[#e9e9ed] bg-white/55 px-4 py-7 text-center text-[10px] text-[#969dac] sm:py-9 dark:border-white/10 dark:bg-white/[.02] dark:text-slate-400">
+        <img src={auraStudioLogo} alt="AuraStudio" className="mx-auto h-auto w-[126px]" />
+        <p className="mt-2">{t.landingFooterTagline}</p>
+        <p className="mt-1">© {new Date().getFullYear()}. {t.rightsReserved}</p>
       </footer>
 
-      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );

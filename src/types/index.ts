@@ -108,37 +108,6 @@ export interface UserAccount {
   createdAt: string;
 }
 
-export type TransactionType =
-  | 'purchase'
-  | 'generation_spend'
-  | 'generation_refund'
-  | 'admin_grant'
-  | 'admin_deduct'
-  | 'welcome_bonus';
-
-export interface CreditTransaction {
-  id: string;
-  userId: string;
-  type: TransactionType;
-  amount: number; // positive or negative
-  balanceAfter: number;
-  description: string;
-  referenceId?: string; // jobId or packageId
-  createdAt: string;
-}
-
-export interface CreditPackage {
-  id: string;
-  name: LocalizedString;
-  credits: number;
-  bonusCredits: number;
-  priceMDL: number;
-  priceRON: number;
-  priceEUR: number;
-  isPopular?: boolean;
-  isBestValue?: boolean;
-}
-
 export interface AIProviderMeta {
   id: string;
   name: string;

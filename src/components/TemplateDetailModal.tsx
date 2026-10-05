@@ -1,7 +1,7 @@
 import React from 'react';
 import { PhotoTemplate } from '../types';
 import { useApp } from '../context/AppContext';
-import { X, Sparkles, Coins, Layers, Image as ImageIcon } from 'lucide-react';
+import { X, Sparkles, Layers, Image as ImageIcon } from 'lucide-react';
 
 interface TemplateDetailModalProps {
   template: PhotoTemplate | null;
@@ -55,8 +55,6 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({ templa
               <span className="rounded-full bg-[#eef1ff] px-2.5 py-1 text-[#5369e8] dark:bg-indigo-400/10 dark:text-indigo-300">{category}</span>
               <span aria-hidden="true">·</span>
               <span>{template.aspectRatio}</span>
-              <span aria-hidden="true">·</span>
-              <span className="inline-flex items-center gap-1 text-[#65718b] dark:text-slate-300"><Coins className="h-3.5 w-3.5 text-[#7181d9]" />{template.creditCost} {t.credits}</span>
             </div>
 
             <h2 className="mt-3 font-display text-xl font-extrabold tracking-tight text-[#1e2743] sm:text-2xl dark:text-white">{name}</h2>
@@ -70,10 +68,6 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({ templa
               <div className="flex items-center justify-between gap-3 border-t border-[#e7eaf1] pt-3 dark:border-white/10 text-xs">
                 <span className="flex items-center gap-2 text-[#818ba0] dark:text-slate-400"><Layers className="h-4 w-4 text-[#7a88d6]" />{t.aspectRatio}</span>
                 <span className="font-semibold text-[#45516e] dark:text-slate-200">{template.aspectRatio}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-[#e7eaf1] pt-3 dark:border-white/10 text-xs">
-                <span className="flex items-center gap-2 text-[#818ba0] dark:text-slate-400"><Coins className="h-4 w-4 text-[#7a88d6]" />{t.creditCost}</span>
-                <span className="font-bold text-[#465dcc]">{template.creditCost} {t.credits}</span>
               </div>
             </div>
 

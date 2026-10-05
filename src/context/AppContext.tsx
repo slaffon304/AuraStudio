@@ -4,18 +4,15 @@ import {
   UserPhoto,
   PhotoTemplate,
   GenerationJob,
-  CreditTransaction,
   Language,
   Currency,
   TemplateCategory,
-  CreditPackage,
   StudioMode,
   GenderCategory,
   AspectRatio,
   Theme
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
-import { CREDIT_PACKAGES } from '../data/creditPackages';
 import { TRANSLATIONS, TranslationSchema } from '../i18n/translations';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -90,17 +87,12 @@ interface AppContextType {
   openCustomPinterest: () => void;
   openCoupleStudio: () => void;
 
-  // Credits & Transactions
-  creditPackages: CreditPackage[];
-  creditTransactions: CreditTransaction[];
-  purchaseCredits: (packageId: string, paymentMethod: string) => Promise<{ success: boolean; message?: string }>;
+  // Admin-only legacy credit adjustment remains backed by the existing server model.
   adjustCredits: (userId: string, amount: number, reason: string) => Promise<void>;
 
   // Modals state
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
-  isCreditModalOpen: boolean;
-  setIsCreditModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   quickSelectTemplate: (template: PhotoTemplate) => void;
@@ -117,7 +109,7 @@ const LOCAL_PREVIEW_USER: UserAccount = {
   email: 'preview@local.invalid',
   avatar: '',
   role: 'user',
-  creditBalance: 15,
+  creditBalance: 0,
   preferredLanguage: 'ro',
   preferredCurrency: 'MDL',
   country: 'Moldova',
@@ -200,13 +192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
 
-  // Credits & Packages
-  const [creditPackages, setCreditPackages] = useState<CreditPackage[]>(CREDIT_PACKAGES);
-  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
-
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const authToken = session?.access_token || null;
@@ -334,36 +321,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [authToken, authFetch]);
 
-  // Fetch Transactions
-  const fetchTransactions = useCallback(async () => {
-    if (!authToken) {
-      setCreditTransactions([]);
-      return;
-    }
-    try {
-      const res = await authFetch('/api/credit-transactions');
-      if (res.ok) {
-        const txs = await res.json();
-        if (Array.isArray(txs)) {
-          setCreditTransactions(
-            txs.map((t: any) => ({
-              id: t.id,
-              userId: t.user_id,
-              type: t.type,
-              amount: t.amount,
-              balanceAfter: t.balance_after,
-              description: t.description,
-              referenceId: t.reference_id,
-              createdAt: t.created_at
-            }))
-          );
-        }
-      }
-    } catch (err) {
-      console.warn('Notice: Could not fetch credit transactions:', err);
-    }
-  }, [authToken, authFetch]);
-
   // Load Admin Data (If admin)
   const fetchAdminData = useCallback(async () => {
     if (!authToken || currentUser?.role !== 'admin') return;
@@ -413,7 +370,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser(null);
         setUserPhotos([]);
         setJobs([]);
-        setCreditTransactions([]);
       }
     });
 
@@ -430,9 +386,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fetchUserProfile();
       fetchUserPhotos();
       fetchJobs();
-      fetchTransactions();
     }
-  }, [session, fetchUserProfile, fetchUserPhotos, fetchJobs, fetchTransactions]);
+  }, [session, fetchUserProfile, fetchUserPhotos, fetchJobs]);
 
   // When user role is admin, load admin data
   useEffect(() => {
@@ -518,7 +473,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setUserPhotos([]);
     setJobs([]);
-    setCreditTransactions([]);
     setCurrentView('explore');
   };
 
@@ -627,8 +581,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cost = template.creditCost;
 
     if (currentUser.creditBalance < cost) {
-      setIsCreditModalOpen(true);
-      throw new Error(t.insufficientCredits);
+      throw new Error(t.generationAccessUnavailable);
     }
 
     // Call secure backend endpoint
@@ -648,14 +601,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const data = await res.json();
 
     if (!res.ok) {
-      // Refresh balance in case of refund
       await fetchUserProfile();
-      await fetchTransactions();
-      throw new Error(data.error || 'Generarea a eșuat pe server.');
+      const serverMessage = String(data.error || '');
+      const isLegacyCreditError = /credit|credite|кредит|balance|balanț|sold/i.test(serverMessage);
+      throw new Error(isLegacyCreditError ? t.generationAccessUnavailable : (serverMessage || t.failed));
     }
 
-    // Refresh profile balance, transactions, and jobs
-    await Promise.all([fetchUserProfile(), fetchJobs(), fetchTransactions()]);
+    // Refresh the profile and generated jobs after the request completes.
+    await Promise.all([fetchUserProfile(), fetchJobs()]);
 
     const createdJob: GenerationJob = {
       id: data.jobId,
@@ -689,50 +642,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await fetchJobs();
   };
 
-  // Real purchase initiation (No fake payment success!)
-  const purchaseCredits = async (
-    packageId: string,
-    _paymentMethod: string
-  ): Promise<{ success: boolean; message?: string }> => {
-    if (isLocalPreviewMode && !session) {
-      return { success: false, message: t.localPreviewPaymentUnavailable };
-    }
-    if (!session) {
-      setIsAuthModalOpen(true);
-      return { success: false, message: 'Autentificare necesară.' };
-    }
-
-    try {
-      const res = await authFetch('/api/payments/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageId, currency })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.isConfigured === false) {
-        return {
-          success: false,
-          message:
-            data.message ||
-            'Gateway-ul de plată online este în curs de configurare. Pentru creditare de test, folosește Panoul de Administrare.'
-        };
-      }
-
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      }
-
-      return { success: true };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.message || 'Plata nu a putut fi procesată.'
-      };
-    }
-  };
-
   // Admin adjust credits
   const adjustCredits = async (userId: string, amount: number, reason: string) => {
     if (!session || currentUser?.role !== 'admin') return;
@@ -744,7 +653,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (res.ok) {
-      await Promise.all([fetchUserProfile(), fetchTransactions(), fetchAdminData()]);
+      await Promise.all([fetchUserProfile(), fetchAdminData()]);
     }
   };
 
@@ -871,14 +780,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGenderFilter,
         openCustomPinterest,
         openCoupleStudio,
-        creditPackages,
-        creditTransactions,
-        purchaseCredits,
         adjustCredits,
         isCreateModalOpen,
         setIsCreateModalOpen,
-        isCreditModalOpen,
-        setIsCreditModalOpen,
         isAuthModalOpen,
         setIsAuthModalOpen,
         quickSelectTemplate,
