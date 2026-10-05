@@ -3,10 +3,10 @@ import { Language } from '../types';
 export const TRANSLATIONS = {
   ro: {
     appName: 'AuraStudio',
-    appTagline: 'Studio Foto AI pentru Moldova și România',
+    appTagline: 'AuraStudio • o rețea neuronală pentru crearea de fotografii cu un singur clic',
     heroHeadline: 'Transformă un selfie într-un portret editorial.',
     heroSubhead: 'Alege un stil, încarcă fotografia și lasă AuraStudio să creeze restul.',
-    landingBadge: 'STUDIO FOTO AI · MOLDOVA & ROMÂNIA',
+    landingBadge: 'AuraStudio • o rețea neuronală pentru crearea de fotografii cu un singur clic',
     landingHeadlineLead: 'Un selfie. Un stil nou.',
     landingHeadlineHighlight: 'Fotografii care arată ca o ședință editorială.',
     landingSubhead: 'Alege un șablon, încarcă fotografia ta și creează portrete de studio — fără prompturi sau editare complicată.',
@@ -229,10 +229,10 @@ export const TRANSLATIONS = {
 
   ru: {
     appName: 'AuraStudio',
-    appTagline: 'AI Фотостудия для Молдовы и Румынии',
+    appTagline: 'AuraStudio • нейросеть для создания фоток в 1 клик',
     heroHeadline: 'Преврати селфи в редакционный портрет.',
     heroSubhead: 'Выбери стиль, загрузи фото — AuraStudio создаст остальное.',
-    landingBadge: 'AI-ФОТОСТУДИЯ · МОЛДОВА И РУМЫНИЯ',
+    landingBadge: 'AuraStudio • нейросеть для создания фоток в 1 кликЯ',
     landingHeadlineLead: 'Одно селфи. Новый образ.',
     landingHeadlineHighlight: 'Фотографии как из редакционной съёмки.',
     landingSubhead: 'Выбери стиль, загрузи своё фото и создай студийный портрет — без промптов и сложного редактирования.',
@@ -455,10 +455,10 @@ export const TRANSLATIONS = {
 
   en: {
     appName: 'AuraStudio',
-    appTagline: 'AI Photo Studio for Moldova & Romania',
+    appTagline: 'AuraStudio • AI for creating photos in one click',
     heroHeadline: 'Turn a selfie into an editorial portrait.',
     heroSubhead: 'Choose a style, upload a photo, and let AuraStudio do the rest.',
-    landingBadge: 'AI PHOTO STUDIO · MOLDOVA & ROMANIA',
+    landingBadge: 'AuraStudio • AI for creating photos in one click',
     landingHeadlineLead: 'One selfie. A new look.',
     landingHeadlineHighlight: 'Photos that feel like an editorial shoot.',
     landingSubhead: 'Choose a style, upload your photo, and create a studio portrait — no prompts or complicated editing.',
