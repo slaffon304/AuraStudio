@@ -6,7 +6,6 @@ import {
   X,
   Upload,
   Sparkles,
-  Coins,
   CheckCircle,
   AlertCircle,
   RefreshCw,
@@ -18,8 +17,7 @@ import {
   Users,
   Image as ImageIcon,
   Wand2,
-  Check,
-  ShieldCheck
+  Check
 } from 'lucide-react';
 
 interface CreatePhotoModalProps {
@@ -41,7 +39,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     uploadPhoto,
     currentUser,
     createGenerationJob,
-    setIsCreditModalOpen,
     setIsAuthModalOpen,
     setCurrentView,
     studioMode,
@@ -68,9 +65,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [partnerPhotoUrl, setPartnerPhotoUrl] = useState<string>('');
   const [partnerPhotoId, setPartnerPhotoId] = useState<string>('');
 
-  // Generation pack & aspect ratio
+  // Generation format
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
-  const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
 
   // Loading & Step states
   const [isUploading, setIsUploading] = useState(false);
@@ -104,9 +100,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   if (!isOpen) return null;
 
   const currentTemplate = selectedTemplate || templates[0];
-  const baseCost = currentTemplate?.creditCost || 2;
-  const totalCost = baseCost;
-  const hasEnoughCredits = (currentUser?.creditBalance || 0) >= totalCost;
 
   // Localized copy
   const labels = {
@@ -120,9 +113,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadPartner: 'Încarcă poza partenerului/ei',
       partnerFace: 'Partener:',
       ratio: 'Format imagine:',
-      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
-      watermarkPreview: 'Comută filigran',
-      downloadClean: 'Descarcă Ultra-HD (Fără filigran)'
+      generateBtn: t.generateButton
     },
     ru: {
       studioTab: 'Каталог студии',
@@ -134,9 +125,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadPartner: 'Загрузи фото партнёра',
       partnerFace: 'Партнёр:',
       ratio: 'Формат фото:',
-      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
-      watermarkPreview: 'Показать водяной знак',
-      downloadClean: 'Скачать Ultra-HD (Без водяного знака)'
+      generateBtn: t.generateButton
     },
     en: {
       studioTab: 'Studio Styles',
@@ -148,9 +137,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadPartner: 'Upload partner photo',
       partnerFace: 'Partner:',
       ratio: 'Aspect ratio:',
-      generateBtn: `${t.generateButton} (${totalCost} ${t.credits})`,
-      watermarkPreview: 'Toggle watermark',
-      downloadClean: 'Download Ultra-HD (Watermark-free)'
+      generateBtn: t.generateButton
     }
   }[language];
 
@@ -210,11 +197,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       return;
     }
 
-    if (!hasEnoughCredits) {
-      setIsCreditModalOpen(true);
-      return;
-    }
-
     if (!selectedPhotoUrl || !selectedPhotoId) {
       setErrorMessage(language === 'ru' ? 'Загрузи или выбери своё селфи.' : 'Te rugăm să încarci un selfie clar.');
       return;
@@ -265,7 +247,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       setGeneratedResultUrl(job.resultImageUrl || null);
     } catch (err: any) {
       setIsGenerating(false);
-      setErrorMessage(err?.message || 'A apărut o problemă la generare. Creditele au fost restituite.');
+      setErrorMessage(err?.message || t.failed);
     }
   };
 
@@ -325,18 +307,16 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 <LogIn className="h-7 w-7" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white font-display">
-                {language === 'ru' ? 'Войдите для создания фотосессий' : 'Autentifică-te pentru a crea fotografii'}
+                {t.createAuthHeading}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                {language === 'ru'
-                  ? 'Каждый новый пользователь получает 15 бесплатных кредитов в подарок при регистрации.'
-                  : 'Fiecare utilizator nou primește 15 credite cadou de bun venit la înregistrare.'}
+              <p className="mx-auto max-w-sm text-xs text-slate-500 dark:text-slate-400">
+                {t.createAuthDescription}
               </p>
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 px-7 py-3 text-xs font-bold text-white dark:text-slate-950 shadow-lg active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-7 py-3 text-xs font-bold text-white shadow-lg transition-all hover:bg-black active:scale-95 dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 dark:text-slate-950"
               >
-                <span>{language === 'ru' ? 'Войти или Зарегистрироваться' : 'Conectează-te sau Înregistrează-te'}</span>
+                <span>{t.createAuthButton}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -370,32 +350,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                         alt="AI Result"
                         className="h-full w-full object-cover"
                       />
-                      {showWatermarkPreview && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <span className="text-white/40 font-extrabold text-lg tracking-widest uppercase rotate-[-25deg] border border-white/20 px-3 py-1 bg-black/30 backdrop-blur-xs">
-                            AuraStudio
-                          </span>
-                        </div>
-                      )}
                       <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-md shadow-md">
                         {t.showResult}
                       </span>
                     </div>
-                  </div>
-
-                  {/* Watermark toggle */}
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
-                    <button
-                      onClick={() => setShowWatermarkPreview(!showWatermarkPreview)}
-                      className="hover:text-amber-300 transition-colors text-[11px] underline underline-offset-2"
-                    >
-                      {labels.watermarkPreview}
-                    </button>
-                    <span>•</span>
-                    <span className="text-amber-400 font-medium flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {labels.downloadClean}
-                    </span>
                   </div>
 
                   {/* Actions */}
@@ -744,24 +702,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               )}
 
               {/* Footer CTA */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-white/[0.08]">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-500 dark:text-slate-400">Sold:</span>
-                  <span className="font-bold text-slate-900 dark:text-amber-400 flex items-center gap-1">
-                    <Coins className="w-3.5 h-3.5 text-amber-500" />
-                    {currentUser.creditBalance} credite
-                  </span>
-                  {!hasEnoughCredits && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCreditModalOpen(true)}
-                      className="text-xs text-amber-600 dark:text-amber-300 underline font-semibold ml-2 hover:text-amber-700 dark:hover:text-white"
-                    >
-                      Încarcă contul
-                    </button>
-                  )}
-                </div>
-
+              <div className="flex flex-col items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-white/[0.08] sm:flex-row">
                 <button
                   type="button"
                   onClick={handleStartGeneration}

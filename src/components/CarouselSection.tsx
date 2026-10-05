@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { PhotoTemplate } from '../types';
 import { useApp } from '../context/AppContext';
-import { ChevronLeft, ChevronRight, Sparkles, Coins, Eye, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, Eye, ArrowRight } from 'lucide-react';
 
 interface CarouselSectionProps {
   icon?: React.ReactNode;
@@ -152,14 +152,6 @@ export const CarouselSection: React.FC<CarouselSectionProps> = ({
 
                 {/* Subtle dark gradient on bottom */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-
-                {/* Credit Cost Badge */}
-                <div className="absolute top-3 left-3">
-                  <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/95 dark:bg-black/75 text-slate-900 dark:text-amber-300 backdrop-blur-md shadow-sm border border-slate-200/80 dark:border-white/10">
-                    <Coins className="w-3 h-3 text-amber-500" />
-                    <span>{template.creditCost}</span> {t.credits.toLowerCase()}
-                  </span>
-                </div>
 
                 {/* Quick Preview Button */}
                 <button

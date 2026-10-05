@@ -47,17 +47,17 @@ export const PhotoLibraryView: React.FC = () => {
           <FolderHeart className="h-8 w-8" />
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white font-display">
-          Biblioteca Ta Privată de Fotografii
+          {t.libraryTitle}
         </h2>
-        <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
-          Conectează-te pentru a încărca și gestiona fotografiile tale în siguranță pe Supabase Storage.
+        <p className="mx-auto max-w-sm text-xs text-slate-600 dark:text-slate-400">
+          {t.createAuthDescription}
         </p>
         <button
           onClick={() => setIsAuthModalOpen(true)}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95"
         >
           <LogIn className="h-4 w-4" />
-          <span>Autentifică-te pentru a accesa biblioteca</span>
+          <span>{t.createAuthButton}</span>
         </button>
       </div>
     );

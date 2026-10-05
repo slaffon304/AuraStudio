@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  Sparkles,
-  Coins,
-  Shield,
-  UserRound,
-  Globe2,
   ChevronDown,
-  LogOut,
-  Images,
   FolderHeart,
-  Languages,
+  Globe2,
+  Images,
+  LogOut,
   Moon,
-  Sun
+  Shield,
+  Sun,
+  UserRound
 } from 'lucide-react';
 import { Currency, Language } from '../types';
+import auraStudioLogo from '../assets/images/aurastudio-logo.png';
 
 interface HeaderProps {
   variant?: 'app' | 'marketing';
@@ -37,7 +35,6 @@ export const Header: React.FC<HeaderProps> = ({
     isLocalPreviewMode,
     signOut,
     setCurrentView,
-    setIsCreditModalOpen,
     setIsAuthModalOpen,
     theme,
     toggleTheme
@@ -59,98 +56,79 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#e2e7f0] bg-[#eef1f8]/95 text-[#171d38] backdrop-blur-xl dark:border-white/10 dark:bg-[#090a0f]/95 dark:text-slate-100">
-      <div className="mx-auto flex h-[58px] max-w-6xl items-center justify-between px-3 sm:px-6">
-        {isMarketing ? (
-          <>
-            <button
-              onClick={onNavigateHome}
-              className="flex shrink-0 items-center gap-2 text-left"
-              aria-label="AuraStudio home"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-[10px] bg-[#536dfe] text-white shadow-sm shadow-blue-200 sm:h-8 sm:w-8 sm:rounded-xl">
-                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              </span>
-              <span className="text-[15px] font-extrabold tracking-tight text-[#17203d] sm:text-[17px] dark:text-white">AuraStudio</span>
-            </button>
+    <header className="sticky top-0 z-40 border-b border-[#e8e8ee] bg-[#fbfaf8]/95 text-[#171d38] backdrop-blur-xl dark:border-white/10 dark:bg-[#090a0f]/95 dark:text-slate-100">
+      <div className="mx-auto grid h-[62px] w-full max-w-[1440px] grid-cols-[auto_1fr] items-center gap-3 px-4 sm:h-[68px] sm:px-7 lg:px-10">
+        <button
+          type="button"
+          onClick={onNavigateHome}
+          className="flex w-fit shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5969f5]"
+          aria-label={t.appName}
+        >
+          <img
+            src={auraStudioLogo}
+            alt="AuraStudio"
+            className="h-auto w-[104px] sm:w-[160px]"
+          />
+        </button>
 
-            <nav className="hidden items-center gap-7 text-[13px] font-medium text-[#737b91] md:flex dark:text-slate-400">
-              <button onClick={onNavigateApp} className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.exploreTemplates}</button>
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2.5">
+          {isMarketing && (
+            <nav className="mr-auto hidden items-center gap-6 pl-8 text-[12px] font-medium text-[#737b91] lg:flex dark:text-slate-400">
               <a href="#how-it-works" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingHowTitle}</a>
-              <a href="#examples" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingSamplesTitle}</a>
+              <a href="#photo-packages" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingPackagesTitle}</a>
+              <a href="#faq" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingFaqTitle}</a>
             </nav>
+          )}
 
-            <div className="flex items-center gap-1 sm:gap-2">
-              <LanguageMenu
-                language={language}
-                setLanguage={setLanguage}
-                languages={languages}
-              />
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={`${t.theme}: ${theme === 'dark' ? t.themeDark : t.themeLight}`}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6e7890] transition hover:bg-white hover:text-[#4358d2] dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              >
-                {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </button>
+          <LanguageMenu
+            language={language}
+            setLanguage={setLanguage}
+            languages={languages}
+            label={t.language}
+          />
+          <CurrencyPicker currency={currency} setCurrency={setCurrency} currencies={currencies} label={t.currency} />
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`${t.theme}: ${theme === 'dark' ? t.themeDark : t.themeLight}`}
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-[#6e7890] transition hover:bg-white hover:text-[#4358d2] lg:flex dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          </button>
+
+          {isMarketing ? (
+            <>
               {currentUser ? (
                 <button
-                  onClick={() => onNavigateApp?.()}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#3f4fce] ring-1 ring-[#e4e8f1] dark:bg-white/5 dark:ring-white/10"
+                  type="button"
+                  onClick={onNavigateApp}
+                  className="hidden h-9 w-9 items-center justify-center rounded-full bg-white text-[#3f4fce] ring-1 ring-[#e4e8f1] sm:flex dark:bg-white/5 dark:ring-white/10"
                   aria-label={t.bottomProfile}
                 >
                   <UserRound className="h-4 w-4" />
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={() => setIsAuthModalOpen(true)}
-                  className="hidden rounded-full px-3 py-2 text-[13px] font-semibold text-[#65708b] hover:text-[#17203d] dark:text-slate-300 dark:hover:text-white sm:inline-flex"
+                  className="hidden whitespace-nowrap rounded-full px-2 py-2 text-[12px] font-semibold text-[#65708b] transition hover:text-[#17203d] sm:inline-flex dark:text-slate-300 dark:hover:text-white"
                 >
                   {t.login}
                 </button>
               )}
               <button
+                type="button"
                 onClick={onNavigateApp}
-                className="whitespace-nowrap rounded-full bg-[#4f67f6] px-3 py-2 text-[10px] font-bold text-white shadow-sm shadow-blue-200 transition hover:bg-[#4058e9] active:scale-[.98] sm:px-4 sm:text-[12px]"
+                className="hidden min-h-9 whitespace-nowrap rounded-full bg-[#4f67f6] px-4 text-[11px] font-bold text-white shadow-sm shadow-blue-200 transition hover:bg-[#4058e9] active:scale-[.98] sm:inline-flex sm:items-center sm:justify-center sm:text-[12px]"
               >
                 {t.landingCta}
               </button>
-            </div>
-          </>
-        ) : (
-          <div className="grid w-full grid-cols-3 items-center">
-            <div className="justify-self-start">
-              {currentUser && (
-                <button
-                  onClick={() => setIsCreditModalOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#e3e9ff] px-3 text-[11px] font-bold text-[#4c62de]"
-                  aria-label={`${currentUser.creditBalance} ${t.credits}`}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>{currentUser.creditBalance}</span>
-                </button>
-              )}
-            </div>
-
-            <button
-              onClick={() => setCurrentView('explore')}
-              className="flex items-center justify-center gap-1.5 justify-self-center text-left"
-              aria-label="AuraStudio home"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-[10px] bg-[#536dfe] text-white">
-                <Sparkles className="h-3.5 w-3.5" />
-              </span>
-              <span className="text-[15px] font-extrabold tracking-tight text-[#17203d] dark:text-white">AuraStudio</span>
-            </button>
-
-            <div className="relative flex items-center gap-2 justify-self-end">
-              <LanguageMenu
-                language={language}
-                setLanguage={setLanguage}
-                languages={languages}
-              />
+            </>
+          ) : (
+            <div className="relative">
               <button
+                type="button"
                 onClick={() => currentUser ? setIsMenuOpen((open) => !open) : setIsAuthModalOpen(true)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#58647c] ring-1 ring-[#e4e8f1] transition hover:text-[#4358d2] dark:bg-white/5 dark:text-slate-300 dark:ring-white/10"
                 aria-label={currentUser ? t.bottomProfile : t.login}
@@ -163,12 +141,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="border-b border-[#edf0f5] px-2 pb-3 pt-1">
                     <p className="truncate text-sm font-bold">{currentUser.name}</p>
                     <p className="mt-0.5 truncate text-xs text-[#858da0]">{currentUser.email}</p>
-                    <button
-                      onClick={() => { setIsCreditModalOpen(true); setIsMenuOpen(false); }}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#eef1ff] px-2.5 py-1 text-xs font-semibold text-[#4f64e6]"
-                    >
-                      <Coins className="h-3.5 w-3.5" /> {currentUser.creditBalance} {t.credits}
-                    </button>
                   </div>
 
                   <div className="space-y-0.5 py-2">
@@ -179,51 +151,11 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                   </div>
 
-                  <div className="border-t border-[#edf0f5] px-2 py-2">
-                    <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[#858da0]">
-                      <Languages className="h-3.5 w-3.5" /> {t.language}
-                    </div>
-                    <div className="flex gap-1">
-                      {languages.map((item) => (
-                        <button
-                          key={item.code}
-                          onClick={() => setLanguage(item.code)}
-                          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold ${language === item.code ? 'bg-[#536dfe] text-white' : 'bg-[#f4f6fb] text-[#737b91]'}`}
-                        >
-                          {item.code.toUpperCase()}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mb-1 mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-[#858da0]">
-                      <Globe2 className="h-3.5 w-3.5" /> {t.currency}
-                    </div>
-                    <div className="flex gap-1">
-                      {currencies.map((item) => (
-                        <button
-                          key={item}
-                          onClick={() => setCurrency(item)}
-                          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold ${currency === item ? 'bg-[#536dfe] text-white' : 'bg-[#f4f6fb] text-[#737b91]'}`}
-                        >
-                          {item}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={toggleTheme}
-                      className="mt-3 flex w-full items-center justify-between rounded-xl bg-[#f4f6fb] px-2.5 py-2 text-[11px] font-semibold text-[#65708a] dark:bg-white/5 dark:text-slate-300"
-                    >
-                      <span>{t.theme}</span>
-                      <span className="inline-flex items-center gap-1.5 text-[#4e64e6] dark:text-indigo-300">
-                        {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-                        {theme === 'dark' ? t.themeDark : t.themeLight}
-                      </span>
-                    </button>
-                  </div>
-
                   {!isLocalPreviewMode && (
                     <button
+                      type="button"
                       onClick={() => { void signOut(); setIsMenuOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-rose-500 hover:bg-rose-50"
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                     >
                       <LogOut className="h-4 w-4" /> {t.profileSignOut}
                     </button>
@@ -231,8 +163,8 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </header>
   );
@@ -248,14 +180,17 @@ const LanguageMenu: React.FC<{
   language: Language;
   setLanguage: (language: Language) => void;
   languages: { code: Language; label: string }[];
-}> = ({ language, setLanguage, languages }) => {
+  label: string;
+}> = ({ language, setLanguage, languages, label }) => {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <button
+        type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-1.5 text-[10px] font-semibold text-[#6e7890] ring-1 ring-[#e5e8f0] sm:px-2.5 sm:py-2 sm:text-[11px] dark:bg-white/5 dark:text-slate-300 dark:ring-white/10"
-        aria-label="Select language"
+        className="inline-flex h-8 items-center gap-1 rounded-full bg-white/80 px-2 text-[10px] font-semibold text-[#6e7890] ring-1 ring-[#e5e8f0] sm:h-9 sm:px-2.5 sm:text-[11px] dark:bg-white/5 dark:text-slate-300 dark:ring-white/10"
+        aria-label={label}
+        aria-expanded={open}
       >
         <Globe2 className="h-3.5 w-3.5" /> {language.toUpperCase()} <ChevronDown className="h-3 w-3" />
       </button>
@@ -263,6 +198,7 @@ const LanguageMenu: React.FC<{
         <div className="absolute right-0 top-10 z-50 min-w-32 rounded-xl border border-[#e4e8f0] bg-white p-1.5 shadow-lg dark:border-white/10 dark:bg-[#141724]">
           {languages.map((item) => (
             <button
+              type="button"
               key={item.code}
               onClick={() => { setLanguage(item.code); setOpen(false); }}
               className={`block w-full rounded-lg px-2.5 py-2 text-left text-xs ${language === item.code ? 'bg-[#eef1ff] font-bold text-[#4f64e6] dark:bg-indigo-400/10 dark:text-indigo-300' : 'text-[#626c83] hover:bg-[#f5f6fa] dark:text-slate-300 dark:hover:bg-white/5'}`}
@@ -275,3 +211,23 @@ const LanguageMenu: React.FC<{
     </div>
   );
 };
+
+const CurrencyPicker: React.FC<{
+  currency: Currency;
+  setCurrency: (currency: Currency) => void;
+  currencies: Currency[];
+  label: string;
+}> = ({ currency, setCurrency, currencies, label }) => (
+  <label className="relative flex h-8 items-center rounded-full bg-white/80 ring-1 ring-[#e5e8f0] sm:h-9 dark:bg-white/5 dark:ring-white/10">
+    <span className="sr-only">{label}</span>
+    <select
+      aria-label={label}
+      value={currency}
+      onChange={(event) => setCurrency(event.target.value as Currency)}
+      className="h-full w-[66px] appearance-none rounded-full bg-transparent pl-2.5 pr-5 text-[10px] font-semibold text-[#6e7890] outline-none sm:w-[72px] sm:pl-3 sm:text-[11px] dark:text-slate-300"
+    >
+      {currencies.map((item) => <option key={item} value={item}>{item}</option>)}
+    </select>
+    <ChevronDown className="pointer-events-none absolute right-2 h-3 w-3 text-[#8b93a6]" />
+  </label>
+);
