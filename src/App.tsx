@@ -66,7 +66,7 @@ const MainAppContent: React.FC = () => {
       {/* Supabase Setup Notice Banner (Only shown if env vars are pending) */}
       {!isBackendConnected && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-300">
-          <span>ℹ️ Mod Configurare Backend: Pentru a conecta baza de date Supabase și Auth în producție, configurează <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code> și <code>SUPABASE_SERVICE_ROLE_KEY</code> în variabilele de mediu.</span>
+          <span>⚠️ Supabase is not configured. Pentru a activa autentificarea și stocarea de fotografii în producție, configurează <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> și <code>SUPABASE_SECRET_KEY</code> în variabilele de mediu.</span>
         </div>
       )}
 

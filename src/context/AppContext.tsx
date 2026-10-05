@@ -356,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isBackendConnected) {
       return {
         success: false,
-        error: 'Backend-ul Supabase nu este configurat. Configurează VITE_SUPABASE_URL și VITE_SUPABASE_ANON_KEY.'
+        error: 'Supabase is not configured. Configurează VITE_SUPABASE_URL și VITE_SUPABASE_PUBLISHABLE_KEY.'
       };
     }
 
@@ -387,7 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isBackendConnected) {
       return {
         success: false,
-        error: 'Backend-ul Supabase nu este configurat. Configurează VITE_SUPABASE_URL și VITE_SUPABASE_ANON_KEY.'
+        error: 'Supabase is not configured. Configurează VITE_SUPABASE_URL și VITE_SUPABASE_PUBLISHABLE_KEY.'
       };
     }
 

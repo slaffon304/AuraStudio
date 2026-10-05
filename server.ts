@@ -45,7 +45,7 @@ interface AuthRequest extends Request {
 async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   if (!isServerSupabaseConfigured()) {
     return res.status(503).json({
-      error: 'Supabase backend is not configured yet. Please configure VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.'
+      error: 'Supabase is not configured. Please configure SUPABASE_URL and SUPABASE_SECRET_KEY in .env.'
     });
   }
 
@@ -627,6 +627,34 @@ app.post('/api/admin/credits/adjust', requireAuth, requireAdmin, async (req: Aut
 
     if (error) throw error;
     res.json({ success: true, newBalance });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin change user role (Enforced through protected server procedure)
+app.post('/api/admin/users/:id/role', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+  const { role } = req.body;
+  const targetUserId = req.params.id;
+
+  if (!role || (role !== 'user' && role !== 'admin')) {
+    return res.status(400).json({ error: 'Rol invalid. Valori acceptate: user sau admin.' });
+  }
+
+  // Prevent admin from accidentally demoting themselves
+  if (targetUserId === req.user!.id && role !== 'admin') {
+    return res.status(400).json({ error: 'Nu vă puteți retrage propriul rol de administrator.' });
+  }
+
+  try {
+    const { data: updatedRole, error } = await supabaseAdmin.rpc('admin_set_user_role', {
+      p_admin_id: req.user!.id,
+      p_target_user_id: targetUserId,
+      p_new_role: role
+    });
+
+    if (error) throw error;
+    res.json({ success: true, role: updatedRole });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
