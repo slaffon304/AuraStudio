@@ -19,9 +19,19 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const MAX_SOURCE_PHOTO_BYTES = 10 * 1024 * 1024;
+const SUPPORTED_SOURCE_PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif'
+};
+const SUPPORTED_ASPECT_RATIOS = new Set(['1:1', '3:4', '4:3', '9:16', '16:9']);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// 10 MB source photos arrive as base64 (~13.4 MB), so leave a small JSON envelope margin.
+app.use(express.json({ limit: '16mb' }));
+app.use(express.urlencoded({ extended: true, limit: '16mb' }));
 
 // Initialize Google GenAI Client
 let aiClient: GoogleGenAI | null = null;
@@ -141,59 +151,76 @@ app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Upload a user photo (to 'user-photos' storage bucket)
+// Upload a user photo (to the private 'user-photos' storage bucket).
 app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
-  const { dataUrl, filename } = req.body;
-  if (!dataUrl || !dataUrl.startsWith('data:image/')) {
-    return res.status(400).json({ error: 'Imagine invalidă. Se acceptă doar fișiere de tip imagine.' });
+  const { dataUrl, filename } = req.body || {};
+  const dataUrlMatch = typeof dataUrl === 'string'
+    ? dataUrl.match(/^data:(image\/(?:jpeg|png|webp|heic|heif));base64,([A-Za-z0-9+/=\r\n]+)$/i)
+    : null;
+
+  if (!dataUrlMatch) {
+    return res.status(400).json({ error: 'Se acceptă imagini JPEG, PNG, WebP, HEIC sau HEIF codificate în Base64.' });
+  }
+
+  const mimeType = dataUrlMatch[1].toLowerCase();
+  const extension = SUPPORTED_SOURCE_PHOTO_TYPES[mimeType];
+  const base64Data = dataUrlMatch[2].replace(/\s/g, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  if (!buffer.length) {
+    return res.status(400).json({ error: 'Fișierul imagine este gol sau invalid.' });
+  }
+  if (buffer.length > MAX_SOURCE_PHOTO_BYTES) {
+    return res.status(413).json({ error: 'Fotografia trebuie să aibă maximum 10 MB.' });
   }
 
   const userId = req.user!.id;
   const photoId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const storagePath = `${userId}/${photoId}.jpg`;
+  const storagePath = `${userId}/${photoId}.${extension}`;
+  const safeFilename = typeof filename === 'string' && filename.trim()
+    ? path.basename(filename.trim()).replace(/\0/g, '').slice(0, 255)
+    : `my_photo.${extension}`;
 
   try {
-    // Convert Base64 dataURL to binary Buffer for Supabase Storage
-    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    // 1. Upload to Supabase Storage 'user-photos' bucket
     const { error: uploadError } = await supabaseAdmin.storage
       .from('user-photos')
       .upload(storagePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true
+        contentType: mimeType,
+        upsert: false
       });
 
     if (uploadError) throw uploadError;
 
-    // 2. Insert metadata record in user_photos
     const { data: record, error: dbError } = await supabaseAdmin
       .from('user_photos')
       .insert({
         user_id: userId,
         storage_path: storagePath,
-        filename: filename || 'my_photo.jpg',
-        mime_type: 'image/jpeg',
+        filename: safeFilename,
+        mime_type: mimeType,
         file_size: buffer.length
       })
       .select('*')
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      await supabaseAdmin.storage.from('user-photos').remove([storagePath]);
+      throw dbError;
+    }
 
-    // 3. Create signed URL for frontend display
-    const { data: signedData } = await supabaseAdmin.storage
+    const { data: signedData, error: signedUrlError } = await supabaseAdmin.storage
       .from('user-photos')
       .createSignedUrl(storagePath, 3600);
 
-    res.json({
+    if (signedUrlError) throw signedUrlError;
+
+    return res.json({
       ...record,
       url: signedData?.signedUrl || ''
     });
   } catch (err: any) {
     console.error('Error uploading photo:', err);
-    res.status(500).json({ error: 'Încărcarea fotografiei a eșuat: ' + err.message });
+    return res.status(500).json({ error: 'Încărcarea fotografiei a eșuat: ' + err.message });
   }
 });
 
@@ -268,15 +295,15 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
 
 // Create and trigger AI generation job
 app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
-  const { templateId, userPhotoUrl, aspectRatio } = req.body;
+  const { templateId, userPhotoId, aspectRatio } = req.body || {};
   const userId = req.user!.id;
 
-  if (!templateId) {
+  if (typeof templateId !== 'string' || !templateId.trim()) {
     return res.status(400).json({ error: 'Parametrul templateId este obligatoriu.' });
   }
 
-  if (!userPhotoUrl) {
-    return res.status(400).json({ error: 'Fotografia utilizatorului este obligatorie.' });
+  if (typeof userPhotoId !== 'string' || !userPhotoId.trim()) {
+    return res.status(400).json({ error: 'Încarcă o fotografie înainte de generare.' });
   }
 
   // 1. Fetch template from database to obtain genuine cost and prompt
@@ -284,10 +311,11 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     .from('templates')
     .select('*')
     .eq('id', templateId)
+    .eq('is_active', true)
     .single();
 
   if (tmplError || !template) {
-    return res.status(404).json({ error: 'Șablonul specificat nu există.' });
+    return res.status(404).json({ error: 'Șablonul specificat nu există sau nu mai este activ.' });
   }
 
   // Check if AI provider is configured
@@ -296,6 +324,48 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       error: 'Generarea AI nu este configurată pe server: GEMINI_API_KEY lipsește în Secrets. Te rugăm să configurezi cheia Gemini în panoul de Secrets.'
     });
   }
+
+  // Resolve the selected image by its authenticated database record. Never trust a client URL
+  // for a private user photo, and never send a storage URL to the image model as if it were data.
+  const { data: userPhoto, error: userPhotoError } = await supabaseAdmin
+    .from('user_photos')
+    .select('id, user_id, storage_path, mime_type, file_size')
+    .eq('id', userPhotoId)
+    .eq('user_id', userId)
+    .single();
+
+  if (userPhotoError || !userPhoto) {
+    return res.status(404).json({ error: 'Fotografia nu a fost găsită în biblioteca ta.' });
+  }
+
+  const sourceMimeType = String(userPhoto.mime_type || '').toLowerCase();
+  if (!SUPPORTED_SOURCE_PHOTO_TYPES[sourceMimeType]) {
+    return res.status(415).json({ error: 'Formatul fotografiei nu este acceptat. Folosește JPEG, PNG, WebP, HEIC sau HEIF.' });
+  }
+  if (Number(userPhoto.file_size) > MAX_SOURCE_PHOTO_BYTES) {
+    return res.status(413).json({ error: 'Fotografia trebuie să aibă maximum 10 MB.' });
+  }
+
+  const { data: sourcePhotoBlob, error: sourcePhotoError } = await supabaseAdmin.storage
+    .from('user-photos')
+    .download(userPhoto.storage_path);
+
+  if (sourcePhotoError || !sourcePhotoBlob) {
+    console.error('Could not load source photo from private storage:', sourcePhotoError);
+    return res.status(422).json({ error: 'Nu am putut citi fotografia selectată. Încarc-o din nou și încearcă iar.' });
+  }
+
+  const sourcePhotoBuffer = Buffer.from(await sourcePhotoBlob.arrayBuffer());
+  if (!sourcePhotoBuffer.length) {
+    return res.status(422).json({ error: 'Fotografia selectată este goală sau invalidă.' });
+  }
+  if (sourcePhotoBuffer.length > MAX_SOURCE_PHOTO_BYTES) {
+    return res.status(413).json({ error: 'Fotografia trebuie să aibă maximum 10 MB.' });
+  }
+
+  const requestedAspectRatio = typeof aspectRatio === 'string' && SUPPORTED_ASPECT_RATIOS.has(aspectRatio)
+    ? aspectRatio
+    : (SUPPORTED_ASPECT_RATIOS.has(template.aspect_ratio) ? template.aspect_ratio : '3:4');
 
   let jobId: string | null = null;
 
@@ -306,12 +376,13 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       .insert({
         user_id: userId,
         template_id: template.id,
+        user_photo_id: userPhoto.id,
         status: 'queued',
         progress: 10,
         current_step_message: 'Verificare credite și autorizare...',
         provider_id: 'gemini-genai',
         credit_cost: template.credit_cost,
-        aspect_ratio: aspectRatio || template.aspect_ratio || '3:4'
+        aspect_ratio: requestedAspectRatio
       })
       .select('id')
       .single();
@@ -359,26 +430,26 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       })
       .eq('id', jobId);
 
-    // 5. Execute REAL server-side AI generation with Gemini SDK
+    // 5. Send both the curated template prompt and the private source image to Gemini.
     let imageBase64Data: string | null = null;
     let mimeType = 'image/jpeg';
 
-    const fullPrompt = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
+    const promptParts = [
+      template.prompt,
+      template.negative_prompt ? `Avoid these visual artifacts and traits: ${template.negative_prompt}.` : '',
+      'Create a high-end professional portrait while preserving the identity and facial features of the person in the provided source photo. Use a pristine European aesthetic, cinematic 85mm lens, natural facial details, and 4K ultra-HD photography.'
+    ].filter(Boolean);
+    const fullPrompt = promptParts.join(' ');
 
-    const contentsParts: any[] = [{ text: fullPrompt }];
-
-    // If userPhoto is dataURL, parse inlineData
-    if (userPhotoUrl.startsWith('data:image/')) {
-      const match = userPhotoUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (match) {
-        contentsParts.push({
-          inlineData: {
-            mimeType: match[1],
-            data: match[2]
-          }
-        });
+    const contentsParts: any[] = [
+      { text: fullPrompt },
+      {
+        inlineData: {
+          mimeType: sourceMimeType,
+          data: sourcePhotoBuffer.toString('base64')
+        }
       }
-    }
+    ];
 
     const genResponse = await aiClient.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
@@ -387,7 +458,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       },
       config: {
         imageConfig: {
-          aspectRatio: (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4'
+          aspectRatio: requestedAspectRatio
         }
       }
     });

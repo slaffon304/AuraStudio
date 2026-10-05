@@ -571,11 +571,26 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ====================================================================
 -- 7. Supabase Storage Buckets
 -- ====================================================================
-INSERT INTO storage.buckets (id, name, public)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES
-  ('user-photos', 'user-photos', false),
-  ('generated-images', 'generated-images', false)
-ON CONFLICT (id) DO UPDATE SET public = false;
+  (
+    'user-photos',
+    'user-photos',
+    false,
+    10485760,
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  ),
+  (
+    'generated-images',
+    'generated-images',
+    false,
+    20971520,
+    ARRAY['image/jpeg', 'image/png', 'image/webp']
+  )
+ON CONFLICT (id) DO UPDATE SET
+  public = false,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- ====================================================================
 -- 8. Row Level Security (RLS) Policies

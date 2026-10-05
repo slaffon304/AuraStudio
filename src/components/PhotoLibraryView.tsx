@@ -1,26 +1,43 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Upload, Trash2, Sparkles, FolderHeart, ShieldCheck, LogIn, ArrowRight } from 'lucide-react';
+import { getPhotoFileValidationError, readPhotoFileAsDataUrl } from '../lib/photo-files';
+import { Upload, Trash2, Sparkles, FolderHeart, ShieldCheck, LogIn, ArrowRight, AlertCircle } from 'lucide-react';
 
 export const PhotoLibraryView: React.FC = () => {
-  const { userPhotos, uploadPhoto, deletePhoto, currentUser, setIsAuthModalOpen, t, setIsCreateModalOpen } = useApp();
+  const { userPhotos, uploadPhoto, deletePhoto, currentUser, setIsAuthModalOpen, t, setIsCreateModalOpen, isLocalPreviewMode } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
 
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
+    const validationError = getPhotoFileValidationError(file);
+    if (validationError) {
+      setUploadError(validationError === 'too-large' ? t.photoTooLarge : t.photoUnsupported);
+      input.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      input.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const dataUrl = await readPhotoFileAsDataUrl(file);
       await uploadPhoto(dataUrl, file.name);
-    };
-    reader.readAsDataURL(file);
+    } catch (error: any) {
+      setUploadError(error.message || t.photoUploadFailed);
+    } finally {
+      setIsUploading(false);
+      input.value = '';
+    }
   };
 
   if (!currentUser) {
@@ -64,16 +81,17 @@ export const PhotoLibraryView: React.FC = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
             onChange={handleFileUpload}
             className="hidden"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-95"
+            disabled={isUploading}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-95 disabled:cursor-wait disabled:opacity-60"
           >
             <Upload className="h-4 w-4" />
-            <span>{t.uploadNewPhoto}</span>
+            <span>{isUploading ? t.photoUploading : t.uploadNewPhoto}</span>
           </button>
         </div>
       </div>
@@ -81,8 +99,15 @@ export const PhotoLibraryView: React.FC = () => {
       {/* Privacy Banner */}
       <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 text-xs text-emerald-300">
         <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-400" />
-        <span>{t.privacyNote}</span>
+        <span>{isLocalPreviewMode ? t.localPreviewPhotoNote : t.privacyNote}</span>
       </div>
+
+      {uploadError && (
+        <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{uploadError}</span>
+        </div>
+      )}
 
       {/* Photo Grid */}
       {userPhotos.length === 0 ? (

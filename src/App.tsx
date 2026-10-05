@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -11,167 +11,224 @@ import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { CreditPurchaseModal } from './components/CreditPurchaseModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
-import { PhotoTemplate } from './types';
+import { PhotoTemplate, TemplateCategory } from './types';
 import {
-  Sparkles,
-  Search,
+  ArrowLeft,
   ArrowRight,
-  ShieldCheck,
-  Zap,
-  Camera,
-  Layers,
-  Heart
+  ArrowUpRight,
+  BriefcaseBusiness,
+  Check,
+  ChevronDown,
+  Heart,
+  ImagePlus,
+  MapPin,
+  Search,
+  LogOut,
+  Sparkles,
+  UserRound,
+  WandSparkles
 } from 'lucide-react';
 
-const MainAppContent: React.FC = () => {
+type Navigate = (path: '/' | '/app') => void;
+
+const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   const {
     t,
+    language,
+    currency,
+    setLanguage,
+    setCurrency,
     currentView,
     setCurrentView,
     templates,
     selectedCategory,
+    setSelectedCategory,
     isCreateModalOpen,
     setIsCreateModalOpen,
     isCreditModalOpen,
     setIsCreditModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
+    isLocalPreviewMode,
+    currentUser,
+    signOut,
     quickSelectTemplate
   } = useApp();
 
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const trendingRailRef = useRef<HTMLDivElement>(null);
+  const railDragStartRef = useRef<{ x: number; left: number } | null>(null);
+  const railWasDraggedRef = useRef(false);
 
-  // Filter templates by category and search
-  const visibleTemplates = templates.filter((tmpl) => {
-    if (!tmpl.isActive) return false;
-    const matchesCategory =
-      selectedCategory === 'All' || tmpl.category === selectedCategory;
-    const matchesSearch =
-      searchQuery === '' ||
-      tmpl.name.ro.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tmpl.name.ru.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tmpl.name.en.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tmpl.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const activeTemplates = useMemo(() => templates.filter((template) => template.isActive), [templates]);
+  const visibleTemplates = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    return activeTemplates.filter((template) => {
+      const matchesCategory = selectedCategory === 'All' || template.category === selectedCategory;
+      const searchableText = [
+        template.name.ro,
+        template.name.ru,
+        template.name.en,
+        template.description.ro,
+        template.description.ru,
+        template.description.en,
+        template.category,
+        ...(template.tags || [])
+      ].join(' ').toLocaleLowerCase();
+      return matchesCategory && (!query || searchableText.includes(query));
+    });
+  }, [activeTemplates, selectedCategory, searchQuery]);
 
-  const { isBackendConnected } = useApp();
+  const trendingTemplates = useMemo(() => {
+    const curated = activeTemplates.filter((template) =>
+      template.category === 'Trending' || (template.tags || []).some((tag) => tag.toLowerCase() === 'trending')
+    );
+    const rest = activeTemplates.filter((template) => !curated.some((item) => item.id === template.id));
+    return [...curated, ...rest].slice(0, 8);
+  }, [activeTemplates]);
+
+  const quickCollections: { category: TemplateCategory; label: string; image: PhotoTemplate | undefined; icon: React.ElementType }[] = [
+    { category: 'Moldova', label: t.appQuickMoldova, image: activeTemplates.find((template) => template.category === 'Moldova'), icon: MapPin },
+    { category: 'Couple', label: t.appQuickCouple, image: activeTemplates.find((template) => template.category === 'Couple'), icon: Heart },
+    { category: 'Business', label: t.appQuickBusiness, image: activeTemplates.find((template) => template.category === 'Business'), icon: BriefcaseBusiness }
+  ];
+
+  const scrollTrending = (direction: -1 | 1) => {
+    trendingRailRef.current?.scrollBy({ left: direction * 260, behavior: 'smooth' });
+  };
+
+  const startTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    railDragStartRef.current = { x: event.clientX, left: trendingRailRef.current?.scrollLeft || 0 };
+    railWasDraggedRef.current = false;
+  };
+
+  const moveTrendingDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    const start = railDragStartRef.current;
+    if (!start || event.buttons !== 1 || !trendingRailRef.current) return;
+    const distance = event.clientX - start.x;
+    if (Math.abs(distance) > 4) railWasDraggedRef.current = true;
+    if (railWasDraggedRef.current) {
+      event.preventDefault();
+      trendingRailRef.current.scrollLeft = start.left - distance;
+    }
+  };
+
+  const endTrendingDrag = () => {
+    railDragStartRef.current = null;
+    window.setTimeout(() => { railWasDraggedRef.current = false; }, 0);
+  };
+
+  const preventClickAfterDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (railWasDraggedRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  const openPrivateView = (view: 'gallery' | 'library' | 'profile') => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setCurrentView(view);
+  };
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-slate-100 flex flex-col pb-20 md:pb-10">
-      {/* Top Header */}
-      <Header />
+    <div className="min-h-screen bg-[#eef1f8] pb-28 text-[#1d2540] md:pb-8">
+      <Header variant="app" onNavigateHome={() => navigate('/')} onNavigateApp={() => navigate('/app')} />
 
-      {/* Supabase Setup Notice Banner (Only shown if env vars are pending) */}
-      {!isBackendConnected && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-300">
-          <span>⚠️ Supabase is not configured. Pentru a activa autentificarea și stocarea de fotografii în producție, configurează <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> și <code>SUPABASE_SECRET_KEY</code> în variabilele de mediu.</span>
-        </div>
-      )}
-
-      {/* Main Content Area */}
-      <main className="flex-1">
-        {/* VIEW 1: EXPLORE & BROWSE TEMPLATES */}
+      <main className="mx-auto w-full max-w-[1180px] px-4 sm:px-6">
         {currentView === 'explore' && (
           <div>
-            {/* HERO SECTION */}
-            <section className="relative overflow-hidden border-b border-white/[0.06] bg-gradient-to-b from-[#11131c] via-[#0b0c12] to-[#090a0f] pt-10 pb-12 sm:pt-14 sm:pb-16 px-4 sm:px-6 lg:px-8">
-              {/* Subtle ambient lighting flares */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-amber-500/[0.06] rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -top-24 right-10 w-96 h-96 bg-violet-600/[0.04] rounded-full blur-3xl pointer-events-none" />
+            <div className="mx-auto max-w-[720px] pt-4 sm:pt-6">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#9aa2b2]" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t.appSearchPlaceholder}
+                  className="h-11 w-full rounded-full border border-[#e3e7f0] bg-white px-11 text-[12px] text-[#29324c] shadow-[0_2px_8px_rgba(42,55,91,.035)] outline-none placeholder:text-[#a0a7b6] focus:border-[#aebafb] focus:ring-4 focus:ring-[#536dfe]/[0.08] sm:h-12 sm:text-[13px]"
+                />
+              </label>
+              <div className="mt-2 sm:mt-3">
+                <CategoryFilter />
+              </div>
+            </div>
 
-              <div className="relative max-w-4xl mx-auto text-center space-y-5">
-                {/* Quiet Region marker (No pill badge, natural unboxed typography) */}
-                <div className="flex items-center justify-center gap-2 text-xs font-semibold text-amber-400 tracking-wide">
-                  <span>🇲🇩 Moldova</span>
-                  <span aria-hidden="true" className="text-slate-600">·</span>
-                  <span>🇷🇴 România</span>
-                  <span aria-hidden="true" className="text-slate-600">·</span>
-                  <span className="text-slate-400">AI Photo Studio</span>
-                </div>
+            <section aria-label={t.appCollectionsLabel} className="mt-4 grid grid-cols-3 gap-2.5 sm:mt-5 sm:gap-3">
+              {quickCollections.map(({ category, label, image, icon: Icon }) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setSelectedCategory(category)}
+                  className="group relative h-[88px] overflow-hidden rounded-[18px] bg-white text-left ring-1 ring-[#e5e8f0] transition active:scale-[.985] sm:h-[112px] sm:rounded-[20px]"
+                >
+                  {image && <img src={image.previewImage} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />}
+                  <span className="absolute inset-0 bg-gradient-to-t from-[#10182d]/80 via-[#10182d]/18 to-[#10182d]/5" />
+                  <span className="absolute left-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-[#5268ec] shadow-sm sm:left-3 sm:top-3 sm:h-7 sm:w-7">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="absolute inset-x-2 bottom-2.5 line-clamp-2 text-[9px] font-bold leading-tight text-white sm:inset-x-3 sm:bottom-3 sm:text-[11px]">
+                    {label}
+                  </span>
+                </button>
+              ))}
+            </section>
 
-                {/* Primary Headline */}
-                <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white max-w-3xl mx-auto leading-[1.15]">
-                  {t.heroHeadline}
-                </h1>
-
-                {/* Subtitle */}
-                <p className="text-xs sm:text-sm md:text-base text-slate-300/90 max-w-xl mx-auto leading-relaxed">
-                  {t.heroSubhead}
-                </p>
-
-                {/* Primary CTA and Search */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
-                  <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 px-8 py-3.5 text-xs font-bold text-slate-950 shadow-xl shadow-amber-500/25 hover:brightness-110 active:scale-95 transition-all"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    <span>{t.createPhotoAction}</span>
+            <section className="mt-6 sm:mt-8" aria-labelledby="trending-title">
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
+                <h1 id="trending-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl">{t.appTrendingTitle}</h1>
+                <div className="hidden items-center gap-1.5 sm:flex">
+                  <button onClick={() => scrollTrending(-1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8]" aria-label={t.scrollTrendingLeft}>
+                    <ArrowLeft className="h-4 w-4" />
                   </button>
-
-                  <div className="w-full sm:w-64 relative">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Caută șablon..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-10 pr-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400/80 transition-colors"
-                    />
-                  </div>
+                  <button onClick={() => scrollTrending(1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#78829a] ring-1 ring-[#e4e8f0] transition hover:text-[#4c62e8]" aria-label={t.scrollTrendingRight}>
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
                 </div>
-
-                {/* 3 Value Pillars (Zero-pill text separators) */}
-                <div className="pt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>Fotografii 100% private</span>
+              </div>
+              <div
+                ref={trendingRailRef}
+                className="no-scrollbar -mx-4 flex snap-x snap-mandatory select-none gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 touch-pan-x cursor-grab active:cursor-grabbing sm:mx-0 sm:gap-3 sm:px-0"
+                style={{ scrollPaddingLeft: '1rem' }}
+                onMouseDown={startTrendingDrag}
+                onMouseMove={moveTrendingDrag}
+                onMouseUp={endTrendingDrag}
+                onClickCapture={preventClickAfterDrag}
+              >
+                {trendingTemplates.map((template) => (
+                  <div key={template.id} className="w-[104px] flex-none sm:w-[128px] lg:w-[142px]">
+                    <TemplateCard template={template} variant="carousel" onPreview={setPreviewTemplate} />
                   </div>
-                  <span aria-hidden="true" className="text-slate-700 hidden sm:inline">·</span>
-                  <div className="flex items-center gap-1.5">
-                    <Zap className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Rezultat gata în 5 secunde</span>
-                  </div>
-                  <span aria-hidden="true" className="text-slate-700 hidden sm:inline">·</span>
-                  <div className="flex items-center gap-1.5">
-                    <Camera className="h-3.5 w-3.5 text-amber-300" />
-                    <span>Fără setări tehnice sau prompturi</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </section>
 
-            {/* TEMPLATES SHOWCASE SECTION */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-              {/* Category Filter Bar */}
-              <div className="mb-6">
-                <CategoryFilter />
+            <section className="mt-7 sm:mt-9" aria-labelledby="try-title">
+              <div className="mb-3 flex items-end justify-between sm:mb-4">
+                <div>
+                  <h2 id="try-title" className="text-[17px] font-extrabold tracking-tight text-[#202844] sm:text-xl">{t.appTryTitle}</h2>
+                  <p className="mt-1 text-[10px] text-[#9299aa] sm:text-xs">{t.landingSamplesSub}</p>
+                </div>
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="text-[10px] font-semibold text-[#5268ed] sm:text-xs">
+                    {t.clearSearch}
+                  </button>
+                )}
               </div>
 
-              {/* Templates Grid */}
               {visibleTemplates.length === 0 ? (
-                <div className="text-center py-20 rounded-3xl border border-white/5 bg-white/[0.01]">
-                  <p className="text-xs text-slate-400">Nu am găsit șabloane pentru căutarea selectată.</p>
-                  <button
-                    onClick={() => {
-                      setSearchQuery('');
-                    }}
-                    className="mt-3 text-xs text-amber-400 hover:underline"
-                  >
-                    Resetează filtrele
-                  </button>
+                <div className="rounded-2xl border border-[#e3e7f0] bg-white px-5 py-12 text-center">
+                  <p className="text-sm font-semibold text-[#404b68]">{t.noTemplatesFound}</p>
+                  <button onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }} className="mt-2 text-xs font-semibold text-[#536dfe]">{t.resetFilters}</button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
                   {visibleTemplates.map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      onSelect={(tmpl) => quickSelectTemplate(tmpl)}
-                      onPreview={(tmpl) => setPreviewTemplate(tmpl)}
-                    />
+                    <TemplateCard key={template.id} template={template} onPreview={setPreviewTemplate} />
                   ))}
                 </div>
               )}
@@ -179,68 +236,265 @@ const MainAppContent: React.FC = () => {
           </div>
         )}
 
-        {/* VIEW 2: GALLERY */}
         {currentView === 'gallery' && <GalleryView />}
-
-        {/* VIEW 3: PHOTO LIBRARY */}
         {currentView === 'library' && <PhotoLibraryView />}
-
-        {/* VIEW 4: ADMIN DASHBOARD */}
         {currentView === 'admin' && <AdminDashboard />}
+
+        {currentView === 'profile' && currentUser && (
+          <section className="mx-auto max-w-xl py-7 sm:py-10">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#202844]">{t.profileTitle}</h1>
+            <p className="mt-1 text-sm text-[#858ea2]">{t.profileSub}</p>
+            <div className="mt-5 rounded-[22px] border border-[#e3e7f0] bg-white p-5 shadow-[0_6px_25px_rgba(42,55,91,.04)]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8ecff] text-[#536dfe]"><UserRound className="h-5 w-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-[#27314f]">{currentUser.name}</p>
+                  <p className="truncate text-xs text-[#8a92a4]">{currentUser.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsCreditModalOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-[#f3f5ff] px-4 py-3 text-left">
+                <span className="text-xs font-medium text-[#747f99]">{t.currentBalance}</span>
+                <span className="text-sm font-extrabold text-[#4e64e6]">{currentUser.creditBalance} {t.credits}</span>
+              </button>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button onClick={() => setCurrentView('library')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb]">{t.profilePhotos}</button>
+                <button onClick={() => setCurrentView('gallery')} className="rounded-xl border border-[#e6e9f1] px-3 py-3 text-xs font-semibold text-[#5d6882] hover:bg-[#f7f8fb]">{t.myGallery}</button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2]">
+                  {t.profileLanguage}
+                  <select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none">
+                    <option value="ro">Română</option><option value="ru">Русский</option><option value="en">English</option>
+                  </select>
+                </label>
+                <label className="rounded-xl bg-[#f7f8fb] px-3 py-2 text-[10px] font-semibold text-[#8991a2]">
+                  {t.profileCurrency}
+                  <select value={currency} onChange={(event) => setCurrency(event.target.value as typeof currency)} className="mt-1 block w-full bg-transparent text-xs font-bold text-[#3d4967] outline-none">
+                    <option value="MDL">MDL</option><option value="RON">RON</option><option value="EUR">EUR</option>
+                  </select>
+                </label>
+              </div>
+              {!isLocalPreviewMode && (
+                <button onClick={() => { void signOut(); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-semibold text-rose-500 hover:bg-rose-50">
+                  <LogOut className="h-4 w-4" /> {t.profileSignOut}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* FOOTER */}
-      <footer className="mt-auto border-t border-white/[0.06] bg-[#07080b] py-8 text-center text-xs text-slate-500 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-display font-bold text-white text-sm">AuraStudio</span>
-            <span aria-hidden="true" className="text-slate-700">·</span>
-            <span className="text-[11px] text-slate-400">Moldova & România</span>
-          </div>
+      <BottomNav />
 
-          <div className="text-[11px] text-slate-500">
-            {t.footerTagline}
-          </div>
-
-          <div className="text-[11px] text-slate-600">
-            © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
-          </div>
-        </div>
-      </footer>
-
-      {/* MODALS */}
-      <CreatePhotoModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-      />
-
+      <CreatePhotoModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
       <TemplateDetailModal
         template={previewTemplate}
         isOpen={!!previewTemplate}
         onClose={() => setPreviewTemplate(null)}
-        onSelect={(tmpl) => quickSelectTemplate(tmpl)}
+        onSelect={(template) => {
+          setPreviewTemplate(null);
+          setCurrentView('explore');
+          quickSelectTemplate(template);
+        }}
       />
-
-      <CreditPurchaseModal
-        isOpen={isCreditModalOpen}
-        onClose={() => setIsCreditModalOpen(false)}
-      />
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
-
-      {/* MOBILE THUMB-ZONE BOTTOM NAVIGATION */}
-      <BottomNav />
+      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
+};
+
+const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
+  const { t, language, templates, setCurrentView, isAuthModalOpen, setIsAuthModalOpen, isCreditModalOpen, setIsCreditModalOpen } = useApp();
+  const [faqOpen, setFaqOpen] = useState<number | null>(0);
+  const activeTemplates = templates.filter((template) => template.isActive);
+  const heroTemplate = activeTemplates[0];
+  const sideTemplates = activeTemplates.slice(1, 3);
+
+  const openApp = () => navigate('/app');
+  const showTemplate = () => {
+    setCurrentView('explore');
+    openApp();
+  };
+
+  return (
+    <div className="min-h-screen bg-[#eef1f8] text-[#18203b]">
+      <Header variant="marketing" onNavigateApp={openApp} onNavigateHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+
+      <main>
+        <section className="mx-auto max-w-[980px] px-5 pb-8 pt-8 sm:px-8 sm:pb-12 sm:pt-12 lg:pt-16">
+          <div className="mx-auto max-w-[760px] text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-[9px] font-bold tracking-[.13em] text-[#6675d4] ring-1 ring-[#e2e7f2] sm:text-[10px]">
+              <Sparkles className="h-3 w-3" /> {t.landingBadge}
+            </span>
+            <h1 className="mt-5 text-[34px] font-extrabold leading-[1.06] tracking-[-.045em] text-[#151d38] sm:mt-6 sm:text-5xl md:text-[58px]">
+              <span className="block">{t.landingHeadlineLead}</span>
+              <span className="mt-1 block text-[#5269f5]">{t.landingHeadlineHighlight}</span>
+            </h1>
+            <p className="mx-auto mt-4 max-w-[590px] text-[12px] leading-[1.75] text-[#7d879d] sm:mt-5 sm:text-sm">
+              {t.landingSubhead}
+            </p>
+            <button
+              type="button"
+              onClick={openApp}
+              className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#4e67f7] px-7 text-xs font-bold text-white shadow-[0_8px_20px_rgba(78,103,247,.22)] transition hover:-translate-y-0.5 hover:bg-[#4059e8] active:translate-y-0 sm:mt-6 sm:min-h-12 sm:px-8 sm:text-sm"
+            >
+              {t.landingCta}<ArrowRight className="h-4 w-4" />
+            </button>
+            <p className="mt-2 text-[10px] text-[#9aa2b3]">{t.landingFreeNote}</p>
+          </div>
+
+          <div className="relative mx-auto mt-8 h-[295px] max-w-[470px] sm:mt-10 sm:h-[390px] md:mt-12">
+            {heroTemplate && (
+              <div className="absolute bottom-2 right-[6%] top-0 w-[67%] overflow-hidden rounded-[26px] bg-white shadow-[0_20px_55px_rgba(34,47,80,.18)] ring-1 ring-white/70 sm:rounded-[32px]">
+                <img src={heroTemplate.previewImage} alt={heroTemplate.name[language] || heroTemplate.name.ro} className="h-full w-full object-cover" />
+                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4e5a76] shadow-sm backdrop-blur sm:left-4 sm:top-4 sm:text-[10px]">
+                  <Sparkles className="h-3 w-3 text-[#566cf4]" /> {t.landingSamplesTitle}
+                </span>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#11182d]/65 to-transparent px-4 pb-4 pt-12 text-white sm:px-5 sm:pb-5">
+                  <p className="text-[10px] font-medium text-white/80">{t.categories[heroTemplate.category] || heroTemplate.category}</p>
+                  <p className="mt-1 text-sm font-bold sm:text-base">{heroTemplate.name[language] || heroTemplate.name.ro}</p>
+                </div>
+              </div>
+            )}
+            {sideTemplates[0] && (
+              <div className="absolute bottom-[10%] left-[2%] z-10 h-[46%] w-[37%] rotate-[-4deg] overflow-hidden rounded-[19px] bg-white p-1.5 shadow-[0_15px_35px_rgba(34,47,80,.2)] sm:rounded-[22px] sm:p-2">
+                <img src={sideTemplates[0].previewImage} alt={sideTemplates[0].name[language] || sideTemplates[0].name.ro} className="h-full w-full rounded-[14px] object-cover sm:rounded-[16px]" />
+                <span className="absolute bottom-3 left-3 right-3 truncate rounded-full bg-white/90 px-2 py-1 text-center text-[8px] font-bold text-[#44516e] sm:text-[9px]">
+                  {sideTemplates[0].name[language] || sideTemplates[0].name.ro}
+                </span>
+              </div>
+            )}
+            {sideTemplates[1] && (
+              <div className="absolute right-[2%] top-[8%] z-10 h-[27%] w-[27%] rotate-[5deg] overflow-hidden rounded-[17px] bg-white p-1.5 shadow-[0_12px_28px_rgba(34,47,80,.18)] sm:rounded-[20px] sm:p-2">
+                <img src={sideTemplates[1].previewImage} alt={sideTemplates[1].name[language] || sideTemplates[1].name.ro} className="h-full w-full rounded-[12px] object-cover sm:rounded-[15px]" />
+              </div>
+            )}
+            <div className="absolute bottom-[1%] right-[0%] z-20 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-[9px] font-semibold text-[#5d6984] shadow-[0_8px_25px_rgba(34,47,80,.14)] sm:bottom-[4%] sm:px-4 sm:py-2.5 sm:text-[10px]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#edf0ff] text-[#546af4]"><Check className="h-3 w-3" /></span>
+              {t.landingStep1Body.split('.')[0]}
+            </div>
+          </div>
+        </section>
+
+        <section id="examples" className="border-y border-[#e4e8f1] bg-white/65 py-8 sm:py-11">
+          <div className="mx-auto max-w-[1180px] px-4 sm:px-6">
+            <div className="mb-4 flex items-end justify-between gap-4 sm:mb-5">
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl">{t.landingSamplesTitle}</h2>
+                <p className="mt-1 text-[11px] text-[#9098aa] sm:text-xs">{t.landingSamplesSub}</p>
+              </div>
+              <button onClick={openApp} className="hidden items-center gap-1 text-xs font-bold text-[#5269f5] sm:inline-flex">
+                {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+              {activeTemplates.slice(0, 4).map((template) => (
+                <TemplateCard key={template.id} template={template} onPreview={showTemplate} />
+              ))}
+            </div>
+            <button onClick={openApp} className="mt-4 inline-flex items-center gap-1 text-[11px] font-bold text-[#5269f5] sm:hidden">
+              {t.exploreTemplates}<ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="mx-auto max-w-[1020px] px-4 py-10 sm:px-6 sm:py-14">
+          <div className="mx-auto max-w-[560px] text-center">
+            <span className="text-[9px] font-bold uppercase tracking-[.15em] text-[#7180dc]">AuraStudio</span>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1c2541] sm:text-3xl">{t.landingHowTitle}</h2>
+            <p className="mt-2 text-[11px] text-[#8c95a9] sm:text-sm">{t.landingHowSub}</p>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
+            {[
+              { number: '01', title: t.step1Template, body: t.landingStep1Body, icon: <WandSparkles className="h-4 w-4" /> },
+              { number: '02', title: t.step2Photo, body: t.landingStep2Body, icon: <ImagePlus className="h-4 w-4" /> },
+              { number: '03', title: t.step3Generate, body: t.landingStep3Body, icon: <Sparkles className="h-4 w-4" /> }
+            ].map((step) => (
+              <div key={step.number} className="rounded-[20px] border border-[#e8ebf2] bg-white p-4 shadow-[0_5px_18px_rgba(42,55,91,.035)] sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f0f3ff] text-[#576df3]">{step.icon}</span>
+                  <span className="text-sm font-extrabold text-[#cad0df]">{step.number}</span>
+                </div>
+                <h3 className="mt-4 text-[12px] font-bold text-[#27314e] sm:text-sm">{step.title}</h3>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-[#8a93a7] sm:text-xs">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="px-4 pb-10 sm:px-6 sm:pb-14">
+          <div className="mx-auto flex max-w-[1020px] flex-col items-center justify-between gap-5 rounded-[24px] bg-[#111832] px-5 py-7 text-center text-white sm:flex-row sm:px-9 sm:py-8 sm:text-left">
+            <div>
+              <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">{t.landingHeadlineLead}</h2>
+              <p className="mt-1.5 text-[11px] text-white/60 sm:text-sm">{t.landingFreeNote}</p>
+            </div>
+            <button onClick={openApp} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#536dfe] px-6 text-xs font-bold text-white shadow-md shadow-black/20 transition hover:bg-[#6680ff]">
+              {t.landingCta}<ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[760px] px-4 pb-10 sm:px-6 sm:pb-14">
+          <div className="mb-4 text-center">
+            <h2 className="text-xl font-extrabold tracking-tight text-[#1d2540] sm:text-2xl">{t.landingFaqTitle}</h2>
+          </div>
+          <div className="space-y-2">
+            {[
+              [t.landingFaqPromptQ, t.landingFaqPromptA],
+              [t.landingFaqFormatsQ, t.landingFaqFormatsA],
+              [t.landingFaqPrivacyQ, t.landingFaqPrivacyA],
+              [t.landingFaqRatioQ, t.landingFaqRatioA]
+            ].map(([question, answer], index) => (
+              <details key={question} open={faqOpen === index} onToggle={(event) => {
+                if ((event.currentTarget as HTMLDetailsElement).open) setFaqOpen(index);
+                else if (faqOpen === index) setFaqOpen(null);
+              }} className="group rounded-2xl border border-[#e4e8f0] bg-white px-4 py-3.5 open:shadow-[0_5px_18px_rgba(42,55,91,.04)] sm:px-5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-bold text-[#303a57] sm:text-xs">
+                  {question}<ChevronDown className="h-4 w-4 shrink-0 text-[#8792aa] transition group-open:rotate-180" />
+                </summary>
+                <p className="pt-2.5 text-[10px] leading-relaxed text-[#858ea2] sm:text-xs">{answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-[#e2e6ef] px-4 py-5 text-center text-[10px] text-[#9aa2b2] sm:py-6">
+        <div className="font-bold text-[#56617c]">AuraStudio <span className="font-normal text-[#a4abba]">· Moldova & România</span></div>
+        <p className="mt-1">© {new Date().getFullYear()} AuraStudio. {t.rightsReserved}</p>
+      </footer>
+
+      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+    </div>
+  );
+};
+
+const AppRouter: React.FC = () => {
+  const { setCurrentView } = useApp();
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  const navigate = useCallback<Navigate>((path) => {
+    if (path === '/app') setCurrentView('explore');
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setPathname(path);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [setCurrentView]);
+
+  useEffect(() => {
+    const syncPath = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', syncPath);
+    return () => window.removeEventListener('popstate', syncPath);
+  }, []);
+
+  return pathname === '/app' || pathname.startsWith('/app/')
+    ? <MainAppContent navigate={navigate} />
+    : <MarketingLanding navigate={navigate} />;
 };
 
 export default function App() {
   return (
     <AppProvider>
-      <MainAppContent />
+      <AppRouter />
     </AppProvider>
   );
 }
