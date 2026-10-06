@@ -152,34 +152,57 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     }
   ];
 
-  // Photo packages (EUR placeholders — user will adjust prices)
+  // Photo packages — prices per currency (placeholders; adjust when final)
+  // Base idea: ~EUR, MDL ≈ ×20, RON ≈ ×5 (rough; set real numbers later)
+  type Money = { MDL: string; RON: string; EUR: string };
+  const money = (m: Money) => m[currency as keyof Money] || m.EUR;
+  const sym = currency === 'MDL' ? 'L' : currency === 'RON' ? 'lei' : '€';
+
   const packages = [
     {
       id: 'single',
       title: t.landingPkg1Title,
-      priceMain: '4.90',
-      priceNote: t.landingPkg1Note,
+      priceMain: money({ EUR: '4.90', MDL: '99', RON: '25' }),
+      priceNote:
+        currency === 'EUR'
+          ? t.landingPkg1Note
+          : language === 'ru'
+          ? 'одно фото'
+          : language === 'en'
+          ? 'one photo'
+          : 'o fotografie',
       description: t.landingPkg1Desc,
       isPopular: false,
-      photos: 1
+      photos: 1,
+      packTotal: null as string | null
     },
     {
       id: 'studio',
       title: t.landingPkg2Title,
-      priceMain: '1.90',
-      priceNote: t.landingPkg2Note,
+      priceMain: money({ EUR: '1.90', MDL: '39', RON: '10' }),
+      priceNote: money({
+        EUR: '19€ pachet · 10 foto',
+        MDL: '390 L pachet · 10 foto',
+        RON: '99 lei pachet · 10 foto'
+      }),
       description: t.landingPkg2Desc,
       isPopular: true,
-      photos: 10
+      photos: 10,
+      packTotal: money({ EUR: '19', MDL: '390', RON: '99' })
     },
     {
       id: 'session',
       title: t.landingPkg3Title,
-      priceMain: '1.20',
-      priceNote: t.landingPkg3Note,
+      priceMain: money({ EUR: '1.20', MDL: '25', RON: '6' }),
+      priceNote: money({
+        EUR: '49€ pachet · 40 foto',
+        MDL: '990 L pachet · 40 foto',
+        RON: '249 lei pachet · 40 foto'
+      }),
       description: t.landingPkg3Desc,
       isPopular: false,
-      photos: 40
+      photos: 40,
+      packTotal: money({ EUR: '49', MDL: '990', RON: '249' })
     }
   ];
 
@@ -484,12 +507,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                   </h3>
 
                   <div className="mt-6">
-                    <div className="flex items-end gap-1">
+                    <div className="flex items-end gap-1 flex-wrap">
                       <span className="font-display text-[42px] font-extrabold leading-none tracking-tight text-[#1a2035] sm:text-[46px]">
                         {pkg.priceMain}
                       </span>
-                      <span className="mb-1 text-[18px] font-bold text-[#1a2035]">
-                        €{pkg.photos === 1 ? '' : t.landingPkgPerPhoto}
+                      <span className="mb-1 text-[16px] font-bold text-[#1a2035]">
+                        {currency === 'EUR' ? '€' : sym}
+                        {pkg.photos > 1 ? t.landingPkgPerPhoto : ''}
                       </span>
                     </div>
                     <p className="mt-2 text-[14px] font-medium text-[#8b93a7]">
