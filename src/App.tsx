@@ -14,6 +14,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { ProfileView } from './components/ProfileView';
 import { PhotoTemplate } from './types';
+import { pathToView, viewToPath } from './lib/navigation';
 import {
   Sparkles,
   Search,
@@ -44,23 +45,10 @@ const MainAppContent: React.FC = () => {
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Sync URL path ↔ currentView (minimal routing for /app and /app/profile)
+  // Sync URL path ↔ currentView
   useEffect(() => {
     const applyPath = () => {
-      const path = window.location.pathname.replace(/\/$/, '') || '/';
-      if (path === '/app/profile') {
-        setCurrentView('profile' as any);
-      } else if (path === '/app/gallery') {
-        setCurrentView('gallery');
-      } else if (path === '/app/library') {
-        setCurrentView('library');
-      } else if (path === '/app/admin') {
-        setCurrentView('admin');
-      } else if (path === '/app' || path.startsWith('/app/')) {
-        setCurrentView('explore');
-      } else {
-        setCurrentView('landing');
-      }
+      setCurrentView(pathToView(window.location.pathname) as any);
     };
     applyPath();
     window.addEventListener('popstate', applyPath);
@@ -100,7 +88,7 @@ const MainAppContent: React.FC = () => {
           <LandingView
             onGoToApp={() => {
               setCurrentView('explore');
-              window.history.pushState({}, '', '/app');
+              window.history.pushState({}, '', viewToPath('explore'));
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
