@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Sparkles, User, Globe, ChevronDown, LogOut, LogIn, Sun, Moon, Shield } from 'lucide-react';
 import { Language, Currency } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
+import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
 
 export const Header: React.FC = () => {
   const {
@@ -31,32 +32,27 @@ export const Header: React.FC = () => {
 
   const currencies: Currency[] = ['MDL', 'RON', 'EUR'];
 
-  const goLanding = () => {
-    setCurrentView('landing');
-    window.history.pushState({}, '', '/');
+  const navigate = (view: 'landing' | 'explore' | 'profile' | 'gallery' | 'library' | 'admin') => {
+    setCurrentView(view as any);
+    window.history.pushState({}, '', viewToPath(view as any));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const goApp = () => {
-    setCurrentView('explore');
-    window.history.pushState({}, '', '/app');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const goLanding = () => navigate('landing');
+  const goApp = () => navigate('explore');
 
   const goProfile = () => {
     if (!currentUser) {
+      setAfterAuthRedirect('profile');
       setIsAuthModalOpen(true);
       return;
     }
-    setCurrentView('profile' as any);
-    window.history.pushState({}, '', '/app/profile');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate('profile');
   };
 
   const goTariffs = () => {
     if (currentView !== 'landing') {
-      setCurrentView('landing');
-      window.history.pushState({}, '', '/');
+      navigate('landing');
       setTimeout(() => {
         document.getElementById('photo-packages')?.scrollIntoView({ behavior: 'smooth' });
       }, 80);
@@ -218,8 +214,7 @@ export const Header: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsUserMenuOpen(false);
-                    setCurrentView('gallery');
-                    window.history.pushState({}, '', '/app/gallery');
+                    navigate('gallery');
                   }}
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
