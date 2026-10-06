@@ -147,19 +147,37 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     }
   ];
 
-  // Photo packages
+  // Photo packages (EUR placeholders — user will adjust prices)
   const packages = [
     {
-      title: t.landingPackagePortrait,
-      image: resultWoman2EditorialImg
+      id: 'single',
+      title: t.landingPkg1Title,
+      priceMain: '4.90',
+      priceUnit: t.landingPkgPerPhoto,
+      priceNote: t.landingPkg1Note,
+      features: [t.landingPkg1F1, t.landingPkg1F2],
+      isPopular: false,
+      photos: 1
     },
     {
-      title: t.landingPackageCouple,
-      image: activeTemplates.find((tpl) => tpl.category === 'Couple')?.previewImage || activeTemplates[1]?.previewImage
+      id: 'studio',
+      title: t.landingPkg2Title,
+      priceMain: '1.90',
+      priceUnit: t.landingPkgPerPhoto,
+      priceNote: t.landingPkg2Note,
+      features: [t.landingPkg2F1, t.landingPkg2F2, t.landingPkg2F3],
+      isPopular: true,
+      photos: 10
     },
     {
-      title: t.landingPackageEditorial,
-      image: activeTemplates.find((tpl) => tpl.category === 'Fashion')?.previewImage || activeTemplates[2]?.previewImage
+      id: 'session',
+      title: t.landingPkg3Title,
+      priceMain: '1.20',
+      priceUnit: t.landingPkgPerPhoto,
+      priceNote: t.landingPkg3Note,
+      features: [t.landingPkg3F1, t.landingPkg3F2, t.landingPkg3F3],
+      isPopular: false,
+      photos: 40
     }
   ];
 
@@ -415,120 +433,117 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
           </div>
         </section>
 
-        {/* SECTION 3: PHOTO PACKAGES */}
+        {/* SECTION 3: PHOTO PACKAGES / ТАРИФЫ */}
         <section
           id="photo-packages"
           className="scroll-mt-24 px-4 py-12 sm:px-7 sm:py-16 lg:px-10"
         >
-          <div className="relative mx-auto max-w-[1240px] overflow-hidden rounded-[28px] bg-[#11162c] px-5 py-8 text-white shadow-[0_24px_70px_rgba(27,32,66,0.12)] sm:rounded-[36px] sm:px-9 sm:py-10 lg:px-11 lg:py-12">
-            <div className="pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full bg-[#6954ef]/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-36 left-[28%] h-72 w-72 rounded-full bg-[#a937bb]/15 blur-3xl" />
+          <div className="relative mx-auto max-w-[1100px] overflow-hidden rounded-[28px] bg-[#0f1629] px-5 py-10 text-white sm:rounded-[36px] sm:px-10 sm:py-14 lg:px-12">
+            <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-[#6366f1]/20 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-40 left-[20%] h-72 w-72 rounded-full bg-[#ec4899]/10 blur-3xl" />
 
-            <div className="relative">
-              <div className="flex flex-col items-center gap-4 text-center">
-                <div className="max-w-[650px]">
-                  <span className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.16em] text-[#aab4ff] sm:text-[10px]">
-                    <Layers className="h-3.5 w-3.5" />
-                    <span>{t.landingPackagesEyebrow}</span>
-                  </span>
-                  <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.035em] sm:text-3xl">
-                    {t.landingPackagesTitle}
-                  </h2>
-                  <p className="mx-auto mt-2 max-w-[600px] text-[11px] leading-relaxed text-white/60 sm:text-sm">
-                    {t.landingPackagesSub}
-                  </p>
-                </div>
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-[10px] font-semibold text-white/75">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#a9b4ff]" />
-                  <span>{t.landingPackagesStatus}</span>
-                </div>
-              </div>
-
-              <div className="mx-auto mt-6 grid max-w-[1040px] gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
-                {packages.map((pkg, idx) => (
-                  <article
-                    key={idx}
-                    className="relative overflow-hidden rounded-[22px] border border-white/[0.11] bg-white/[0.055] p-4 backdrop-blur-sm sm:p-5"
-                  >
-                    {pkg.image && (
-                      <img
-                        src={pkg.image}
-                        alt=""
-                        loading="lazy"
-                        className="absolute right-0 top-0 h-32 w-24 object-cover opacity-[0.18] [mask-image:linear-gradient(to_left,black,transparent)]"
-                      />
-                    )}
-                    <div className="relative flex items-center justify-between gap-2">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-[#b5bfff]">
-                        <Sparkles className="h-4 w-4" />
-                      </span>
-                      <span className="rounded-full border border-white/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-white/55">
-                        {t.landingPackageDraft}
-                      </span>
-                    </div>
-
-                    <h3 className="relative mt-4 text-[13px] font-bold text-white sm:text-sm">
-                      {pkg.title}
-                    </h3>
-
-                    <div className="relative mt-4 space-y-2.5 border-t border-white/10 pt-3 text-[10px] sm:text-[11px]">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-white/55">{t.landingPackagePhotoCount}</span>
-                        <span className="text-right font-semibold text-white/85">
-                          {t.landingPackagePending}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-white/55">{t.landingPackagePrice}</span>
-                        <span className="text-right font-semibold text-white/85">
-                          {t.landingPackagePending} · {currency}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled
-                      className="relative mt-4 inline-flex min-h-10 w-full cursor-not-allowed items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-[10px] font-bold text-white/40 sm:text-[11px]"
-                    >
-                      {t.landingPackageUnavailable}
-                    </button>
-                  </article>
-                ))}
+            <div className="relative text-center">
+              <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+                {t.landingPackagesTitle}
+              </h2>
+              <div className="mx-auto mt-3 flex items-center justify-center gap-2 text-[13px] text-white/55 sm:text-sm">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a78bfa]" />
+                <span>{t.landingPackagesSub}</span>
               </div>
             </div>
+
+            <div className="relative mx-auto mt-10 grid max-w-[980px] gap-4 sm:grid-cols-3 sm:gap-5">
+              {packages.map((pkg) => (
+                <article
+                  key={pkg.id}
+                  className={`relative flex flex-col rounded-[22px] bg-white p-5 text-[#1a2035] shadow-lg sm:p-6 ${
+                    pkg.isPopular
+                      ? 'ring-2 ring-[#6366f1] sm:scale-[1.03] z-10'
+                      : ''
+                  }`}
+                >
+                  {pkg.isPopular && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-[#6366f1] px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md">
+                      <Sparkles className="h-3 w-3" />
+                      {t.popularBadge}
+                    </span>
+                  )}
+
+                  <h3 className="text-[15px] font-bold leading-snug sm:text-base">
+                    {pkg.title}
+                  </h3>
+
+                  <div className="mt-4 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+                      {pkg.priceMain}€
+                    </span>
+                    <span className="text-sm font-semibold text-[#6366f1]">
+                      {pkg.photos === 1 ? t.landingPkgOnePhoto : t.landingPkgPerPhoto}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[12px] font-medium text-[#6366f1]">
+                    {pkg.priceNote}
+                  </p>
+
+                  <ul className="mt-5 flex-1 space-y-2.5 border-t border-[#eeeef2] pt-4 text-[12px] leading-relaxed text-[#5a6478]">
+                    {pkg.features.map((f, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#c4c9d6]" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#f472b6] px-4 text-[13px] font-bold text-white shadow-[0_8px_20px_rgba(244,114,182,0.35)] transition hover:bg-[#ec4899] active:scale-[0.98] cursor-pointer"
+                  >
+                    {t.landingPkgBuy}
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <p className="relative mt-8 text-center text-[12px] text-white/40">
+              {t.landingPackagesFooter}
+            </p>
           </div>
         </section>
 
         {/* SECTION 4: FAQ */}
         <section
           id="faq"
-          className="scroll-mt-24 mx-auto w-full max-w-[900px] px-4 pb-12 sm:px-7 sm:pb-16 lg:px-10"
+          className="scroll-mt-24 px-4 py-12 sm:px-7 sm:py-16 lg:px-10"
         >
-          <div className="mx-auto mb-8 max-w-[560px] text-center">
-            <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#737ee0] sm:text-[10px]">
-              {t.landingFaqEyebrow}
-            </span>
-            <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.035em] text-[#1d2540] sm:text-3xl dark:text-white">
-              {t.landingFaqTitle}
-            </h2>
-          </div>
+          <div className="relative mx-auto max-w-[900px] overflow-hidden rounded-[28px] bg-[#0f1629] px-5 py-10 text-white sm:rounded-[36px] sm:px-10 sm:py-12">
+            <div className="mx-auto mb-8 max-w-[560px] text-center">
+              <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+                {t.landingFaqTitle}
+              </h2>
+              <p className="mt-2 text-[12px] text-white/45 sm:text-sm">
+                {t.landingFaqSub}
+              </p>
+            </div>
 
-          <div className="space-y-3">
-            {faqItems.map(([question, answer], idx) => (
-              <details
-                key={idx}
-                className="group rounded-[18px] border border-[#e7e8ee] bg-white px-5 py-4 shadow-[0_4px_18px_rgba(38,43,72,0.025)] open:shadow-[0_10px_28px_rgba(38,43,72,0.06)] sm:px-6 dark:border-white/10 dark:bg-[#141724]"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[12px] sm:text-[13px] font-bold leading-relaxed text-[#303a57] dark:text-slate-100">
-                  <span>{question}</span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-[#8792aa] transition group-open:rotate-180" />
-                </summary>
-                <p className="max-w-[760px] pt-3 text-[11px] leading-[1.8] text-[#7f889b] sm:text-xs dark:text-slate-400">
-                  {answer}
-                </p>
-              </details>
-            ))}
+            <div className="space-y-3">
+              {faqItems.map(([question, answer], idx) => (
+                <details
+                  key={idx}
+                  className="group rounded-2xl bg-white/[0.06] px-5 py-4 open:bg-white/[0.09] transition-colors sm:px-6"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-semibold leading-relaxed text-white sm:text-[14px]">
+                    <span>{question}</span>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/70 group-open:bg-white/15">
+                      <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+                    </span>
+                  </summary>
+                  <p className="pt-3 text-[12px] leading-[1.75] text-white/55 sm:text-[13px]">
+                    {answer}
+                  </p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
 
