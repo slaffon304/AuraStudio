@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Sparkles, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle, MapPin } from 'lucide-react';
 import { consumeAfterAuthRedirect, viewToPath } from '../lib/navigation';
+import logoImg from '../assets/images/aurastudio-logo.png';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,18 +10,24 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { signIn, signUp, setCurrentView } = useApp();
+  const { signIn, signUp, setCurrentView, setCurrency } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [country, setCountry] = useState<'Moldova' | 'Romania'>('Moldova');
+  const [country, setCountry] = useState<'Moldova' | 'Romania' | 'Other'>('Moldova');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const currencyForCountry = (c: 'Moldova' | 'Romania' | 'Other') => {
+    if (c === 'Moldova') return 'MDL' as const;
+    if (c === 'Romania') return 'RON' as const;
+    return 'EUR' as const;
+  };
 
   const finishAuth = () => {
     const next = consumeAfterAuthRedirect();
@@ -57,6 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         if (!res.success) {
           setErrorMsg(res.error || 'Crearea contului a eșuat.');
         } else {
+          setCurrency(currencyForCountry(country));
           setSuccessMsg('Cont creat cu succes!');
           setTimeout(() => finishAuth(), 800);
         }
@@ -76,14 +84,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <X className="h-5 w-5" />
         </button>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-white font-display">AuraStudio</h2>
-            <p className="text-[11px] text-slate-400">Cont Studio AI</p>
-          </div>
+        <div className="flex items-center gap-3 pr-8">
+          <img
+            src={logoImg}
+            alt="AuraStudio"
+            className="h-10 w-auto max-w-[160px] object-contain brightness-110"
+          />
+          <p className="text-[11px] text-slate-400">Cont Studio AI</p>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/5">
@@ -129,20 +136,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
           {mode === 'signup' && (
-            <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">Nume & Prenume</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Maria Popescu"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
-                />
+            <>
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 block mb-1">Nume & Prenume</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Maria Popescu"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 block mb-1">Țara</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value as 'Moldova' | 'Romania' | 'Other')}
+                    className="w-full rounded-xl border border-white/10 bg-[#161924] pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400 appearance-none"
+                  >
+                    <option value="Moldova">Moldova (MDL)</option>
+                    <option value="Romania">România (RON)</option>
+                    <option value="Other">Other (EUR)</option>
+                  </select>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Tarifele vor fi afișate în moneda țării tale.
+                </p>
+              </div>
+            </>
           )}
 
           <div>
@@ -176,20 +204,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {mode === 'signup' && (
-            <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">Monedă Cont</label>
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value as 'Moldova' | 'Romania')}
-                className="w-full rounded-xl border border-white/10 bg-[#161924] px-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
-              >
-                <option value="Moldova">MDL (Leu)</option>
-                <option value="Romania">RON (Leu)</option>
-              </select>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
@@ -200,7 +214,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 ? 'Se procesează...'
                 : mode === 'signin'
                 ? 'Conectează-te'
-                : 'Creează Contul & Primește 15 Credite'}
+                : 'Creează Contul'}
             </span>
             <ArrowRight className="h-4 w-4" />
           </button>
