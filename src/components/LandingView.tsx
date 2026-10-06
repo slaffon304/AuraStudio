@@ -112,12 +112,20 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
 
   const activeTemplates = templates.filter((tpl) => tpl.isActive).sort((a, b) => a.displayOrder - b.displayOrder);
 
-  // 3 tilted cards at top
+  // 3 tilted cards at top — always use real photos (local assets as reliable fallback)
+  const fallbackHeroImgs = [
+    resultWoman2EditorialImg,
+    heroEditorialAfterImg,
+    refWoman2FaceImg
+  ];
   const topPreviewCards = [
     activeTemplates[3] || activeTemplates[0],
     activeTemplates[4] || activeTemplates[1],
     activeTemplates[2] || activeTemplates[0]
-  ].filter(Boolean);
+  ];
+  const topCardImages = topPreviewCards.map((card, i) =>
+    card?.previewImage || fallbackHeroImgs[i] || fallbackHeroImgs[0]
+  );
 
   const tiltedTransforms = [
     'rotate(-8deg) translateY(0px)',
@@ -153,9 +161,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
       id: 'single',
       title: t.landingPkg1Title,
       priceMain: '4.90',
-      priceUnit: t.landingPkgPerPhoto,
       priceNote: t.landingPkg1Note,
-      features: [t.landingPkg1F1, t.landingPkg1F2],
+      description: t.landingPkg1Desc,
       isPopular: false,
       photos: 1
     },
@@ -163,9 +170,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
       id: 'studio',
       title: t.landingPkg2Title,
       priceMain: '1.90',
-      priceUnit: t.landingPkgPerPhoto,
       priceNote: t.landingPkg2Note,
-      features: [t.landingPkg2F1, t.landingPkg2F2, t.landingPkg2F3],
+      description: t.landingPkg2Desc,
       isPopular: true,
       photos: 10
     },
@@ -173,9 +179,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
       id: 'session',
       title: t.landingPkg3Title,
       priceMain: '1.20',
-      priceUnit: t.landingPkgPerPhoto,
       priceNote: t.landingPkg3Note,
-      features: [t.landingPkg3F1, t.landingPkg3F2, t.landingPkg3F3],
+      description: t.landingPkg3Desc,
       isPopular: false,
       photos: 40
     }
@@ -271,15 +276,15 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
 
                 {/* 3 tilted cards */}
                 <div className="flex items-end justify-center gap-2 sm:gap-4">
-                  {topPreviewCards.map((card, idx) => (
+                  {topCardImages.map((imgSrc, idx) => (
                     <div
                       key={`preview-${idx}`}
                       className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-2xl bg-white p-1 pb-3 shadow-[0_12px_28px_rgba(30,35,70,0.16)] sm:w-32 transition-transform duration-300"
                       style={{ transform: tiltedTransforms[idx] }}
                     >
                       <img
-                        src={card.previewImage}
-                        alt={card.name[language] || card.name.ro}
+                        src={imgSrc}
+                        alt=""
                         className="h-full w-full rounded-xl object-cover"
                         loading="lazy"
                       />
@@ -477,34 +482,34 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                     </span>
                   )}
 
-                  <h3 className="text-[17px] font-bold leading-snug tracking-tight sm:text-[18px]">
+                  <h3 className="text-[20px] font-bold leading-[1.25] tracking-tight text-[#1a2035] sm:text-[22px]">
                     {pkg.title}
                   </h3>
 
-                  <div className="mt-5 flex items-baseline gap-1.5 flex-wrap">
-                    <span className="font-display text-[36px] font-extrabold leading-none tracking-tight sm:text-[40px]">
-                      {pkg.priceMain}€
-                    </span>
-                    <span className="text-[14px] font-semibold text-[#5b6ef5]">
-                      {pkg.photos === 1 ? '' : t.landingPkgPerPhoto}
-                    </span>
+                  <div className="mt-6">
+                    <div className="flex items-end gap-1">
+                      <span className="font-display text-[42px] font-extrabold leading-none tracking-tight text-[#1a2035] sm:text-[46px]">
+                        {pkg.priceMain}
+                      </span>
+                      <span className="mb-1 text-[18px] font-bold text-[#1a2035]">
+                        €{pkg.photos === 1 ? '' : t.landingPkgPerPhoto}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[14px] font-medium text-[#8b93a7]">
+                      {pkg.priceNote}
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-[13px] font-medium text-[#5b6ef5]">
-                    {pkg.priceNote}
+
+                  <div className="my-5 border-t border-[#eceef4]" />
+
+                  <p className="flex-1 text-[13.5px] leading-[1.65] text-[#8b93a7]">
+                    {pkg.description}
                   </p>
-
-                  <div className="mt-5 border-t border-[#eeeef3] pt-4" />
-
-                  <ul className="flex-1 space-y-2.5 text-[12.5px] leading-[1.55] text-[#6b7389]">
-                    {pkg.features.map((f, i) => (
-                      <li key={i}>{f}</li>
-                    ))}
-                  </ul>
 
                   <button
                     type="button"
                     onClick={() => setIsAuthModalOpen(true)}
-                    className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#f472b6] px-4 text-[14px] font-bold text-white shadow-[0_8px_20px_rgba(244,114,182,0.35)] transition hover:bg-[#ec4899] active:scale-[0.98] cursor-pointer"
+                    className="mt-7 inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-[#f472b6] px-4 text-[15px] font-bold text-white shadow-[0_8px_20px_rgba(244,114,182,0.35)] transition hover:bg-[#ec4899] active:scale-[0.98] cursor-pointer"
                   >
                     {t.landingPkgBuy}
                   </button>
@@ -556,7 +561,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
 
         {/* SECTION 5: FINAL CTA — Поехали, это бесплатно */}
         <section className="px-4 pb-8 sm:px-7 sm:pb-10 lg:px-10">
-          <div className="relative mx-auto flex max-w-[900px] flex-col items-center overflow-hidden rounded-[28px] bg-[#0b1220] px-6 py-12 text-center sm:rounded-[36px] sm:px-12 sm:py-14">
+          <div className="relative mx-auto flex max-w-[520px] flex-col items-center overflow-hidden rounded-[28px] bg-[#0b1220] px-6 py-11 text-center sm:rounded-[32px] sm:px-10 sm:py-12">
             {/* Decorative stars */}
             <div className="pointer-events-none absolute -left-6 top-8 h-24 w-24 opacity-40" aria-hidden="true">
               <svg viewBox="0 0 100 100" fill="none" className="h-full w-full text-[#4c5fd5]">
