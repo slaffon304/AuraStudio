@@ -11,7 +11,7 @@ import {
   Sun,
   UserRound
 } from 'lucide-react';
-import { Currency, Language } from '../types';
+import { Language } from '../types';
 import auraStudioLogo from '../assets/images/aurastudio-logo.png';
 
 interface HeaderProps {
@@ -29,8 +29,6 @@ export const Header: React.FC<HeaderProps> = ({
     t,
     language,
     setLanguage,
-    currency,
-    setCurrency,
     currentUser,
     isLocalPreviewMode,
     signOut,
@@ -47,7 +45,6 @@ export const Header: React.FC<HeaderProps> = ({
     { code: 'ru', label: 'Русский' },
     { code: 'en', label: 'English' }
   ];
-  const currencies: Currency[] = ['MDL', 'RON', 'EUR'];
 
   const goTo = (view: 'explore' | 'gallery' | 'library' | 'profile' | 'admin') => {
     setCurrentView(view);
@@ -74,7 +71,6 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2.5">
           {isMarketing && (
             <nav className="mr-auto hidden items-center gap-6 pl-8 text-[12px] font-medium text-[#737b91] lg:flex dark:text-slate-400">
-              <a href="#how-it-works" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingHowTitle}</a>
               <a href="#photo-packages" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingPackagesTitle}</a>
               <a href="#faq" className="transition-colors hover:text-[#17203d] dark:hover:text-white">{t.landingFaqTitle}</a>
             </nav>
@@ -86,7 +82,6 @@ export const Header: React.FC<HeaderProps> = ({
             languages={languages}
             label={t.language}
           />
-          <CurrencyPicker currency={currency} setCurrency={setCurrency} currencies={currencies} label={t.currency} />
 
           <button
             type="button"
@@ -212,22 +207,3 @@ const LanguageMenu: React.FC<{
   );
 };
 
-const CurrencyPicker: React.FC<{
-  currency: Currency;
-  setCurrency: (currency: Currency) => void;
-  currencies: Currency[];
-  label: string;
-}> = ({ currency, setCurrency, currencies, label }) => (
-  <label className="relative flex h-8 items-center rounded-full bg-white/80 ring-1 ring-[#e5e8f0] sm:h-9 dark:bg-white/5 dark:ring-white/10">
-    <span className="sr-only">{label}</span>
-    <select
-      aria-label={label}
-      value={currency}
-      onChange={(event) => setCurrency(event.target.value as Currency)}
-      className="h-full w-[66px] appearance-none rounded-full bg-transparent pl-2.5 pr-5 text-[10px] font-semibold text-[#6e7890] outline-none sm:w-[72px] sm:pl-3 sm:text-[11px] dark:text-slate-300"
-    >
-      {currencies.map((item) => <option key={item} value={item}>{item}</option>)}
-    </select>
-    <ChevronDown className="pointer-events-none absolute right-2 h-3 w-3 text-[#8b93a6]" />
-  </label>
-);

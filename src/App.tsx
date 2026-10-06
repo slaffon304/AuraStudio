@@ -10,12 +10,13 @@ import { GalleryView } from './components/GalleryView';
 import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
+import { RotatingHeadlineWord } from './components/RotatingHeadlineWord';
+import { HEADLINE_ROTATING_WORDS, HERO_WISH_WORDS } from './data/headlineWords';
 import auraStudioLogo from './assets/images/aurastudio-logo.png';
 import { PhotoTemplate, TemplateCategory } from './types';
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   BriefcaseBusiness,
   Check,
   ChevronDown,
@@ -347,11 +348,16 @@ const MainAppContent: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
 
 const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
   const { t, language, currency, templates, setCurrentView, isAuthModalOpen, setIsAuthModalOpen } = useApp();
+  const headlineWords = HEADLINE_ROTATING_WORDS[language];
+  const wishWords = HERO_WISH_WORDS[language];
   const activeTemplates = templates
     .filter((template) => template.isActive)
     .sort((left, right) => left.displayOrder - right.displayOrder);
   const heroTemplate = activeTemplates[0];
   const sideTemplates = activeTemplates.slice(1, 3);
+  // Ряд из 3 фото-плиток со стикерами над большой картинкой — как в референсе.
+  const topTemplates = [activeTemplates[3] || activeTemplates[0], activeTemplates[4] || activeTemplates[1], activeTemplates[5] || activeTemplates[2]].filter(Boolean);
+  const topTileStyles = ['rotate(-8deg) translateY(0px)', 'rotate(4deg) translateY(12px)', 'rotate(-3deg) translateY(4px)'];
 
   const openApp = () => navigate('/app');
   const goToCatalog = () => {
@@ -389,18 +395,26 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
           <div className="pointer-events-none absolute -left-48 top-12 h-[420px] w-[420px] rounded-full bg-[#e7eaff]/70 blur-3xl dark:bg-[#536dfe]/[.08]" />
           <div className="pointer-events-none absolute -right-48 top-24 h-[420px] w-[420px] rounded-full bg-[#f2e8ff]/70 blur-3xl dark:bg-[#a855f7]/[.07]" />
           <div className="relative mx-auto grid w-full max-w-[1440px] items-center gap-8 px-4 py-9 sm:px-7 sm:py-14 lg:grid-cols-[.94fr_1.06fr] lg:gap-10 lg:px-10 lg:py-16 xl:py-20">
-            <div className="mx-auto max-w-[650px] lg:mx-0">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#e8e9f2] bg-white/85 px-3 py-1.5 text-[9px] font-bold tracking-[.12em] text-[#606ed3] shadow-sm sm:text-[10px] dark:border-white/10 dark:bg-white/[.04] dark:text-indigo-300">
-                <Sparkles className="h-3.5 w-3.5" /> {t.landingBadge}
-              </span>
-              <h1 className="mt-5 max-w-[660px] font-display text-[40px] font-extrabold leading-[1.04] tracking-[-.055em] text-[#181d32] sm:mt-6 sm:text-5xl lg:text-[58px] xl:text-[66px] dark:text-white">
-                <span className="block">{t.landingHeadlineLead}</span>
-                <span className="mt-1 block bg-gradient-to-r from-[#4c63ed] via-[#784ee8] to-[#b93bc6] bg-clip-text text-transparent">{t.landingHeadlineHighlight}</span>
+            <div className="mx-auto max-w-[650px] text-center lg:mx-0">
+              <h1 className="max-w-[660px] font-display text-[40px] font-extrabold leading-[1.05] tracking-[-.05em] text-[#181d32] sm:text-5xl lg:text-[58px] xl:text-[66px] dark:text-white">
+                <span className="block">
+                  {t.landingHeadlineLead} <RotatingHeadlineWord words={headlineWords} />
+                </span>
+                <span className="block">{t.landingHeadlineTail}</span>
               </h1>
-              <p className="mt-4 max-w-[540px] text-[13px] leading-[1.8] text-[#777f92] sm:mt-5 sm:text-[15px] dark:text-slate-400">
+
+              {/* Овал с текстом — под заголовком, как в референсе */}
+              <div className="mx-auto mt-6 inline-flex max-w-[560px] items-center justify-center gap-2.5 rounded-full bg-[#e8eeff] px-5 py-3 text-center shadow-[0_8px_24px_rgba(76,99,237,.10)] sm:px-6 dark:bg-white/[.06]">
+                <Sparkles className="h-4 w-4 shrink-0 text-[#4c63ed] dark:text-[#8ba0ff]" />
+                <span className="text-[13px] font-bold leading-snug text-[#3b56f5] sm:text-sm dark:text-[#a9b9ff]">
+                  {t.landingBadge}
+                </span>
+              </div>
+
+              <p className="mx-auto mt-5 max-w-[540px] text-balance text-[13px] leading-[1.8] text-[#777f92] sm:mt-6 sm:text-[15px] dark:text-slate-400">
                 {t.landingSubhead}
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-7">
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-7">
                 <button
                   type="button"
                   onClick={goToCatalog}
@@ -408,15 +422,54 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
                 >
                   {t.landingCta}<ArrowRight className="h-4 w-4" />
                 </button>
-                <a href="#how-it-works" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#687187] transition hover:text-[#465be0] sm:text-sm dark:text-slate-300 dark:hover:text-white">
-                  {t.landingHowTitle}<ArrowUpRight className="h-4 w-4" />
-                </a>
               </div>
-              <p className="mt-4 max-w-[430px] text-[10px] leading-relaxed text-[#9a9eaa] sm:text-[11px] dark:text-slate-500">{t.landingHeroNote}</p>
+              <p className="mx-auto mt-4 max-w-[430px] text-[10px] leading-relaxed text-[#9a9eaa] sm:text-[11px] dark:text-slate-500">{t.landingHeroNote}</p>
             </div>
 
             <div className="relative mx-auto w-full max-w-[590px] px-2 pb-7 pt-1 sm:px-5 sm:pb-10 lg:mr-0">
               <div className="pointer-events-none absolute inset-x-[12%] bottom-[8%] top-[4%] rounded-full bg-gradient-to-br from-[#dce2ff] via-[#f4e3ff] to-[#ffe7d8] opacity-80 blur-3xl dark:from-[#536dfe]/20 dark:via-[#9d4edd]/15 dark:to-[#ee80a6]/10" />
+
+              {/* Ряд из 3 фото-плиток со стикерами над большой — как в референсе */}
+              <div className="relative z-10 mx-auto mt-3 w-full max-w-[440px] px-2 sm:mt-5 sm:max-w-[520px]">
+                <span className="pointer-events-none absolute -top-3 left-[3%] z-30 -rotate-6 rounded-full bg-[#f472b6] px-3 py-1.5 text-[10px] font-display font-bold text-white shadow-[0_8px_20px_rgba(30,35,70,.18)] sm:px-3.5 sm:text-xs">
+                  {t.heroStickerReady}
+                </span>
+                <span className="pointer-events-none absolute right-[5%] top-1 z-30 rotate-3 rounded-full bg-[#a78bfa] px-3 py-1.5 text-[10px] font-display font-bold text-white shadow-[0_8px_20px_rgba(30,35,70,.18)] sm:px-3.5 sm:text-xs">
+                  {t.heroStickerFast}
+                </span>
+                <div className="flex items-end justify-center gap-2 sm:gap-4">
+                  {topTemplates.map((template, index) => (
+                    <div
+                      key={`${template.id}-${index}`}
+                      className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-2xl bg-white p-1 pb-3 shadow-[0_12px_28px_rgba(30,35,70,.16)] sm:w-32"
+                      style={{ transform: topTileStyles[index] }}
+                    >
+                      <img
+                        src={template.previewImage}
+                        alt={template.name[language] || template.name.ro}
+                        className="h-full w-full rounded-xl object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Реплика с подменяемым текстом и стрелкой вниз — как в референсе */}
+              <div className="relative z-10 mx-auto mt-5 flex w-fit max-w-full flex-col items-center">
+                <div className="relative inline-flex max-w-full items-start gap-2 rounded-[24px] bg-white px-4 py-3 shadow-[0_12px_32px_rgba(32,39,75,.14)] sm:px-5 dark:bg-[#171b2d]">
+                  <span className="text-xl leading-none">🙋</span>
+                  <span className="font-display text-[15px] font-bold leading-snug text-[#1b2340] sm:text-base dark:text-white">
+                    {t.heroWishLead} <RotatingHeadlineWord words={wishWords} />
+                  </span>
+                  <span className="absolute -bottom-2 left-10 h-4 w-4 rotate-45 bg-white dark:bg-[#171b2d]" />
+                </div>
+                <svg width="50" height="60" viewBox="0 0 50 60" fill="none" className="my-2 sm:my-3" aria-hidden="true">
+                  <path d="M24 4 C12 14 38 24 26 37 C23.5 40.5 25 47 25 55" stroke="#4c63ed" strokeWidth="3" strokeLinecap="round" fill="none" />
+                  <path d="M18.5 48.5 L25 55.5 L31.5 48.5" stroke="#4c63ed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              </div>
+
               <div className="relative ml-auto aspect-[4/4.7] w-[78%] overflow-hidden rounded-[30px] bg-[#dce0eb] shadow-[0_28px_70px_rgba(30,35,70,.2)] ring-1 ring-white/80 sm:rounded-[38px] dark:ring-white/10">
                 {heroTemplate && (
                   <img
@@ -477,20 +530,20 @@ const MarketingLanding: React.FC<{ navigate: Navigate }> = ({ navigate }) => {
             <div className="pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full bg-[#6954ef]/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-36 left-[28%] h-72 w-72 rounded-full bg-[#a937bb]/15 blur-3xl" />
             <div className="relative">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div className="flex flex-col items-center gap-4 text-center">
                 <div className="max-w-[650px]">
                   <span className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.16em] text-[#aab4ff] sm:text-[10px]">
                     <ImagePlus className="h-3.5 w-3.5" /> {t.landingPackagesEyebrow}
                   </span>
                   <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-.035em] sm:text-3xl">{t.landingPackagesTitle}</h2>
-                  <p className="mt-2 max-w-[600px] text-[11px] leading-relaxed text-white/60 sm:text-sm">{t.landingPackagesSub}</p>
+                  <p className="mt-2 mx-auto max-w-[600px] text-[11px] leading-relaxed text-white/60 sm:text-sm">{t.landingPackagesSub}</p>
                 </div>
                 <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[.06] px-3 py-2 text-[10px] font-semibold text-white/75">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#a9b4ff]" /> {t.landingPackagesStatus}
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mx-auto mt-6 grid max-w-[1040px] gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
                 {photoPackages.map((photoPackage) => (
                   <article key={photoPackage.title} className="relative overflow-hidden rounded-[22px] border border-white/[.11] bg-white/[.055] p-4 backdrop-blur-sm sm:p-5">
                     {photoPackage.image && (
