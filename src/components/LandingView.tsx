@@ -438,66 +438,73 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
           id="photo-packages"
           className="scroll-mt-24 px-4 py-12 sm:px-7 sm:py-16 lg:px-10"
         >
-          <div className="relative mx-auto max-w-[1100px] overflow-hidden rounded-[28px] bg-[#0f1629] px-5 py-10 text-white sm:rounded-[36px] sm:px-10 sm:py-14 lg:px-12">
+          <div className="relative mx-auto max-w-[1100px] overflow-hidden rounded-[28px] bg-[#0b1220] px-5 py-12 text-white sm:rounded-[36px] sm:px-10 sm:py-16 lg:px-14">
             <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-[#6366f1]/20 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-40 left-[20%] h-72 w-72 rounded-full bg-[#ec4899]/10 blur-3xl" />
 
             <div className="relative text-center">
-              <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+              <h2 className="font-display text-[32px] font-extrabold tracking-tight sm:text-[40px]">
                 {t.landingPackagesTitle}
               </h2>
-              <div className="mx-auto mt-3 flex items-center justify-center gap-2 text-[13px] text-white/55 sm:text-sm">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a78bfa]" />
-                <span>{t.landingPackagesSub}</span>
+              {/* AI-generated content star marker (like reference) */}
+              <div className="mt-3 flex justify-center" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#8b9cff]">
+                  <path
+                    d="M12 2.5l1.6 5.1L19 9l-5.1 1.6L12 15.8l-1.9-5.2L5 9l5.1-1.4L12 2.5zM18.5 14.2l.9 2.7 2.8.9-2.8.9-.9 2.7-.9-2.7-2.7-.9 2.7-.9.9-2.7zM5.8 15.5l.6 1.8 1.9.6-1.9.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6.6-1.8z"
+                    fill="currentColor"
+                  />
+                </svg>
               </div>
+              <p className="mx-auto mt-3 max-w-[420px] text-[13px] leading-relaxed text-white/50 sm:text-[14px]">
+                {t.landingPackagesSub}
+              </p>
             </div>
 
-            <div className="relative mx-auto mt-10 grid max-w-[980px] gap-4 sm:grid-cols-3 sm:gap-5">
+            <div className="relative mx-auto mt-10 grid max-w-[980px] gap-4 sm:mt-12 sm:grid-cols-3 sm:gap-5 items-stretch">
               {packages.map((pkg) => (
                 <article
                   key={pkg.id}
-                  className={`relative flex flex-col rounded-[22px] bg-white p-5 text-[#1a2035] shadow-lg sm:p-6 ${
+                  className={`relative flex flex-col rounded-[20px] bg-white p-5 text-[#1a2035] sm:p-6 ${
                     pkg.isPopular
-                      ? 'ring-2 ring-[#6366f1] sm:scale-[1.03] z-10'
-                      : ''
+                      ? 'ring-2 ring-[#5b6ef5] sm:scale-[1.02] z-10 shadow-[0_12px_40px_rgba(91,110,245,0.25)]'
+                      : 'shadow-lg'
                   }`}
                 >
                   {pkg.isPopular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-[#6366f1] px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#5b6ef5] px-3.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md">
                       <Sparkles className="h-3 w-3" />
                       {t.popularBadge}
                     </span>
                   )}
 
-                  <h3 className="text-[15px] font-bold leading-snug sm:text-base">
+                  <h3 className="text-[17px] font-bold leading-snug tracking-tight sm:text-[18px]">
                     {pkg.title}
                   </h3>
 
-                  <div className="mt-4 flex items-baseline gap-1.5 flex-wrap">
-                    <span className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+                  <div className="mt-5 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="font-display text-[36px] font-extrabold leading-none tracking-tight sm:text-[40px]">
                       {pkg.priceMain}€
                     </span>
-                    <span className="text-sm font-semibold text-[#6366f1]">
-                      {pkg.photos === 1 ? t.landingPkgOnePhoto : t.landingPkgPerPhoto}
+                    <span className="text-[14px] font-semibold text-[#5b6ef5]">
+                      {pkg.photos === 1 ? '' : t.landingPkgPerPhoto}
                     </span>
                   </div>
-                  <p className="mt-1 text-[12px] font-medium text-[#6366f1]">
+                  <p className="mt-1.5 text-[13px] font-medium text-[#5b6ef5]">
                     {pkg.priceNote}
                   </p>
 
-                  <ul className="mt-5 flex-1 space-y-2.5 border-t border-[#eeeef2] pt-4 text-[12px] leading-relaxed text-[#5a6478]">
+                  <div className="mt-5 border-t border-[#eeeef3] pt-4" />
+
+                  <ul className="flex-1 space-y-2.5 text-[12.5px] leading-[1.55] text-[#6b7389]">
                     {pkg.features.map((f, i) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#c4c9d6]" />
-                        <span>{f}</span>
-                      </li>
+                      <li key={i}>{f}</li>
                     ))}
                   </ul>
 
                   <button
                     type="button"
                     onClick={() => setIsAuthModalOpen(true)}
-                    className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#f472b6] px-4 text-[13px] font-bold text-white shadow-[0_8px_20px_rgba(244,114,182,0.35)] transition hover:bg-[#ec4899] active:scale-[0.98] cursor-pointer"
+                    className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#f472b6] px-4 text-[14px] font-bold text-white shadow-[0_8px_20px_rgba(244,114,182,0.35)] transition hover:bg-[#ec4899] active:scale-[0.98] cursor-pointer"
                   >
                     {t.landingPkgBuy}
                   </button>
@@ -505,7 +512,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
               ))}
             </div>
 
-            <p className="relative mt-8 text-center text-[12px] text-white/40">
+            <p className="relative mt-8 text-center text-[12px] text-white/35 sm:text-[13px]">
               {t.landingPackagesFooter}
             </p>
           </div>
@@ -547,24 +554,33 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
           </div>
         </section>
 
-        {/* SECTION 5: FINAL CTA BANNER */}
-        <section className="px-4 pb-12 sm:px-7 sm:pb-16 lg:px-10">
-          <div className="relative mx-auto flex max-w-[1240px] flex-col items-center justify-between gap-5 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#e8ebff] via-[#f0e9ff] to-[#f9eaf1] px-6 py-8 text-center sm:flex-row sm:px-10 sm:py-9 sm:text-left dark:from-[#14182d] dark:via-[#19142c] dark:to-[#211725]">
-            <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#8b5cf6]/15 blur-3xl" />
-            <div className="relative max-w-[640px]">
-              <h2 className="font-display text-xl font-extrabold tracking-tight text-[#1b2340] sm:text-2xl dark:text-white">
-                {t.landingFinalTitle}
-              </h2>
-              <p className="mt-2 text-[11px] leading-relaxed text-[#727b91] sm:text-sm dark:text-slate-400">
-                {t.landingFinalBody}
-              </p>
+        {/* SECTION 5: FINAL CTA — Поехали, это бесплатно */}
+        <section className="px-4 pb-8 sm:px-7 sm:pb-10 lg:px-10">
+          <div className="relative mx-auto flex max-w-[900px] flex-col items-center overflow-hidden rounded-[28px] bg-[#0b1220] px-6 py-12 text-center sm:rounded-[36px] sm:px-12 sm:py-14">
+            {/* Decorative stars */}
+            <div className="pointer-events-none absolute -left-6 top-8 h-24 w-24 opacity-40" aria-hidden="true">
+              <svg viewBox="0 0 100 100" fill="none" className="h-full w-full text-[#4c5fd5]">
+                <path d="M50 5 L55 40 L90 50 L55 60 L50 95 L45 60 L10 50 L45 40 Z" fill="currentColor" opacity="0.5"/>
+              </svg>
             </div>
+            <div className="pointer-events-none absolute -right-4 bottom-6 h-28 w-28 opacity-35" aria-hidden="true">
+              <svg viewBox="0 0 100 100" fill="none" className="h-full w-full text-[#5b4fc7]">
+                <path d="M50 8 L54 38 L88 50 L54 62 L50 92 L46 62 L12 50 L46 38 Z" fill="currentColor" opacity="0.55"/>
+              </svg>
+            </div>
+
+            <h2 className="relative font-display text-[26px] font-extrabold tracking-tight text-white sm:text-[32px]">
+              {t.landingFinalTitle}
+            </h2>
+            <p className="relative mt-3 max-w-[380px] text-[13px] leading-relaxed text-white/50 sm:text-[14px]">
+              {t.landingFinalBody}
+            </p>
             <button
               type="button"
               onClick={onGoToApp}
-              className="relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[#5368f3] px-7 text-xs font-bold text-white shadow-[0_8px_20px_rgba(83,104,243,0.2)] transition hover:bg-[#455be8] sm:text-sm cursor-pointer"
+              className="relative mt-7 inline-flex min-h-[48px] items-center gap-2 rounded-full bg-[#4f63f0] px-8 text-[14px] font-bold text-white shadow-[0_10px_28px_rgba(79,99,240,0.35)] transition hover:bg-[#3f53e0] active:scale-[0.98] cursor-pointer"
             >
-              <span>{t.landingCta}</span>
+              <span>{t.landingFinalCta}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -572,16 +588,39 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-[#e9e9ed] bg-white/55 px-4 py-8 text-center text-[11px] text-[#969dac] sm:py-10 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400">
-        <img
-          src={logoImg}
-          alt="AuraStudio"
-          className="mx-auto h-8 sm:h-9 w-auto object-contain dark:brightness-110"
-        />
-        <p className="mt-3">{t.landingFooterTagline}</p>
-        <p className="mt-1">
-          © {new Date().getFullYear()}. {t.rightsReserved}
-        </p>
+      <footer className="border-t border-[#e9e9ed] bg-[#faf9f6] px-4 pb-10 pt-8 dark:border-white/10 dark:bg-[#090a0f]">
+        <div className="mx-auto flex max-w-[900px] flex-col items-center gap-5 text-center">
+          {/* Telegram support pill */}
+          <a
+            href="https://t.me/aurastudio_help_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-[#e2e4ec] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#3a4560] shadow-sm transition hover:border-[#c8cce0] hover:bg-[#f7f8fc] dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21.5 3.5L2.7 11.1c-1.3.5-1.3 1.3-.2 1.6l4.8 1.5 1.8 5.6c.2.7.4.9 1 .9.6 0 .9-.3 1.2-.6l2.7-2.6 5.6 4.1c1 .6 1.8.3 2.1-.9l3.7-17.4c.4-1.6-.6-2.3-1.7-1.8z" fill="#2AABEE"/>
+            </svg>
+            <span>{t.landingTelegramSupport}</span>
+          </a>
+
+          {/* Policy links */}
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[12px] text-[#8a92a6] dark:text-slate-500">
+            <a href="#photo-packages" className="hover:text-[#4f63f0] transition-colors">{t.landingPackagesTitle}</a>
+            <span className="text-[#d0d4de]">·</span>
+            <a href="/privacy" className="hover:text-[#4f63f0] transition-colors">{t.landingPrivacy}</a>
+            <span className="text-[#d0d4de]">·</span>
+            <a href="/terms" className="hover:text-[#4f63f0] transition-colors">{t.landingTerms}</a>
+            <span className="text-[#d0d4de]">·</span>
+            <a href="/offer" className="hover:text-[#4f63f0] transition-colors">{t.landingOffer}</a>
+          </nav>
+
+          <p className="max-w-[520px] text-[11px] leading-relaxed text-[#a0a6b5] dark:text-slate-600">
+            {t.landingFooterLegal}
+          </p>
+          <p className="text-[11px] text-[#b0b5c2] dark:text-slate-600">
+            © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
+          </p>
+        </div>
       </footer>
     </div>
   );
