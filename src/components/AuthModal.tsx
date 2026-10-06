@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Sparkles, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { consumeAfterAuthRedirect, viewToPath } from '../lib/navigation';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -8,7 +9,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { signIn, signUp } = useApp();
+  const { signIn, signUp, setCurrentView } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -20,6 +21,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const finishAuth = () => {
+    const next = consumeAfterAuthRedirect();
+    if (next) {
+      setCurrentView(next as any);
+      window.history.pushState({}, '', viewToPath(next));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +44,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         if (!res.success) {
           setErrorMsg(res.error || 'Autentificare eșuată. Verifică datele introduse.');
         } else {
-          onClose();
+          finishAuth();
         }
       } else {
         if (!name.trim()) {
@@ -46,10 +57,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         if (!res.success) {
           setErrorMsg(res.error || 'Crearea contului a eșuat.');
         } else {
-          setSuccessMsg('Cont creat cu succes! Verifică email-ul pentru confirmare dacă este necesar.');
-          setTimeout(() => {
-            onClose();
-          }, 1500);
+          setSuccessMsg('Cont creat cu succes!');
+          setTimeout(() => finishAuth(), 800);
         }
       }
     } finally {
@@ -67,7 +76,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <X className="h-5 w-5" />
         </button>
 
-        {/* Brand Header */}
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300">
             <Sparkles className="h-5 w-5" />
@@ -78,7 +86,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Segmented Auth Mode Switcher */}
         <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/5">
           <button
             type="button"
@@ -87,9 +94,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               setErrorMsg(null);
             }}
             className={`py-2 text-xs font-semibold rounded-lg transition-colors ${
-              mode === 'signin'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-white'
+              mode === 'signin' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
           >
             Autentificare
@@ -101,16 +106,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               setErrorMsg(null);
             }}
             className={`py-2 text-xs font-semibold rounded-lg transition-colors ${
-              mode === 'signup'
-                ? 'bg-amber-400 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-white'
+              mode === 'signup' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
           >
             Înregistrare
           </button>
         </div>
 
-        {/* Error / Success Notifications */}
         {errorMsg && (
           <div className="mt-4 flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-300">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -125,13 +127,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
-        {/* Real Form */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
           {mode === 'signup' && (
             <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">
-                Nume & Prenume
-              </label>
+              <label className="text-[11px] font-medium text-slate-300 block mb-1">Nume & Prenume</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <input
@@ -147,9 +146,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           )}
 
           <div>
-            <label className="text-[11px] font-medium text-slate-300 block mb-1">
-              Email
-            </label>
+            <label className="text-[11px] font-medium text-slate-300 block mb-1">Email</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <input
@@ -164,9 +161,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div>
-            <label className="text-[11px] font-medium text-slate-300 block mb-1">
-              Parolă
-            </label>
+            <label className="text-[11px] font-medium text-slate-300 block mb-1">Parolă</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <input
@@ -183,9 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
           {mode === 'signup' && (
             <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">
-                Monedă Cont
-              </label>
+              <label className="text-[11px] font-medium text-slate-300 block mb-1">Monedă Cont</label>
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value as 'Moldova' | 'Romania')}
@@ -217,22 +210,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           {mode === 'signin' ? (
             <span>
               Nu ai un cont?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('signup')}
-                className="text-amber-400 hover:underline font-semibold"
-              >
+              <button type="button" onClick={() => setMode('signup')} className="text-amber-400 hover:underline font-semibold">
                 Înregistrează-te gratuit
               </button>
             </span>
           ) : (
             <span>
               Ai deja un cont?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('signin')}
-                className="text-amber-400 hover:underline font-semibold"
-              >
+              <button type="button" onClick={() => setMode('signin')} className="text-amber-400 hover:underline font-semibold">
                 Conectează-te
               </button>
             </span>
