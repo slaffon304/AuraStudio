@@ -1,17 +1,19 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Home, LayoutGrid, User, LogIn } from 'lucide-react';
+import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
 
 export const BottomNav: React.FC = () => {
   const { currentView, setCurrentView, setIsAuthModalOpen, currentUser, language } = useApp();
 
-  const go = (view: string, path: string) => {
+  const go = (view: 'explore' | 'profile' | 'gallery' | 'library') => {
     if ((view === 'profile' || view === 'gallery' || view === 'library') && !currentUser) {
+      setAfterAuthRedirect(view);
       setIsAuthModalOpen(true);
       return;
     }
     setCurrentView(view as any);
-    window.history.pushState({}, '', path);
+    window.history.pushState({}, '', viewToPath(view));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -27,17 +29,17 @@ export const BottomNav: React.FC = () => {
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 pb-[env(safe-area-inset-bottom)] pointer-events-none">
       <div className="mx-auto mb-3 flex max-w-[280px] items-center rounded-full bg-white/95 dark:bg-[#151822]/95 shadow-[0_8px_30px_rgba(20,30,60,0.15)] border border-slate-200/80 dark:border-white/10 backdrop-blur-xl pointer-events-auto px-1.5 py-1.5">
-        <button type="button" onClick={() => go('explore', '/app')} className={tab(currentView === 'explore')}>
+        <button type="button" onClick={() => go('explore')} className={tab(currentView === 'explore')}>
           <Home className="h-5 w-5" />
           <span className="text-[10px] mt-0.5">{homeLabel}</span>
         </button>
-        <button type="button" onClick={() => go('explore', '/app')} className={tab(false)}>
+        <button type="button" onClick={() => go('explore')} className={tab(false)}>
           <LayoutGrid className="h-5 w-5" />
           <span className="text-[10px] mt-0.5">{catalogLabel}</span>
         </button>
         <button
           type="button"
-          onClick={() => go('profile', '/app/profile')}
+          onClick={() => go('profile')}
           className={`flex items-center gap-1.5 rounded-full px-4 py-2.5 transition-all ${
             currentView === ('profile' as any)
               ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md'
