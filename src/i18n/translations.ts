@@ -201,6 +201,10 @@ export const TRANSLATIONS = {
     landingPkg1Note: "o fotografie",
     landingPkg1F1: "Orice șablon la alegere",
     landingPkg1F2: "Descărcare în calitate îmbunătățită, fără filigran",
+    landingPkg1Desc: "Orice șablon la alegere sau descărcarea fotografiei gata — în calitate îmbunătățită, fără filigran.",
+    landingPkg2Desc: "10 foto din oricare 100+ șabloane. Calitate îmbunătățită. Regenerări gratuite.",
+    landingPkg3Desc: "40 foto din oricare 100+ șabloane. Calitate îmbunătățită. Regenerări gratuite. Generare prioritară.",
+
     landingPkg2Title: "Studio foto în buzunar",
     landingPkg2Note: "19€ pachet · 10 foto",
     landingPkg2F1: "10 foto din oricare 100+ șabloane",
@@ -426,6 +430,10 @@ export const TRANSLATIONS = {
     landingPkg1Note: "одно фото",
     landingPkg1F1: "Любой шаблон на выбор",
     landingPkg1F2: "Скачивание готового фото в улучшенном качестве, без водяного знака",
+    landingPkg1Desc: "Любой шаблон на выбор или скачивание готового фото — в улучшенном качестве, без водяного знака.",
+    landingPkg2Desc: "10 фото в любом из 100+ шаблонов. Улучшенное качество. Бесплатные повторы генераций.",
+    landingPkg3Desc: "40 фото в любом из 100+ шаблонов. Улучшенное качество. Бесплатные повторы генераций. Приоритетная генерация.",
+
     landingPkg2Title: "Фотостудия в кармане",
     landingPkg2Note: "19€ за пакет · 10 фото",
     landingPkg2F1: "10 фото в любом из 100+ шаблонов",
@@ -651,6 +659,10 @@ export const TRANSLATIONS = {
     landingPkg1Note: "one photo",
     landingPkg1F1: "Any template of your choice",
     landingPkg1F2: "Download in enhanced quality, no watermark",
+    landingPkg1Desc: "Any template of your choice or download the finished photo — enhanced quality, no watermark.",
+    landingPkg2Desc: "10 photos from any of 100+ templates. Enhanced quality. Free regenerations.",
+    landingPkg3Desc: "40 photos from any of 100+ templates. Enhanced quality. Free regenerations. Priority generation.",
+
     landingPkg2Title: "Studio in your pocket",
     landingPkg2Note: "€19 pack · 10 photos",
     landingPkg2F1: "10 photos from any of 100+ templates",
