@@ -10,6 +10,7 @@ import {
   LogOut
 } from 'lucide-react';
 import logoImg from '../assets/images/aurastudio-logo.png';
+import { viewToPath } from '../lib/navigation';
 
 export const ProfileView: React.FC = () => {
   const {
@@ -82,7 +83,7 @@ export const ProfileView: React.FC = () => {
 
   const goBack = () => {
     setCurrentView('explore');
-    window.history.pushState({}, '', '/app');
+    window.history.pushState({}, '', viewToPath('explore'));
   };
 
   return (
@@ -137,7 +138,7 @@ export const ProfileView: React.FC = () => {
           type="button"
           onClick={() => {
             setCurrentView('gallery');
-            window.history.pushState({}, '', '/app/gallery');
+            window.history.pushState({}, '', viewToPath('gallery'));
           }}
           className="rounded-[20px] bg-white p-4 text-left shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5"
         >
@@ -167,7 +168,7 @@ export const ProfileView: React.FC = () => {
         type="button"
         onClick={() => {
           setCurrentView('library');
-          window.history.pushState({}, '', '/app/library');
+          window.history.pushState({}, '', viewToPath('library'));
         }}
         className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white p-4 shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5 text-left"
       >
