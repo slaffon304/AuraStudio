@@ -37,8 +37,8 @@ interface AppContextType {
   authToken: string | null;
 
   // Current view & navigation
-  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin';
-  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin') => void;
+  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile';
+  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile') => void;
 
   // User & Real Supabase Auth
   currentUser: UserAccount | null;
@@ -112,7 +112,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Harmless client preferences in localStorage
   const [language, setLanguageState] = useState<Language>(() => {
-    return (localStorage.getItem('aurastudio_lang') as Language) || 'ro';
+    const saved = localStorage.getItem('aurastudio_lang') as Language | null;
+    if (saved === 'ro' || saved === 'ru' || saved === 'en') return saved;
+    const nav = (typeof navigator !== 'undefined' ? navigator.language : 'en').toLowerCase();
+    if (nav.startsWith('ru')) return 'ru';
+    if (nav.startsWith('ro')) return 'ro';
+    return 'en';
   });
 
   const [currency, setCurrencyState] = useState<Currency>(() => {
@@ -156,7 +161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const t = TRANSLATIONS[language];
 
   // Navigation
-  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile'>('landing');
 
   // Studio Mode & Gender Filter (PifPaf AI Features)
   const [studioMode, setStudioMode] = useState<StudioMode>('template');
@@ -241,6 +246,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const profile = await res.json();
         if (profile) {
+          const preferredCurrency = (profile.preferred_currency || 'MDL') as Currency;
+          const preferredLanguage = (profile.preferred_language || 'ro') as Language;
           setCurrentUser({
             id: profile.id,
             name: profile.name,
@@ -248,11 +255,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             avatar: profile.avatar_url || '',
             role: profile.role,
             creditBalance: profile.credit_balance,
-            preferredLanguage: profile.preferred_language || 'ro',
-            preferredCurrency: profile.preferred_currency || 'MDL',
+            preferredLanguage,
+            preferredCurrency,
             country: profile.country || 'Moldova',
             createdAt: profile.created_at
           });
+          if (preferredCurrency === 'MDL' || preferredCurrency === 'RON' || preferredCurrency === 'EUR') {
+            setCurrency(preferredCurrency);
+          }
+          if (preferredLanguage === 'ro' || preferredLanguage === 'ru' || preferredLanguage === 'en') {
+            setLanguage(preferredLanguage);
+          }
         }
       }
     } catch (err) {
@@ -454,7 +467,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name,
             country,
             preferred_language: language,
-            preferred_currency: country === 'Romania' ? 'RON' : 'MDL'
+            preferred_currency:
+              country === 'Romania' ? 'RON' : country === 'Moldova' ? 'MDL' : 'EUR'
           }
         }
       });
@@ -466,6 +480,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.session) {
         setSession(data.session);
       }
+
+      const curr =
+        country === 'Romania' ? 'RON' : country === 'Moldova' ? 'MDL' : 'EUR';
+      setCurrency(curr as Currency);
 
       setIsAuthModalOpen(false);
       return { success: true };
