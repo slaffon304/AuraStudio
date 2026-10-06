@@ -152,57 +152,52 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     }
   ];
 
-  // Photo packages — prices per currency (placeholders; adjust when final)
-  // Base idea: ~EUR, MDL ≈ ×20, RON ≈ ×5 (rough; set real numbers later)
+  // Final package prices (EUR base; MDL ≈ ×20, RON ≈ ×5)
   type Money = { MDL: string; RON: string; EUR: string };
   const money = (m: Money) => m[currency as keyof Money] || m.EUR;
   const sym = currency === 'MDL' ? 'L' : currency === 'RON' ? 'lei' : '€';
+  const perPhotoLabel =
+    language === 'ru' ? '/фото' : language === 'en' ? '/photo' : '/foto';
 
   const packages = [
     {
-      id: 'single',
+      id: 'pack5',
       title: t.landingPkg1Title,
-      priceMain: money({ EUR: '4.90', MDL: '99', RON: '25' }),
-      priceNote:
-        currency === 'EUR'
-          ? t.landingPkg1Note
-          : language === 'ru'
-          ? 'одно фото'
-          : language === 'en'
-          ? 'one photo'
-          : 'o fotografie',
+      priceMain: money({ EUR: '0.58', MDL: '12', RON: '2.90' }),
+      priceNote: money({
+        EUR: '2.90€ за пакет · 5 фото',
+        MDL: '58 L за пакет · 5 фото',
+        RON: '14.50 lei за пакет · 5 foto'
+      }),
       description: t.landingPkg1Desc,
       isPopular: false,
-      photos: 1,
-      packTotal: null as string | null
+      photos: 5
     },
     {
-      id: 'studio',
+      id: 'pack10',
       title: t.landingPkg2Title,
-      priceMain: money({ EUR: '1.90', MDL: '39', RON: '10' }),
+      priceMain: money({ EUR: '0.49', MDL: '10', RON: '2.45' }),
       priceNote: money({
-        EUR: '19€ pachet · 10 foto',
-        MDL: '390 L pachet · 10 foto',
-        RON: '99 lei pachet · 10 foto'
+        EUR: '4.90€ за пакет · 10 фото',
+        MDL: '98 L за пакет · 10 фото',
+        RON: '24.50 lei за пакет · 10 foto'
       }),
       description: t.landingPkg2Desc,
       isPopular: true,
-      photos: 10,
-      packTotal: money({ EUR: '19', MDL: '390', RON: '99' })
+      photos: 10
     },
     {
-      id: 'session',
+      id: 'pack40',
       title: t.landingPkg3Title,
-      priceMain: money({ EUR: '1.20', MDL: '25', RON: '6' }),
+      priceMain: money({ EUR: '0.29', MDL: '6', RON: '1.45' }),
       priceNote: money({
-        EUR: '49€ pachet · 40 foto',
-        MDL: '990 L pachet · 40 foto',
-        RON: '249 lei pachet · 40 foto'
+        EUR: '11.60€ за пакет · 40 фото',
+        MDL: '232 L за пакет · 40 фото',
+        RON: '58 lei за пакет · 40 foto'
       }),
       description: t.landingPkg3Desc,
       isPopular: false,
-      photos: 40,
-      packTotal: money({ EUR: '49', MDL: '990', RON: '249' })
+      photos: 40
     }
   ];
 
@@ -512,8 +507,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                         {pkg.priceMain}
                       </span>
                       <span className="mb-1 text-[16px] font-bold text-[#1a2035]">
-                        {currency === 'EUR' ? '€' : sym}
-                        {pkg.photos > 1 ? t.landingPkgPerPhoto : ''}
+                        {currency === 'EUR' ? '€' : ` ${sym}`}
+                        {perPhotoLabel}
                       </span>
                     </div>
                     <p className="mt-2 text-[14px] font-medium text-[#8b93a7]">
@@ -523,7 +518,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
 
                   <div className="my-5 border-t border-[#eceef4]" />
 
-                  <p className="flex-1 text-[13.5px] leading-[1.65] text-[#8b93a7]">
+                  <p className="flex-1 text-[13.5px] leading-[1.65] text-[#8b93a7] whitespace-pre-line">
                     {pkg.description}
                   </p>
 
