@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Sliders,
   X,
+  Coins,
   LogIn
 } from 'lucide-react';
 
@@ -35,17 +36,17 @@ export const GalleryView: React.FC = () => {
           <Sparkles className="h-8 w-8" />
         </div>
         <h2 className="text-xl font-bold text-white font-display">
-          {t.galleryTitle}
+          Galeria Ta Privată de Creații
         </h2>
-        <p className="mx-auto max-w-sm text-xs text-slate-400">
-          {t.createAuthDescription}
+        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          Autentifică-te pentru a vizualiza fotografiile generate salvate pe contul tău.
         </p>
         <button
           onClick={() => setIsAuthModalOpen(true)}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-2.5 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95"
         >
           <LogIn className="h-4 w-4" />
-          <span>{t.createAuthButton}</span>
+          <span>Autentifică-te în cont</span>
         </button>
       </div>
     );
@@ -237,8 +238,13 @@ export const GalleryView: React.FC = () => {
                     <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
                       {job.templateName}
                     </h3>
-                    <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                       <span>{job.aspectRatio}</span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1">
+                        <Coins className="h-3 w-3 text-amber-500" />
+                        <span>{job.creditCost} {t.credits}</span>
+                      </span>
                     </div>
                   </div>
 

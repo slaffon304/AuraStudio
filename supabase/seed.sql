@@ -40,14 +40,13 @@ ON CONFLICT (id) DO UPDATE SET
 -- 3. SEED AI PROVIDERS
 INSERT INTO public.ai_providers (id, name, type, description, is_configured, is_default, model_identifier, average_latency_seconds)
 VALUES
-  ('gemini-genai', 'Google Gemini Image', 'image', 'Server-side Google GenAI model for high-fidelity photo generation and editing.', false, true, 'gemini-3.1-flash-lite-image', 6),
+  ('gemini-genai', 'Google Gemini Image', 'image', 'Server-side Google GenAI model for high-fidelity photo generation and editing.', true, true, 'gemini-3.1-flash-lite-image', 6),
   ('replicate-flux', 'Replicate FLUX.1 Dev (FaceID)', 'image', 'Open-weights FLUX.1 Dev model with InstantID facial preservation adapter.', false, false, 'black-forest-labs/flux-1-dev', 9),
   ('fal-ai-pulid', 'Fal.ai PuLID Flux Studio', 'image', 'Ultra-low latency GPU cloud running PuLID facial identity conditioning.', false, false, 'fal-ai/flux-pulid', 3),
   ('veo-video', 'Google Veo Video', 'video', 'Generates dynamic 4-second cinematic portrait loops with subtle motion and breathing.', false, false, 'veo-3.1-lite-generate-preview', 24)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
-  is_configured = EXCLUDED.is_configured,
   is_default = EXCLUDED.is_default;
 
 -- 4. SEED AURA STUDIO TEMPLATES

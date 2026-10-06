@@ -4,15 +4,18 @@ import {
   UserPhoto,
   PhotoTemplate,
   GenerationJob,
+  CreditTransaction,
   Language,
   Currency,
   TemplateCategory,
+  CreditPackage,
   StudioMode,
   GenderCategory,
   AspectRatio,
   Theme
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
+import { CREDIT_PACKAGES } from '../data/creditPackages';
 import { TRANSLATIONS, TranslationSchema } from '../i18n/translations';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -30,13 +33,12 @@ interface AppContextType {
 
   // Supabase Backend Status
   isBackendConnected: boolean;
-  isLocalPreviewMode: boolean;
   session: Session | null;
   authToken: string | null;
 
   // Current view & navigation
-  currentView: 'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin';
-  setCurrentView: (view: 'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin') => void;
+  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin';
+  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin') => void;
 
   // User & Real Supabase Auth
   currentUser: UserAccount | null;
@@ -71,9 +73,8 @@ interface AppContextType {
     options?: {
       mode?: StudioMode;
       customReferenceUrl?: string;
-      customReferencePhotoId?: string;
       partnerPhotoUrl?: string;
-      partnerPhotoId?: string;
+      isPack?: boolean;
       aspectRatio?: AspectRatio;
     }
   ) => Promise<GenerationJob>;
@@ -87,12 +88,17 @@ interface AppContextType {
   openCustomPinterest: () => void;
   openCoupleStudio: () => void;
 
-  // Admin-only legacy credit adjustment remains backed by the existing server model.
+  // Credits & Transactions
+  creditPackages: CreditPackage[];
+  creditTransactions: CreditTransaction[];
+  purchaseCredits: (packageId: string, paymentMethod: string) => Promise<{ success: boolean; message?: string }>;
   adjustCredits: (userId: string, amount: number, reason: string) => Promise<void>;
 
   // Modals state
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
+  isCreditModalOpen: boolean;
+  setIsCreditModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   quickSelectTemplate: (template: PhotoTemplate) => void;
@@ -102,19 +108,6 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-const LOCAL_PREVIEW_USER: UserAccount = {
-  id: 'local-preview-user',
-  name: 'AuraStudio Preview',
-  email: 'preview@local.invalid',
-  avatar: '',
-  role: 'user',
-  creditBalance: 0,
-  preferredLanguage: 'ro',
-  preferredCurrency: 'MDL',
-  country: 'Moldova',
-  createdAt: new Date().toISOString()
-};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Harmless client preferences in localStorage
@@ -162,25 +155,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const t = TRANSLATIONS[language];
 
-  useEffect(() => {
-    document.documentElement.lang = language;
-  }, [language]);
-
   // Navigation
-  const [currentView, setCurrentView] = useState<'explore' | 'create' | 'gallery' | 'library' | 'profile' | 'admin'>('explore');
+  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin'>('landing');
 
   // Studio Mode & Gender Filter (PifPaf AI Features)
   const [studioMode, setStudioMode] = useState<StudioMode>('template');
   const [genderFilter, setGenderFilter] = useState<GenderCategory>('all');
 
-  // Supabase Auth Session. Development may use a clearly marked in-memory preview identity.
-  const isBackendConnected = isSupabaseConfigured();
-  const isLocalPreviewMode = import.meta.env.DEV && !isBackendConnected;
+  // Supabase Auth Session
   const [session, setSession] = useState<Session | null>(null);
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() =>
-    isLocalPreviewMode ? LOCAL_PREVIEW_USER : null
-  );
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
+  const isBackendConnected = isSupabaseConfigured();
 
   // Templates from Database
   const [templates, setTemplates] = useState<PhotoTemplate[]>(INITIAL_TEMPLATES);
@@ -192,8 +178,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
 
+  // Credits & Packages
+  const [creditPackages, setCreditPackages] = useState<CreditPackage[]>(CREDIT_PACKAGES);
+  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
+
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const authToken = session?.access_token || null;
@@ -217,36 +208,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const dbTemplates = await res.json();
         if (Array.isArray(dbTemplates) && dbTemplates.length > 0) {
-          const mapped: PhotoTemplate[] = dbTemplates.map((item: any) => {
-            const bundledFallback = INITIAL_TEMPLATES.find((template) => template.id === item.id);
-            const databasePreviewUrl = item.preview_image_url || '';
-            const databaseCategory = String(item.category_id || bundledFallback?.category || 'Editorial');
-            const normalizedCategory = databaseCategory === 'Moldova' || databaseCategory === 'Romania'
-              ? 'Heritage'
-              : databaseCategory;
-            const previewImage = databasePreviewUrl.startsWith('/src/assets/') && bundledFallback
-              ? bundledFallback.previewImage
-              : databasePreviewUrl;
-
-            return {
-              id: item.id,
-              category: normalizedCategory as TemplateCategory,
-              name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
-              description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
-              previewImage,
-              gender: item.gender || bundledFallback?.gender,
-              beforeImage: item.before_image_url || bundledFallback?.beforeImage,
-              prompt: item.prompt,
-              negativePrompt: item.negative_prompt,
-              aspectRatio: item.aspect_ratio,
-              creditCost: item.credit_cost,
-              requiredInputType: item.required_input_type,
-              providerHint: item.provider_hint,
-              tags: item.tags || [],
-              isActive: item.is_active,
-              displayOrder: item.display_order
-            };
-          });
+          const mapped: PhotoTemplate[] = dbTemplates.map((item: any) => ({
+            id: item.id,
+            category: item.category_id,
+            name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
+            description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
+            previewImage: item.preview_image_url,
+            prompt: item.prompt,
+            negativePrompt: item.negative_prompt,
+            aspectRatio: item.aspect_ratio,
+            creditCost: item.credit_cost,
+            requiredInputType: item.required_input_type,
+            providerHint: item.provider_hint,
+            tags: item.tags || [],
+            isActive: item.is_active,
+            displayOrder: item.display_order
+          }));
           setTemplates(mapped);
           return;
         }
@@ -321,6 +298,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [authToken, authFetch]);
 
+  // Fetch Transactions
+  const fetchTransactions = useCallback(async () => {
+    if (!authToken) {
+      setCreditTransactions([]);
+      return;
+    }
+    try {
+      const res = await authFetch('/api/credit-transactions');
+      if (res.ok) {
+        const txs = await res.json();
+        if (Array.isArray(txs)) {
+          setCreditTransactions(
+            txs.map((t: any) => ({
+              id: t.id,
+              userId: t.user_id,
+              type: t.type,
+              amount: t.amount,
+              balanceAfter: t.balance_after,
+              description: t.description,
+              referenceId: t.reference_id,
+              createdAt: t.created_at
+            }))
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Notice: Could not fetch credit transactions:', err);
+    }
+  }, [authToken, authFetch]);
+
   // Load Admin Data (If admin)
   const fetchAdminData = useCallback(async () => {
     if (!authToken || currentUser?.role !== 'admin') return;
@@ -370,6 +377,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser(null);
         setUserPhotos([]);
         setJobs([]);
+        setCreditTransactions([]);
       }
     });
 
@@ -386,8 +394,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fetchUserProfile();
       fetchUserPhotos();
       fetchJobs();
+      fetchTransactions();
     }
-  }, [session, fetchUserProfile, fetchUserPhotos, fetchJobs]);
+  }, [session, fetchUserProfile, fetchUserPhotos, fetchJobs, fetchTransactions]);
 
   // When user role is admin, load admin data
   useEffect(() => {
@@ -473,22 +482,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setUserPhotos([]);
     setJobs([]);
+    setCreditTransactions([]);
     setCurrentView('explore');
   };
 
-  // Upload user photo to private storage, or keep an in-memory copy in local preview.
+  // Upload user photo to real Supabase Storage via backend
   const uploadPhoto = async (dataUrl: string, filename = 'My_Photo.jpg'): Promise<UserPhoto> => {
-    if (isLocalPreviewMode && !session) {
-      const localPhoto: UserPhoto = {
-        id: `local-${crypto.randomUUID()}`,
-        userId: LOCAL_PREVIEW_USER.id,
-        url: dataUrl,
-        filename,
-        uploadedAt: new Date().toISOString()
-      };
-      setUserPhotos((prev) => [localPhoto, ...prev]);
-      return localPhoto;
-    }
     if (!session) {
       setIsAuthModalOpen(true);
       throw new Error('Autentificare necesară.');
@@ -512,10 +511,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Delete user photo
   const deletePhoto = async (id: string) => {
-    if (isLocalPreviewMode && !session) {
-      setUserPhotos((prev) => prev.filter((photo) => photo.id !== id));
-      return;
-    }
     if (!session) return;
     try {
       const res = await authFetch(`/api/photos/${id}`, { method: 'DELETE' });
@@ -535,8 +530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openCustomPinterest = () => {
-    const portraitTemplate = templates.find((template) => template.category !== 'Couple' && template.gender !== 'couple') || templates[0] || null;
-    setSelectedTemplate(portraitTemplate);
+    setSelectedTemplate(null);
     setStudioMode('pinterest');
     setIsCreateModalOpen(true);
   };
@@ -556,15 +550,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     options?: {
       mode?: StudioMode;
       customReferenceUrl?: string;
-      customReferencePhotoId?: string;
       partnerPhotoUrl?: string;
-      partnerPhotoId?: string;
+      isPack?: boolean;
       aspectRatio?: AspectRatio;
     }
   ): Promise<GenerationJob> => {
-    if (isLocalPreviewMode && !session) {
-      throw new Error(t.localPreviewGenerationUnavailable);
-    }
     if (!session || !currentUser) {
       setIsAuthModalOpen(true);
       throw new Error('Te rugăm să te autentifici pentru a genera fotografii.');
@@ -578,10 +568,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aspectRatio: options?.aspectRatio || '3:4'
     };
 
-    const cost = template.creditCost;
+    const cost = options?.isPack ? Math.max(3, template.creditCost + 2) : template.creditCost;
 
     if (currentUser.creditBalance < cost) {
-      throw new Error(t.generationAccessUnavailable);
+      setIsCreditModalOpen(true);
+      throw new Error(t.insufficientCredits);
     }
 
     // Call secure backend endpoint
@@ -590,25 +581,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         templateId: template.id,
+        userPhotoUrl,
         userPhotoId,
         aspectRatio: options?.aspectRatio || template.aspectRatio,
         mode: options?.mode || studioMode || 'template',
-        customReferencePhotoId: options?.customReferencePhotoId,
-        partnerPhotoId: options?.partnerPhotoId
+        customReferenceUrl: options?.customReferenceUrl,
+        partnerPhotoUrl: options?.partnerPhotoUrl,
+        isPack: options?.isPack
       })
     });
 
     const data = await res.json();
 
     if (!res.ok) {
+      // Refresh balance in case of refund
       await fetchUserProfile();
-      const serverMessage = String(data.error || '');
-      const isLegacyCreditError = /credit|credite|кредит|balance|balanț|sold/i.test(serverMessage);
-      throw new Error(isLegacyCreditError ? t.generationAccessUnavailable : (serverMessage || t.failed));
+      await fetchTransactions();
+      throw new Error(data.error || 'Generarea a eșuat pe server.');
     }
 
-    // Refresh the profile and generated jobs after the request completes.
-    await Promise.all([fetchUserProfile(), fetchJobs()]);
+    // Refresh profile balance, transactions, and jobs
+    await Promise.all([fetchUserProfile(), fetchJobs(), fetchTransactions()]);
 
     const createdJob: GenerationJob = {
       id: data.jobId,
@@ -620,6 +613,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userPhotoUrl,
       customReferenceUrl: options?.customReferenceUrl,
       partnerPhotoUrl: options?.partnerPhotoUrl,
+      isPack: options?.isPack,
       status: 'completed',
       progress: 100,
       currentStepMessage: t.completed,
@@ -642,6 +636,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await fetchJobs();
   };
 
+  // Real purchase initiation (No fake payment success!)
+  const purchaseCredits = async (
+    packageId: string,
+    _paymentMethod: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    if (!session) {
+      setIsAuthModalOpen(true);
+      return { success: false, message: 'Autentificare necesară.' };
+    }
+
+    try {
+      const res = await authFetch('/api/payments/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId, currency })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.isConfigured === false) {
+        return {
+          success: false,
+          message:
+            data.message ||
+            'Gateway-ul de plată online este în curs de configurare. Pentru creditare de test, folosește Panoul de Administrare.'
+        };
+      }
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Plata nu a putut fi procesată.'
+      };
+    }
+  };
+
   // Admin adjust credits
   const adjustCredits = async (userId: string, amount: number, reason: string) => {
     if (!session || currentUser?.role !== 'admin') return;
@@ -653,7 +688,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (res.ok) {
-      await Promise.all([fetchUserProfile(), fetchAdminData()]);
+      await Promise.all([fetchUserProfile(), fetchTransactions(), fetchAdminData()]);
     }
   };
 
@@ -748,7 +783,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTheme,
         t,
         isBackendConnected,
-        isLocalPreviewMode,
         session,
         authToken,
         currentView,
@@ -780,9 +814,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGenderFilter,
         openCustomPinterest,
         openCoupleStudio,
+        creditPackages,
+        creditTransactions,
+        purchaseCredits,
         adjustCredits,
         isCreateModalOpen,
         setIsCreateModalOpen,
+        isCreditModalOpen,
+        setIsCreditModalOpen,
         isAuthModalOpen,
         setIsAuthModalOpen,
         quickSelectTemplate,

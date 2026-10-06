@@ -19,19 +19,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-const MAX_SOURCE_PHOTO_BYTES = 10 * 1024 * 1024;
-const SUPPORTED_SOURCE_PHOTO_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/heic': 'heic',
-  'image/heif': 'heif'
-};
-const SUPPORTED_ASPECT_RATIOS = new Set(['1:1', '3:4', '4:3', '9:16', '16:9']);
 
-// 10 MB source photos arrive as base64 (~13.4 MB), so leave a small JSON envelope margin.
-app.use(express.json({ limit: '16mb' }));
-app.use(express.urlencoded({ extended: true, limit: '16mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Initialize Google GenAI Client
 let aiClient: GoogleGenAI | null = null;
@@ -151,79 +141,59 @@ app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Upload a user photo (to the private 'user-photos' storage bucket).
+// Upload a user photo (to 'user-photos' storage bucket)
 app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
-  const { dataUrl, filename } = req.body || {};
-  const dataUrlMatch = typeof dataUrl === 'string'
-    ? dataUrl.match(/^data:(image\/(?:jpeg|png|webp|heic|heif));base64,([A-Za-z0-9+/=\r\n]+)$/i)
-    : null;
-
-  if (!dataUrlMatch) {
-    return res.status(400).json({ error: 'Se acceptă imagini JPEG, PNG, WebP, HEIC sau HEIF codificate în Base64.' });
-  }
-
-  const mimeType = dataUrlMatch[1].toLowerCase();
-  const extension = SUPPORTED_SOURCE_PHOTO_TYPES[mimeType];
-  const base64Data = dataUrlMatch[2].replace(/\s/g, '');
-  const buffer = Buffer.from(base64Data, 'base64');
-
-  if (!buffer.length) {
-    return res.status(400).json({ error: 'Fișierul imagine este gol sau invalid.' });
-  }
-  if (buffer.length > MAX_SOURCE_PHOTO_BYTES) {
-    return res.status(413).json({ error: 'Fotografia trebuie să aibă maximum 10 MB.' });
+  const { dataUrl, filename } = req.body;
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Imagine invalidă. Se acceptă doar fișiere de tip imagine.' });
   }
 
   const userId = req.user!.id;
   const photoId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const storagePath = `${userId}/${photoId}.${extension}`;
-  const safeFilename = typeof filename === 'string' && filename.trim()
-    ? path.basename(filename.trim()).replace(/\0/g, '').slice(0, 255)
-    : `my_photo.${extension}`;
+  const storagePath = `${userId}/${photoId}.jpg`;
 
   try {
+    // Convert Base64 dataURL to binary Buffer for Supabase Storage
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // 1. Upload to Supabase Storage 'user-photos' bucket
     const { error: uploadError } = await supabaseAdmin.storage
       .from('user-photos')
       .upload(storagePath, buffer, {
-        contentType: mimeType,
-        upsert: false
+        contentType: 'image/jpeg',
+        upsert: true
       });
 
     if (uploadError) throw uploadError;
 
+    // 2. Insert metadata record in user_photos
     const { data: record, error: dbError } = await supabaseAdmin
       .from('user_photos')
       .insert({
         user_id: userId,
         storage_path: storagePath,
-        filename: safeFilename,
-        mime_type: mimeType,
+        filename: filename || 'my_photo.jpg',
+        mime_type: 'image/jpeg',
         file_size: buffer.length
       })
       .select('*')
       .single();
 
-    if (dbError) {
-      await supabaseAdmin.storage.from('user-photos').remove([storagePath]);
-      throw dbError;
-    }
+    if (dbError) throw dbError;
 
-    const { data: signedData, error: signedUrlError } = await supabaseAdmin.storage
+    // 3. Create signed URL for frontend display
+    const { data: signedData } = await supabaseAdmin.storage
       .from('user-photos')
       .createSignedUrl(storagePath, 3600);
 
-    if (signedUrlError) throw signedUrlError;
-
-    return res.json({
-      id: record.id,
-      userId: record.user_id,
-      url: signedData?.signedUrl || '',
-      filename: record.filename,
-      uploadedAt: record.created_at
+    res.json({
+      ...record,
+      url: signedData?.signedUrl || ''
     });
   } catch (err: any) {
     console.error('Error uploading photo:', err);
-    return res.status(500).json({ error: 'Încărcarea fotografiei a eșuat: ' + err.message });
+    res.status(500).json({ error: 'Încărcarea fotografiei a eșuat: ' + err.message });
   }
 });
 
@@ -292,60 +262,36 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-type GenerationPhotoPart = {
-  inlineData: {
-    mimeType: string;
-    data: string;
-  };
-};
-
-type OwnedPhotoPartResult =
-  | { ok: true; part: GenerationPhotoPart }
-  | { ok: false; status: number; error: string };
-
-// Load a private photo only through its authenticated database record. Client-supplied URLs
-// are deliberately not accepted for generation inputs.
-async function loadOwnedPhotoPart(userId: string, photoId: string): Promise<OwnedPhotoPartResult> {
-  const { data: photo, error: photoError } = await supabaseAdmin
-    .from('user_photos')
-    .select('id, user_id, storage_path, mime_type, file_size')
-    .eq('id', photoId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (photoError || !photo) {
-    return { ok: false, status: 404, error: 'Fotografia nu a fost găsită în biblioteca ta.' };
+// Helper to convert dataURL or fetch image buffer to Gemini inlineData
+async function urlToGenerativePart(url: string) {
+  if (!url) return null;
+  if (url.startsWith('data:image/')) {
+    const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    if (match) {
+      return {
+        inlineData: {
+          mimeType: match[1],
+          data: match[2]
+        }
+      };
+    }
   }
-
-  const mimeType = String(photo.mime_type || '').toLowerCase();
-  if (!SUPPORTED_SOURCE_PHOTO_TYPES[mimeType]) {
-    return { ok: false, status: 415, error: 'Formatul fotografiei nu este acceptat. Folosește JPEG, PNG, WebP, HEIC sau HEIF.' };
+  try {
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const buffer = await resp.arrayBuffer();
+      const contentType = resp.headers.get('content-type') || 'image/jpeg';
+      return {
+        inlineData: {
+          mimeType: contentType,
+          data: Buffer.from(buffer).toString('base64')
+        }
+      };
+    }
+  } catch (err) {
+    console.warn('Could not parse or fetch image for generative part:', err);
   }
-  if (Number(photo.file_size) > MAX_SOURCE_PHOTO_BYTES) {
-    return { ok: false, status: 413, error: 'Fotografia trebuie să aibă maximum 10 MB.' };
-  }
-
-  const { data: blob, error: storageError } = await supabaseAdmin.storage
-    .from('user-photos')
-    .download(photo.storage_path);
-
-  if (storageError || !blob) {
-    console.error('Could not load private source photo:', storageError);
-    return { ok: false, status: 422, error: 'Nu am putut citi fotografia selectată. Încarc-o din nou și încearcă iar.' };
-  }
-
-  const buffer = Buffer.from(await blob.arrayBuffer());
-  if (!buffer.length) {
-    return { ok: false, status: 422, error: 'Fotografia selectată este goală sau invalidă.' };
-  }
-  if (buffer.length > MAX_SOURCE_PHOTO_BYTES) {
-    return { ok: false, status: 413, error: 'Fotografia trebuie să aibă maximum 10 MB.' };
-  }
-
-  return {
-    ok: true,
-    part: { inlineData: { mimeType, data: buffer.toString('base64') } }
-  };
+  return null;
 }
 
 // ====================================================================
@@ -354,243 +300,248 @@ async function loadOwnedPhotoPart(userId: string, photoId: string): Promise<Owne
 
 // Create and trigger AI generation job
 app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const templateId = typeof body.templateId === 'string' ? body.templateId.trim() : '';
-    const userPhotoId = typeof body.userPhotoId === 'string' ? body.userPhotoId.trim() : '';
-    const requestedMode = body.mode;
-    const mode: 'template' | 'pinterest' | 'couple' | null = requestedMode == null || requestedMode === 'template'
-      ? 'template'
-      : requestedMode === 'pinterest' || requestedMode === 'couple'
-        ? requestedMode
-        : null;
-    const customReferencePhotoId = typeof body.customReferencePhotoId === 'string' ? body.customReferencePhotoId.trim() : '';
-    const partnerPhotoId = typeof body.partnerPhotoId === 'string' ? body.partnerPhotoId.trim() : '';
-    const aspectRatio = typeof body.aspectRatio === 'string' ? body.aspectRatio : '';
-    const userId = req.user!.id;
+  const {
+    templateId,
+    userPhotoUrl,
+    aspectRatio,
+    mode = 'template',
+    customReferenceUrl,
+    partnerPhotoUrl,
+    isPack = false
+  } = req.body;
+  const userId = req.user!.id;
 
-    if (!mode) {
-      return res.status(400).json({ error: 'Modul de generare nu este valid.' });
-    }
-    if (!templateId) {
-      return res.status(400).json({ error: 'Parametrul templateId este obligatoriu.' });
-    }
-    if (!userPhotoId) {
-      return res.status(400).json({ error: 'Încarcă o fotografie înainte de generare.' });
-    }
-    if (mode === 'pinterest' && !customReferencePhotoId) {
-      return res.status(400).json({ error: 'Încarcă o fotografie de referință înainte de generare.' });
-    }
-    if (mode === 'couple' && !partnerPhotoId) {
-      return res.status(400).json({ error: 'Încarcă fotografia celeilalte persoane înainte de generare.' });
-    }
+  if (!templateId && !customReferenceUrl) {
+    return res.status(400).json({ error: 'Parametrul templateId sau customReferenceUrl este obligatoriu.' });
+  }
 
-    // The job schema references a real active template; Pinterest and couple modes customize
-    // its prompt at runtime without adding columns or storing extra photo IDs in the job row.
-    const { data: template, error: templateError } = await supabaseAdmin
+  if (!userPhotoUrl) {
+    return res.status(400).json({ error: 'Fotografia utilizatorului este obligatorie.' });
+  }
+
+  // 1. Fetch template from database or create dynamic Pinterest reference config
+  let template: any = null;
+  if (templateId) {
+    const { data: tmpl, error: tmplError } = await supabaseAdmin
       .from('templates')
       .select('*')
       .eq('id', templateId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (templateError) {
-      console.error('Could not load generation template:', templateError);
-      return res.status(500).json({ error: 'Șablonul nu a putut fi încărcat. Încearcă din nou.' });
+      .single();
+    if (!tmplError && tmpl) {
+      template = tmpl;
     }
-    if (!template) {
-      return res.status(404).json({ error: 'Șablonul specificat nu există sau nu mai este activ.' });
+  }
+
+  if (!template) {
+    template = {
+      id: 'custom-pinterest',
+      name_ro: 'Referință Pinterest Personalizată',
+      name_ru: 'Кастомный референс из Pinterest',
+      name_en: 'Custom Pinterest Reference',
+      credit_cost: 2,
+      aspect_ratio: aspectRatio || '3:4',
+      prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
+    };
+  }
+
+  const effectiveCreditCost = isPack ? Math.max(3, template.credit_cost + 2) : template.credit_cost;
+
+  // Check if AI provider is configured
+  if (!process.env.GEMINI_API_KEY || !aiClient) {
+    return res.status(503).json({
+      error: 'Generarea AI nu este configurată pe server: GEMINI_API_KEY lipsește în Secrets. Te rugăm să configurezi cheia Gemini în panoul de Secrets.'
+    });
+  }
+
+  let jobId: string | null = null;
+
+  try {
+    // 2. Create job record in queued state
+    const { data: jobRecord, error: jobCreateError } = await supabaseAdmin
+      .from('generation_jobs')
+      .insert({
+        user_id: userId,
+        template_id: template.id,
+        status: 'queued',
+        progress: 10,
+        current_step_message: 'Verificare credite și autorizare...',
+        provider_id: 'gemini-genai',
+        credit_cost: effectiveCreditCost,
+        aspect_ratio: aspectRatio || template.aspect_ratio || '3:4'
+      })
+      .select('id')
+      .single();
+
+    if (jobCreateError || !jobRecord) {
+      throw new Error('Eroare la crearea înregistrării generării: ' + jobCreateError?.message);
     }
 
-    const effectiveCreditCost = Number(template.credit_cost);
-    if (!Number.isInteger(effectiveCreditCost) || effectiveCreditCost < 1) {
-      return res.status(500).json({ error: 'Costul șablonului nu este configurat corect.' });
-    }
+    jobId = jobRecord.id;
 
-    if (!process.env.GEMINI_API_KEY || !aiClient) {
-      return res.status(503).json({
-        error: 'Generarea AI nu este configurată pe server: GEMINI_API_KEY lipsește în Secrets. Te rugăm să configurezi cheia Gemini în panoul de Secrets.'
+    // 3. ATOMICALLY DEDUCT CREDITS using PostgreSQL stored procedure
+    const { data: newBalance, error: deductError } = await supabaseAdmin
+      .rpc('deduct_credits_for_generation', {
+        p_user_id: userId,
+        p_amount: effectiveCreditCost,
+        p_template_id: template.id,
+        p_template_name: template.name_ro || 'Photo Shoot',
+        p_job_id: jobId
       });
-    }
 
-    const primaryPhotoResult = await loadOwnedPhotoPart(userId, userPhotoId);
-    if (!primaryPhotoResult.ok) {
-      return res.status(primaryPhotoResult.status).json({ error: primaryPhotoResult.error });
-    }
-
-    let secondaryPhotoPart: GenerationPhotoPart | null = null;
-    if (mode === 'pinterest') {
-      const referencePhotoResult = await loadOwnedPhotoPart(userId, customReferencePhotoId);
-      if (!referencePhotoResult.ok) {
-        return res.status(referencePhotoResult.status).json({ error: referencePhotoResult.error });
-      }
-      secondaryPhotoPart = referencePhotoResult.part;
-    } else if (mode === 'couple') {
-      const partnerPhotoResult = await loadOwnedPhotoPart(userId, partnerPhotoId);
-      if (!partnerPhotoResult.ok) {
-        return res.status(partnerPhotoResult.status).json({ error: partnerPhotoResult.error });
-      }
-      secondaryPhotoPart = partnerPhotoResult.part;
-    }
-
-    const requestedAspectRatio = SUPPORTED_ASPECT_RATIOS.has(aspectRatio)
-      ? aspectRatio
-      : (SUPPORTED_ASPECT_RATIOS.has(template.aspect_ratio) ? template.aspect_ratio : '3:4');
-
-    let jobId: string | null = null;
-    let creditsDeducted = false;
-
-    try {
-      const { data: jobRecord, error: jobCreateError } = await supabaseAdmin
-        .from('generation_jobs')
-        .insert({
-          user_id: userId,
-          template_id: template.id,
-          user_photo_id: userPhotoId,
-          status: 'queued',
-          progress: 10,
-          current_step_message: 'Verificare credite și autorizare...',
-          provider_id: 'gemini-genai',
-          credit_cost: effectiveCreditCost,
-          aspect_ratio: requestedAspectRatio
-        })
-        .select('id')
-        .single();
-
-      if (jobCreateError || !jobRecord) {
-        throw new Error('Eroare la crearea înregistrării generării: ' + jobCreateError?.message);
-      }
-
-      jobId = jobRecord.id;
-
-      const { data: newBalance, error: deductError } = await supabaseAdmin
-        .rpc('deduct_credits_for_generation', {
-          p_user_id: userId,
-          p_amount: effectiveCreditCost,
-          p_template_id: template.id,
-          p_template_name: template.name_ro || 'Photo Shoot',
-          p_job_id: jobId
-        });
-
-      if (deductError) {
-        await supabaseAdmin
-          .from('generation_jobs')
-          .update({ status: 'failed', error_message: 'Credite insuficiente pentru această generare.' })
-          .eq('id', jobId);
-
-        return res.status(402).json({
-          error: 'Credite insuficiente. Încarcă-ți contul pentru a genera această fotografie.',
-          required: effectiveCreditCost
-        });
-      }
-      creditsDeducted = true;
-
-      const { error: processingUpdateError } = await supabaseAdmin
+    if (deductError) {
+      await supabaseAdmin
         .from('generation_jobs')
         .update({
-          status: 'processing',
-          progress: 35,
-          current_step_message: 'Sinteză portret fotorealist prin Google Gemini...',
-          started_at: new Date().toISOString()
+          status: 'failed',
+          error_message: 'Credite insuficiente pentru această generare.'
         })
         .eq('id', jobId);
-      if (processingUpdateError) throw processingUpdateError;
 
-      const templatePrompt = String(template.prompt || '');
-      const negativePrompt = template.negative_prompt
-        ? ` Avoid these visual artifacts: ${template.negative_prompt}.`
-        : '';
-      let fullPrompt: string;
-
-      if (mode === 'pinterest') {
-        fullPrompt = `Use the first image as the identity source and the second image only as a visual reference. Preserve the exact identity, facial structure, skin tone, hair, and age of the person in the first image. Transfer the reference's wardrobe, pose, lighting, composition, and setting without copying the reference person's identity. Create a high-end, photorealistic editorial portrait. ${templatePrompt}${negativePrompt}`;
-      } else if (mode === 'couple') {
-        fullPrompt = `Create a romantic editorial couple portrait using the first image as person one and the second image as person two. Preserve both people's distinct facial identities and natural features. Place them together in a believable, elegant pose and setting. Style direction: ${templatePrompt}. Use cinematic, natural lighting and photorealistic detail.${negativePrompt}`;
-      } else {
-        fullPrompt = `${templatePrompt} Create a high-end professional portrait while preserving the identity and facial features of the person in the provided source photo. Use a pristine European aesthetic, cinematic 85mm lens, natural facial details, and 4K ultra-HD photography.${negativePrompt}`;
-      }
-
-      const contentParts: any[] = [
-        { text: fullPrompt },
-        primaryPhotoResult.part
-      ];
-      if (secondaryPhotoPart) contentParts.push(secondaryPhotoPart);
-
-      const genResponse = await aiClient.models.generateContent({
-        model: 'gemini-3.1-flash-lite-image',
-        contents: { parts: contentParts },
-        config: { imageConfig: { aspectRatio: requestedAspectRatio } }
-      });
-
-      let imageBase64Data: string | null = null;
-      let outputMimeType = 'image/jpeg';
-      const candidates = genResponse.candidates;
-      if (candidates && candidates.length > 0) {
-        for (const part of candidates[0].content?.parts || []) {
-          if (part.inlineData?.data) {
-            imageBase64Data = part.inlineData.data;
-            outputMimeType = part.inlineData.mimeType || 'image/jpeg';
-            break;
-          }
-        }
-      }
-
-      if (!imageBase64Data) {
-        throw new Error('Modelul Gemini nu a returnat date vizuale pentru imagine.');
-      }
-
-      const storagePath = `${userId}/${jobId}.jpg`;
-      const imageBuffer = Buffer.from(imageBase64Data, 'base64');
-      const { error: storageError } = await supabaseAdmin.storage
-        .from('generated-images')
-        .upload(storagePath, imageBuffer, { contentType: outputMimeType, upsert: true });
-      if (storageError) throw storageError;
-
-      const { error: generatedImageError } = await supabaseAdmin
-        .from('generated_images')
-        .insert({ job_id: jobId, user_id: userId, storage_path: storagePath, mime_type: outputMimeType });
-      if (generatedImageError) throw generatedImageError;
-
-      const { data: signedData, error: signedUrlError } = await supabaseAdmin.storage
-        .from('generated-images')
-        .createSignedUrl(storagePath, 7200);
-      if (signedUrlError) throw signedUrlError;
-
-      const { error: completedUpdateError } = await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          status: 'completed',
-          progress: 100,
-          current_step_message: 'Portret finalizat cu succes!',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', jobId);
-      if (completedUpdateError) throw completedUpdateError;
-
-      return res.json({ jobId, status: 'completed', resultImageUrl: signedData?.signedUrl || '', newBalance });
-    } catch (generationError: any) {
-      console.error('Generation error:', generationError);
-
-      if (jobId && creditsDeducted) {
-        try {
-          await supabaseAdmin.rpc('refund_credits_for_failed_job', {
-            p_job_id: jobId,
-            p_error_message: generationError?.message || 'Eroare necunoscută la generare.'
-          });
-        } catch (refundError) {
-          console.error('Refund procedure notice:', refundError);
-        }
-      }
-
-      return res.status(500).json({
-        error: creditsDeducted
-          ? 'Generarea a eșuat. Creditele au fost restituite automat pe contul tău: ' + (generationError?.message || '')
-          : 'Generarea nu a putut fi pornită: ' + (generationError?.message || '')
+      return res.status(402).json({
+        error: 'Credite insuficiente. Încarcă-ți contul pentru a genera această fotografie.',
+        required: effectiveCreditCost
       });
     }
-  } catch (requestError: any) {
-    console.error('Could not start generation request:', requestError);
-    return res.status(500).json({ error: 'Generarea nu a putut fi pornită. Încearcă din nou.' });
+
+    // 4. Update job to processing
+    await supabaseAdmin
+      .from('generation_jobs')
+      .update({
+        status: 'processing',
+        progress: 35,
+        current_step_message: 'Sinteză portret fotorealist prin Google Gemini...',
+        started_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    // 5. Execute REAL server-side AI generation with Gemini SDK
+    let imageBase64Data: string | null = null;
+    let mimeType = 'image/jpeg';
+
+    let promptContext = template.prompt;
+    if (mode === 'pinterest' || customReferenceUrl) {
+      promptContext = `Transfer the exact identity, facial structure, eyes, and skin details of the person in the user's selfie into the aesthetic style, outfit, lighting, pose, and background mood of the reference image. Maintain 100% facial resemblance while achieving pristine European editorial fashion photography, cinematic 85mm lens, 4k ultra-hd.`;
+    } else if (mode === 'couple' && partnerPhotoUrl) {
+      promptContext = `Create a breathtaking romantic couple photoshoot featuring both individuals from the provided photos. Person 1 is on the left and Person 2 is on the right, embracing warmly in a luxurious romantic setting: ${template.prompt}. Pristine facial resemblance for both persons, cinematic golden hour lighting, 85mm lens.`;
+    } else {
+      promptContext = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
+    }
+
+    const contentsParts: any[] = [{ text: promptContext }];
+
+    // Primary user selfie
+    const primaryPart = await urlToGenerativePart(userPhotoUrl);
+    if (primaryPart) {
+      contentsParts.push(primaryPart);
+    }
+
+    // Secondary reference (Pinterest image or Couple partner photo)
+    if (customReferenceUrl) {
+      const refPart = await urlToGenerativePart(customReferenceUrl);
+      if (refPart) {
+        contentsParts.push(refPart);
+      }
+    } else if (partnerPhotoUrl) {
+      const partnerPart = await urlToGenerativePart(partnerPhotoUrl);
+      if (partnerPart) {
+        contentsParts.push(partnerPart);
+      }
+    }
+
+    const targetRatio = (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4';
+
+    const genResponse = await aiClient.models.generateContent({
+      model: 'gemini-3.1-flash-lite-image',
+      contents: {
+        parts: contentsParts
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: targetRatio
+        }
+      }
+    });
+
+    const candidates = genResponse.candidates;
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          imageBase64Data = part.inlineData.data;
+          mimeType = part.inlineData.mimeType || 'image/jpeg';
+          break;
+        }
+      }
+    }
+
+    if (!imageBase64Data) {
+      throw new Error('Modelul Gemini nu a returnat date vizuale pentru imagine.');
+    }
+
+    // 6. Save generated image to private Supabase Storage bucket 'generated-images'
+    const storagePath = `${userId}/${jobId}.jpg`;
+    const imageBuffer = Buffer.from(imageBase64Data, 'base64');
+
+    const { error: storageError } = await supabaseAdmin.storage
+      .from('generated-images')
+      .upload(storagePath, imageBuffer, {
+        contentType: mimeType,
+        upsert: true
+      });
+
+    if (storageError) throw storageError;
+
+    // 7. Insert record in generated_images table
+    await supabaseAdmin
+      .from('generated_images')
+      .insert({
+        job_id: jobId,
+        user_id: userId,
+        storage_path: storagePath,
+        mime_type: mimeType
+      });
+
+    // 8. Update job to completed
+    await supabaseAdmin
+      .from('generation_jobs')
+      .update({
+        status: 'completed',
+        progress: 100,
+        current_step_message: 'Portret finalizat cu succes!',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+
+    // 9. Generate secure signed URL for frontend
+    const { data: signedData } = await supabaseAdmin.storage
+      .from('generated-images')
+      .createSignedUrl(storagePath, 7200);
+
+    return res.json({
+      jobId,
+      status: 'completed',
+      resultImageUrl: signedData?.signedUrl || '',
+      newBalance
+    });
+
+  } catch (genErr: any) {
+    console.error('Generation error:', genErr);
+
+    // 10. ATOMIC REFUND ON FAILURE (Refunds credits exactly once!)
+    if (jobId) {
+      try {
+        await supabaseAdmin.rpc('refund_credits_for_failed_job', {
+          p_job_id: jobId,
+          p_error_message: genErr?.message || 'Eroare necunoscută la generare.'
+        });
+      } catch (refundErr) {
+        console.error('Refund procedure notice:', refundErr);
+      }
+    }
+
+    return res.status(500).json({
+      error: 'Generarea a eșuat. Creditele au fost restituite automat pe contul tău: ' + (genErr?.message || '')
+    });
   }
 });
 
