@@ -54,55 +54,15 @@ export const Header: React.FC = () => {
           </button>
         </div>
 
-        {/* Zone 2: Navigation Links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-semibold">
-          <a
-            href="#how-it-works"
-            className="text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            {t.landingHowTitle || (language === 'ru' ? 'Как это работает' : language === 'en' ? 'How it works' : 'Cum funcționează')}
-          </a>
+        {/* Primary Actions: Tariffs, Language, Profile */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Tariffs link */}
           <a
             href="#photo-packages"
-            className="text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            {t.landingPackagesTitle || (language === 'ru' ? 'Пакеты фото' : language === 'en' ? 'Photo packs' : 'Pachete foto')}
-          </a>
-          <a
-            href="#faq"
-            className="text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            {t.landingFaqTitle || 'FAQ'}
-          </a>
-        </nav>
-
-        {/* Zone 3: Primary Actions (Тарифы, 1 фото pill, User Avatar, Theme/Lang) */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Tariffs link (visible on all screens like in screenshot) */}
-          <button
-            onClick={() => setIsCreditModalOpen(true)}
             className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mr-1"
           >
             {language === 'ru' ? 'Тарифы' : language === 'en' ? 'Pricing' : 'Tarife'}
-          </button>
-
-          {/* Blue Credit Pill (PifPaf AI style: ✨ 1 фото) */}
-          <button
-            onClick={() => setIsCreditModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60 text-xs font-bold transition-all shadow-2xs"
-            title={t.buyCredits}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-            <span>
-              {currentUser
-                ? `${currentUser.creditBalance} ${language === 'ru' ? 'фото' : language === 'en' ? 'photos' : 'foto'}`
-                : language === 'ru'
-                ? '1 фото'
-                : language === 'en'
-                ? '1 photo'
-                : '1 foto'}
-            </span>
-          </button>
+          </a>
 
           {/* Theme Toggle (Light / Dark) */}
           <button
