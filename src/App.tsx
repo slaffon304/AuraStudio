@@ -13,6 +13,7 @@ import { AuthModal } from './components/AuthModal';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { ProfileView } from './components/ProfileView';
+import { LegalView } from './components/LegalView';
 import { PhotoTemplate } from './types';
 import { pathToView, viewToPath } from './lib/navigation';
 import {
@@ -198,6 +199,12 @@ const MainAppContent: React.FC = () => {
           </div>
         )}
 
+        {(currentView === ('privacy' as any) ||
+          currentView === ('terms' as any) ||
+          currentView === ('offer' as any)) && (
+          <LegalView page={currentView as 'privacy' | 'terms' | 'offer'} />
+        )}
+
         {currentView === 'admin' && (
           <div className="pb-20 md:pb-10">
             <AdminDashboard />
@@ -205,7 +212,7 @@ const MainAppContent: React.FC = () => {
         )}
       </main>
 
-      {currentView !== 'landing' && <BottomNav />}
+      {currentView !== 'landing' && !['privacy','terms','offer'].includes(currentView as string) && <BottomNav />}
 
       <CreatePhotoModal
         isOpen={isCreateModalOpen}
