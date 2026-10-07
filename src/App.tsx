@@ -33,8 +33,8 @@ const MainAppContent: React.FC = () => {
     selectedCategory,
     isCreateModalOpen,
     setIsCreateModalOpen,
-    isCreditModalOpen,
-    setIsCreditModalOpen,
+    isPhotoModalOpen,
+    setIsPhotoModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
     quickSelectTemplate,
@@ -46,7 +46,6 @@ const MainAppContent: React.FC = () => {
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Sync URL path ↔ currentView
   useEffect(() => {
     const applyPath = () => {
       setCurrentView(pathToView(window.location.pathname) as any);
@@ -230,7 +229,7 @@ const MainAppContent: React.FC = () => {
         }}
       />
 
-      <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <CreditPurchaseModal isOpen={isPhotoModalOpen} onClose={() => setIsPhotoModalOpen(false)} />
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
