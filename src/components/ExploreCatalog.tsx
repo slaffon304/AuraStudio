@@ -343,26 +343,43 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                     </span>
                   </span>
 
-                  {/* Badge — pink text+flame, compact, sticker on top edge */}
+                  {/* Badge — pink flame + text, tight pill, sits on top edge */}
                   <span
-                    className="absolute z-20 inline-flex items-center gap-[3px] whitespace-nowrap rounded-full bg-white px-[7px] py-[2px] shadow-md"
+                    className="absolute z-20 inline-flex items-center gap-[2px] whitespace-nowrap rounded-full bg-white shadow-md"
                     style={{
-                      top: '-6px',
-                      left: '8px',
-                      transform: `rotate(${tilt}deg)`
+                      top: '-7px',
+                      left: '6px',
+                      padding: '4px 8px',
+                      transform: `rotate(${tilt}deg)`,
+                      lineHeight: 1
                     }}
                   >
                     <svg
-                      viewBox="0 0 16 16"
-                      className="h-[9px] w-[9px] shrink-0"
+                      viewBox="0 0 24 24"
+                      width="11"
+                      height="11"
+                      className="shrink-0"
                       aria-hidden="true"
                     >
                       <path
                         fill="#ff2d8b"
-                        d="M8 1.2c.2 1.6-.6 2.6-1.4 3.5-.9 1-1.8 2-1.8 3.6 0 2 1.6 3.5 3.5 3.5S12 10.3 12 8.3c0-1.3-.5-2.2-1.2-3.2C9.8 3.8 9.2 2.6 8 1.2z"
+                        d="M12 2s5 5.2 5 10.2A5 5 0 0 1 7 12.2C7 9.4 8.4 7.2 10 5.5 10.3 7.8 11 9 12 9c0-2.2.3-4.5 0-7z"
+                      />
+                      <path
+                        fill="#ff2d8b"
+                        d="M12 13.2c-1.4 0-2.4 1-2.4 2.3 0 1.4 1.1 2.3 2.4 2.3s2.4-.9 2.4-2.3c0-1.3-1-2.3-2.4-2.3z"
+                        opacity=".35"
                       />
                     </svg>
-                    <span className="text-[9px] font-extrabold uppercase leading-none tracking-tight text-[#ff2d8b]">
+                    <span
+                      style={{
+                        color: '#ff2d8b',
+                        fontSize: '9px',
+                        fontWeight: 800,
+                        letterSpacing: '-0.02em',
+                        textTransform: 'uppercase'
+                      }}
+                    >
                       {count.toLocaleString('ru-RU')} {todayWord}
                     </span>
                   </span>
