@@ -3,6 +3,60 @@ import { useApp } from '../context/AppContext';
 import { ArrowLeft } from 'lucide-react';
 import { viewToPath, clearFromProfile } from '../lib/navigation';
 
+function localizeTxDescription(raw: string, language: string): string {
+  const s = (raw || '').trim();
+  const lower = s.toLowerCase();
+
+  // Welcome gift
+  if (
+    lower.includes('cadou de bun venit') ||
+    lower.includes('welcome gift') ||
+    lower.includes('приветствен') ||
+    lower.includes('bun venit')
+  ) {
+    if (language === 'ru') return 'Приветственный подарок AuraStudio (1 фото)';
+    if (language === 'en') return 'AuraStudio welcome gift (1 photo)';
+    return 'Cadou de bun venit AuraStudio (1 foto)';
+  }
+
+  // Purchase / package
+  if (lower.includes('purchase') || lower.includes('cumpăr') || lower.includes('покупк') || lower.includes('pachet')) {
+    if (language === 'ru') return s.replace(/Cadou|cumpărare|Purchase/gi, 'Покупка') || 'Покупка пакета';
+    if (language === 'en') return 'Package purchase';
+    return s;
+  }
+
+  // Generation spend
+  if (lower.includes('gener') || lower.includes('generare') || lower.includes('списан')) {
+    if (language === 'ru') return 'Списание за генерацию';
+    if (language === 'en') return 'Generation spend';
+    return 'Debitare pentru generare';
+  }
+
+  // Refund
+  if (lower.includes('refund') || lower.includes('return') || lower.includes('restitu') || lower.includes('возврат')) {
+    if (language === 'ru') return 'Возврат фото';
+    if (language === 'en') return 'Photo refund';
+    return 'Returnare foto';
+  }
+
+  // Referral
+  if (lower.includes('referral') || lower.includes('refer') || lower.includes('реферал')) {
+    if (language === 'ru') return 'Реферальный бонус';
+    if (language === 'en') return 'Referral bonus';
+    return 'Bonus referral';
+  }
+
+  // Admin adjust
+  if (lower.includes('admin') || lower.includes('administrator') || lower.includes('bonus acordat')) {
+    if (language === 'ru') return 'Корректировка администратором';
+    if (language === 'en') return 'Admin adjustment';
+    return 'Ajustare de administrator';
+  }
+
+  return s;
+}
+
 export const HistoryView: React.FC = () => {
   const {
     language,
@@ -56,7 +110,6 @@ export const HistoryView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-4 sm:pb-12">
-      {/* Back */}
       <div className="mb-5 flex items-center">
         <button
           type="button"
@@ -73,7 +126,6 @@ export const HistoryView: React.FC = () => {
       </h1>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{sub}</p>
 
-      {/* Balance card */}
       <div className="mt-6 rounded-[24px] bg-gradient-to-br from-[#5b6cf0] to-[#7b5cf0] p-5 text-white shadow-md">
         <p className="text-sm font-medium text-white/85">{available}</p>
         <p className="mt-1 text-3xl font-extrabold tabular-nums">
@@ -88,7 +140,6 @@ export const HistoryView: React.FC = () => {
         </button>
       </div>
 
-      {/* Transactions */}
       <div className="mt-4">
         {photoTransactions.length === 0 ? (
           <div className="rounded-[20px] bg-white dark:bg-[#12141c] border border-slate-100 dark:border-white/5 px-5 py-10 text-center text-sm text-slate-400 shadow-sm">
@@ -103,7 +154,7 @@ export const HistoryView: React.FC = () => {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                    {tx.description}
+                    {localizeTxDescription(tx.description, language)}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     {new Date(tx.createdAt).toLocaleString()}
