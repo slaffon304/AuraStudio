@@ -37,8 +37,8 @@ interface AppContextType {
   authToken: string | null;
 
   // Current view & navigation
-  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile';
-  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile') => void;
+  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'privacy' | 'terms' | 'offer';
+  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'privacy' | 'terms' | 'offer') => void;
 
   // User & Real Supabase Auth
   currentUser: UserAccount | null;
@@ -161,7 +161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const t = TRANSLATIONS[language];
 
   // Navigation
-  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'privacy' | 'terms' | 'offer'>('landing');
 
   // Studio Mode & Gender Filter (PifPaf AI Features)
   const [studioMode, setStudioMode] = useState<StudioMode>('template');
