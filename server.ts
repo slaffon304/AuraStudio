@@ -826,6 +826,95 @@ app.get('/api/admin/providers', requireAuth, requireAdmin, async (req: AuthReque
   }
 });
 
+
+// ====================================================================
+// ACCOUNT: delete, referral, profile extras
+// ====================================================================
+
+// Extended /api/me already returns profile columns (level, referral_code, etc.)
+
+app.get('/api/me/referral', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('referral_code, referral_photos_earned, level, completed_generations, photo_balance')
+      .eq('id', userId)
+      .single();
+    if (error) throw error;
+
+    const { count: invitedCount } = await supabaseAdmin
+      .from('referrals')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', userId);
+
+    res.json({
+      referralCode: profile?.referral_code,
+      invited: invitedCount || 0,
+      photosEarned: profile?.referral_photos_earned || 0,
+      level: profile?.level || 1,
+      completedGenerations: profile?.completed_generations || 0,
+      photoBalance: profile?.photo_balance || 0
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/referral', requireAuth, async (req: AuthRequest, res) => {
+  const code = String(req.body?.code || '').trim();
+  if (!code) {
+    return res.status(400).json({ error: 'Missing referral code' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.rpc('apply_referral', {
+      p_referred_id: req.user!.id,
+      p_code: code
+    });
+    if (error) throw error;
+    if (data && data.ok === false) {
+      return res.status(400).json({ error: data.error || 'referral_failed', data });
+    }
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/account/delete', requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.user!.id;
+  try {
+    // 1. List and remove storage objects
+    for (const bucket of ['user-photos', 'generated-images'] as const) {
+      const { data: files } = await supabaseAdmin.storage.from(bucket).list(userId, { limit: 1000 });
+      if (files && files.length > 0) {
+        const paths = files.map((f) => `${userId}/${f.name}`);
+        await supabaseAdmin.storage.from(bucket).remove(paths);
+      }
+    }
+
+    // 2. DB wipe via RPC
+    const { data: delResult, error: delErr } = await supabaseAdmin.rpc('delete_user_account', {
+      p_user_id: userId
+    });
+    if (delErr) throw delErr;
+
+    // 3. Auth user
+    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authErr) {
+      console.error('Auth deleteUser:', authErr);
+      // profile already gone; report partial
+      return res.status(200).json({ success: true, warning: authErr.message, db: delResult });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Account delete error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // ====================================================================
 // STATIC & VITE MIDDLEWARE
 // ====================================================================
