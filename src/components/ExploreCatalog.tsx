@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { PhotoTemplate } from '../types';
 import { Search, ChevronRight, X, Gift, Sparkles, Bell, MessageCircle } from 'lucide-react';
 
-type TabId = 'forYou' | 'video' | 'effects' | 'holidays' | 'together' | 'pets' | 'guys';
+type TabId = 'forYou' | 'video' | 'effects' | 'holidays' | 'together' | 'pets' | 'covered';
 
 const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
   { id: 'forYou', ru: 'для тебя', ro: 'pentru tine', en: 'for you' },
@@ -12,7 +12,7 @@ const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
   { id: 'holidays', ru: 'праздники', ro: 'sărbători', en: 'holidays' },
   { id: 'together', ru: 'вместе', ro: 'împreună', en: 'together' },
   { id: 'pets', ru: 'с питомцами', ro: 'cu animale', en: 'with pets' },
-  { id: 'guys', ru: 'для парней', ro: 'pentru băieți', en: 'for guys' }
+  { id: 'covered', ru: 'для покрытых', ro: 'cu hijab', en: 'modest' }
 ];
 
 const TELEGRAM_URL = 'https://t.me/aurastudio_help_bot';
@@ -53,10 +53,23 @@ function filterByTab(templates: PhotoTemplate[], tab: TabId): PhotoTemplate[] {
       );
     case 'pets':
       return active.filter((t) => (t.tags || []).some((x) => /pet|dog|cat|animal/i.test(x)));
-    case 'guys':
-      return active.filter(
-        (t) => t.gender === 'male' || (t.tags || []).some((x) => /male|men|guy|boy/i.test(x))
-      );
+    case 'covered':
+      return active.filter((t) => {
+        const blob = [
+          ...(t.tags || []),
+          t.name.ru,
+          t.name.en,
+          t.name.ro,
+          t.description?.ru || '',
+          t.description?.en || '',
+          t.description?.ro || ''
+        ]
+          .join(' ')
+          .toLowerCase();
+        return /hijab|modest|covered|scarf|хиджаб|покрыт|платок|abaya|niqab|headscarf|мусульм/i.test(
+          blob
+        );
+      });
     default:
       return active;
   }
@@ -68,7 +81,7 @@ function todayCount(id: string): number {
   return 400 + (h % 4600);
 }
 
-/** Stable pseudo-random tilt in degrees for badge, ~ −8…+8 */
+/** Stable tilt −8°…+8° per template */
 function badgeTilt(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 17 + id.charCodeAt(i)) >>> 0;
@@ -161,7 +174,6 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
 
   return (
     <div className="mx-auto max-w-7xl bg-[#f3f5fa] dark:bg-[#090a0f] px-4 sm:px-6 lg:px-8 pb-28 pt-3 sm:pt-5 min-h-[60vh]">
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
@@ -173,7 +185,6 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         />
       </div>
 
-      {/* Tabs — lowercase, blue dot */}
       <div className="mt-5 overflow-x-auto no-scrollbar -mx-4 px-4">
         <div className="flex items-end gap-5 min-w-max pb-1">
           {TABS.map((t) => {
@@ -197,7 +208,6 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </div>
       </div>
 
-      {/* 3 action tiles */}
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <button
           type="button"
@@ -292,18 +302,18 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </button>
       </div>
 
-      {/* ===== В ТРЕНДЕ — ~2.75 cards, tilted badges ===== */}
+      {/* В тренде */}
       <section className="mt-7">
         <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
           {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
         </h2>
 
-        {/*
-          Card width: calc((100% - 2*gap) / 2.75) ≈ 34.5% of row
-          On mobile with px-4, ~2.75 cards visible like reference.
-        */}
-        <div className="mt-3 -mx-4 overflow-x-auto no-scrollbar">
-          <div className="flex gap-2.5 px-4 pb-1" style={{ width: 'max-content' }}>
+        {/* overflow-x auto, overflow-y visible so badges can stick out above cards */}
+        <div className="mt-4 -mx-4 overflow-x-auto overflow-y-visible no-scrollbar">
+          <div
+            className="flex items-start gap-2.5 px-4 pt-3 pb-1"
+            style={{ width: 'max-content' }}
+          >
             {trending.map((tmpl) => {
               const name = tmpl.name[lang] || tmpl.name.ro;
               const count = todayCount(tmpl.id);
@@ -313,31 +323,37 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   key={tmpl.id}
                   type="button"
                   onClick={() => onPreview(tmpl)}
-                  className="relative shrink-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800 text-left"
+                  className="relative shrink-0 text-left"
                   style={{
                     width: 'min(148px, 34.5vw)',
                     height: 'min(198px, 46vw)'
                   }}
                 >
-                  <img
-                    src={tmpl.previewImage}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                  {/* Photo shell — overflow hidden only here */}
+                  <span className="absolute inset-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800">
+                    <img
+                      src={tmpl.previewImage}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                    <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-[14px] font-bold leading-[1.15] text-white line-clamp-2">
+                      {name}
+                    </span>
+                  </span>
 
-                  {/* Badge — random tilt per card */}
+                  {/* Badge — sticker on TOP EDGE, partially outside card */}
                   <span
-                    className="absolute left-2 top-2 z-10 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-wide text-[#12152a] shadow-sm"
-                    style={{ transform: `rotate(${tilt}deg)` }}
+                    className="absolute z-20 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-wide text-[#12152a] shadow-md"
+                    style={{
+                      top: '-6px',
+                      left: '8px',
+                      transform: `rotate(${tilt}deg)`
+                    }}
                   >
                     <span aria-hidden="true">🔥</span>
                     {count.toLocaleString('ru-RU')} {todayWord}
-                  </span>
-
-                  <span className="absolute bottom-0 left-0 right-0 z-10 px-2.5 pb-2.5 text-[14px] font-bold leading-[1.15] text-white line-clamp-2 text-left">
-                    {name}
                   </span>
                 </button>
               );
@@ -348,7 +364,6 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         <p className="mt-2 text-[13px] text-slate-400">{swipeHint}</p>
       </section>
 
-      {/* Section under trend like reference "стоит попробовать" can stay as tab grid */}
       <section className="mt-7">
         <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
           {language === 'ru'
@@ -388,7 +403,6 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         )}
       </section>
 
-      {/* Telegram sheet */}
       {tgOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <button
