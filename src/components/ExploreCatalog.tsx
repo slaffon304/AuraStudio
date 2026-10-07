@@ -68,6 +68,13 @@ function todayCount(id: string): number {
   return 400 + (h % 4600);
 }
 
+/** Stable pseudo-random tilt in degrees for badge, ~ −8…+8 */
+function badgeTilt(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 17 + id.charCodeAt(i)) >>> 0;
+  return (h % 17) - 8;
+}
+
 function PinterestMark() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -128,7 +135,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
   const todayWord =
     language === 'ru' ? 'СЕГОДНЯ' : language === 'en' ? 'TODAY' : 'AZI';
   const swipeHint =
-    language === 'ru' ? 'листай вправо' : language === 'en' ? 'swipe right' : 'glisează la dreapta';
+    language === 'ru' ? 'листай вправо →' : language === 'en' ? 'swipe right →' : 'glisează la dreapta →';
 
   const perks =
     language === 'ru'
@@ -153,7 +160,8 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-28 pt-3 sm:pt-5">
+    <div className="mx-auto max-w-7xl bg-[#f3f5fa] dark:bg-[#090a0f] px-4 sm:px-6 lg:px-8 pb-28 pt-3 sm:pt-5 min-h-[60vh]">
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
@@ -161,10 +169,11 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={searchPh}
-          className="w-full rounded-full border border-slate-200/80 dark:border-white/10 bg-[#f4f6fb] dark:bg-white/[0.04] py-3 pl-11 pr-4 text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-full border-0 bg-white dark:bg-white/[0.06] py-3 pl-11 pr-4 text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
       </div>
 
+      {/* Tabs — lowercase, blue dot */}
       <div className="mt-5 overflow-x-auto no-scrollbar -mx-4 px-4">
         <div className="flex items-end gap-5 min-w-max pb-1">
           {TABS.map((t) => {
@@ -174,8 +183,8 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`relative pb-2.5 text-[17px] sm:text-[18px] font-extrabold tracking-tight whitespace-nowrap transition-colors ${
-                  active ? 'text-[#1a2035] dark:text-white' : 'text-[#b0b6c6] dark:text-slate-500'
+                className={`relative pb-2.5 text-[18px] font-extrabold tracking-tight whitespace-nowrap transition-colors ${
+                  active ? 'text-[#12152a] dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
                 }`}
               >
                 {tabLabel(t.id, language)}
@@ -188,14 +197,14 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </div>
       </div>
 
-      {/* Three tiles — equal height, compact like reference (~118px) */}
+      {/* 3 action tiles */}
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <button
           type="button"
           onClick={onPinterest}
-          className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#e60023] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
+          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-[#e60023] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 text-white">
             <PinterestMark />
           </span>
           <span className="text-[14px] font-bold leading-[1.15]">
@@ -223,13 +232,13 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           onClick={() => {
             if (filtered[0]) onSelect(filtered[0]);
           }}
-          className="flex h-[118px] flex-col justify-between rounded-[22px] bg-white dark:bg-[#161924] border border-[#eceef4] dark:border-white/10 px-3 py-3 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] active:scale-[0.98] transition-transform"
+          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-white dark:bg-[#161924] px-3 py-3 text-left shadow-sm active:scale-[0.98] transition-transform"
         >
           <span className="flex items-center justify-between">
-            <span className="text-[20px] font-black tracking-tight text-[#1a2035] dark:text-white">4K</span>
-            <ChevronRight className="h-4 w-4 text-slate-300" />
+            <span className="text-[20px] font-black tracking-tight text-[#12152a] dark:text-white">4K</span>
+            <ChevronRight className="h-4 w-4 -rotate-45 text-slate-300" />
           </span>
-          <span className="text-[14px] font-bold leading-[1.15] text-[#1a2035] dark:text-white">
+          <span className="text-[14px] font-bold leading-[1.15] text-[#12152a] dark:text-white">
             {language === 'ru' ? (
               <>
                 Улучшить
@@ -252,13 +261,13 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         <button
           type="button"
           onClick={() => setTgOpen(true)}
-          className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#2ea3ff] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
+          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-[#3b9eff] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
             <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
               <path
                 fill="currentColor"
-                d="M21.5 4.5 2.8 11.7c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.6c.2.7.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5zM9.2 14.3l8.7-5.5c.4-.3.8-.1.5.2l-7.1 6.4-.3 3.1-1.8-4.2z"
+                d="M21.5 4.5 2.8 11.7c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.6c.2.7.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5z"
               />
             </svg>
           </span>
@@ -283,46 +292,70 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </button>
       </div>
 
+      {/* ===== В ТРЕНДЕ — ~2.75 cards, tilted badges ===== */}
       <section className="mt-7">
-        <h2 className="text-[22px] font-extrabold tracking-tight text-[#1a2035] dark:text-white">
+        <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
           {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
         </h2>
 
-        <div className="mt-3 flex gap-2.5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1">
-          {trending.map((tmpl) => {
-            const name = tmpl.name[lang] || tmpl.name.ro;
-            const count = todayCount(tmpl.id);
-            return (
-              <button
-                key={tmpl.id}
-                type="button"
-                onClick={() => onPreview(tmpl)}
-                className="relative h-[210px] w-[138px] shrink-0 snap-start overflow-hidden rounded-[18px] bg-slate-200 dark:bg-slate-800 text-left"
-              >
-                <img
-                  src={tmpl.previewImage}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/10" />
-                <span className="absolute left-2 top-2 inline-flex max-w-[calc(100%-16px)] items-center gap-1 whitespace-nowrap rounded-full bg-white px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-wide text-[#1a2035] shadow-sm">
-                  <span aria-hidden="true">🔥</span>
-                  {count.toLocaleString('ru-RU')} {todayWord}
-                </span>
-                <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-[14px] font-bold leading-[1.15] text-white line-clamp-2">
-                  {name}
-                </span>
-              </button>
-            );
-          })}
+        {/*
+          Card width: calc((100% - 2*gap) / 2.75) ≈ 34.5% of row
+          On mobile with px-4, ~2.75 cards visible like reference.
+        */}
+        <div className="mt-3 -mx-4 overflow-x-auto no-scrollbar">
+          <div className="flex gap-2.5 px-4 pb-1" style={{ width: 'max-content' }}>
+            {trending.map((tmpl) => {
+              const name = tmpl.name[lang] || tmpl.name.ro;
+              const count = todayCount(tmpl.id);
+              const tilt = badgeTilt(tmpl.id);
+              return (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => onPreview(tmpl)}
+                  className="relative shrink-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800 text-left"
+                  style={{
+                    width: 'min(148px, 34.5vw)',
+                    height: 'min(198px, 46vw)'
+                  }}
+                >
+                  <img
+                    src={tmpl.previewImage}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+
+                  {/* Badge — random tilt per card */}
+                  <span
+                    className="absolute left-2 top-2 z-10 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-wide text-[#12152a] shadow-sm"
+                    style={{ transform: `rotate(${tilt}deg)` }}
+                  >
+                    <span aria-hidden="true">🔥</span>
+                    {count.toLocaleString('ru-RU')} {todayWord}
+                  </span>
+
+                  <span className="absolute bottom-0 left-0 right-0 z-10 px-2.5 pb-2.5 text-[14px] font-bold leading-[1.15] text-white line-clamp-2 text-left">
+                    {name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <p className="mt-1.5 text-[12px] text-slate-400">{swipeHint}</p>
+
+        <p className="mt-2 text-[13px] text-slate-400">{swipeHint}</p>
       </section>
 
-      <section className="mt-6">
-        <h2 className="text-[18px] font-extrabold text-[#1a2035] dark:text-white">
-          {tabLabel(tab, language)}
+      {/* Section under trend like reference "стоит попробовать" can stay as tab grid */}
+      <section className="mt-7">
+        <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
+          {language === 'ru'
+            ? 'стоит попробовать'
+            : language === 'en'
+            ? 'worth trying'
+            : 'merită încercat'}
         </h2>
         {filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-slate-400">
@@ -341,7 +374,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   key={tmpl.id}
                   type="button"
                   onClick={() => onPreview(tmpl)}
-                  className="relative aspect-[3/4] overflow-hidden rounded-[18px] bg-slate-100 dark:bg-slate-800 text-left"
+                  className="relative aspect-[3/4] overflow-hidden rounded-[16px] bg-slate-100 dark:bg-slate-800 text-left"
                 >
                   <img src={tmpl.previewImage} alt="" className="h-full w-full object-cover" loading="lazy" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -355,6 +388,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         )}
       </section>
 
+      {/* Telegram sheet */}
       {tgOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <button
@@ -372,7 +406,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             >
               <X className="h-4 w-4" />
             </button>
-            <div className="mx-auto mt-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2ea3ff] text-white">
+            <div className="mx-auto mt-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3b9eff] text-white">
               <svg viewBox="0 0 24 24" className="h-7 w-7" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -380,7 +414,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                 />
               </svg>
             </div>
-            <h3 className="mt-4 text-center text-[22px] font-extrabold leading-tight text-[#1a2035]">
+            <h3 className="mt-4 text-center text-[22px] font-extrabold leading-tight text-[#12152a]">
               {language === 'ru'
                 ? 'Подпишись на Telegram — получи +1 фото'
                 : language === 'en'
@@ -389,12 +423,12 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             </h3>
             <p className="mt-2 text-center text-[14px] leading-snug text-slate-500">
               {language === 'ru'
-                ? 'Бонус за подписку на бота поддержки. Начисление подключим отдельно — пока кнопка открывает Telegram.'
+                ? 'Бонус за подписку на бота поддержки. Автоначисление подключим отдельно — сейчас кнопка открывает Telegram.'
                 : language === 'en'
-                ? 'Bonus for subscribing to the support bot. Auto-grant comes later — the button opens Telegram for now.'
-                : 'Bonus pentru abonarea la botul de suport. Acordarea automată vine mai târziu — butonul deschide Telegram.'}
+                ? 'Bonus for the support bot. Auto-grant comes later — the button opens Telegram for now.'
+                : 'Bonus pentru botul de suport. Acordarea automată vine mai târziu — butonul deschide Telegram.'}
             </p>
-            <ul className="mt-4 space-y-2.5 rounded-2xl bg-[#f4f6fb] px-4 py-3 text-[14px] text-[#1a2035]">
+            <ul className="mt-4 space-y-2.5 rounded-2xl bg-[#f4f6fb] px-4 py-3 text-[14px] text-[#12152a]">
               {perks.map((line, i) => {
                 const Icon = [Gift, Sparkles, Bell, MessageCircle][i];
                 return (
@@ -409,7 +443,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
               href={TELEGRAM_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#2ea3ff] text-[16px] font-bold text-white"
+              className="mt-4 flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#3b9eff] text-[16px] font-bold text-white"
             >
               <span aria-hidden="true">✈</span>
               {language === 'ru' ? 'Получить 1 фото' : language === 'en' ? 'Get 1 photo' : 'Primește 1 foto'}
