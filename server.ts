@@ -638,29 +638,279 @@ app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) =>
 
 // ====================================================================
 // PAYMENTS ENDPOINTS
+// Fulfill path: checkout → provider → confirm/webhook → grant photos + level spend
 // ====================================================================
 
-app.post('/api/payments/checkout', requireAuth, async (req: AuthRequest, res) => {
-  const { packageId, currency } = req.body;
+/**
+ * Idempotent fulfillment after successful payment.
+ * 1) grant_photos_from_purchase
+ * 2) record_purchase_spend (levels by EUR total)
+ */
+async function fulfillPhotoPurchase(opts: {
+  userId: string;
+  packageId: string;
+  photos: number;
+  amountEur: number;
+  externalId: string;
+  provider?: string;
+}): Promise<{ ok: boolean; balance?: number; level?: any; error?: string }> {
+  const { userId, packageId, photos, amountEur, externalId, provider = 'standard-gateway' } = opts;
 
-  if (!paymentGateway.isConfigured()) {
-    return res.status(400).json({
-      isConfigured: false,
-      message: 'Modulul de plată online este în curs de configurare. Pentru adăugare foto de test, folosește panoul de administrare.'
-    });
+  // Idempotency: skip if this external payment already completed
+  const { data: existing } = await supabaseAdmin
+    .from('payment_transactions')
+    .select('id, status')
+    .eq('external_id', externalId)
+    .maybeSingle();
+
+  if (existing?.status === 'completed') {
+    const { data: prof } = await supabaseAdmin
+      .from('profiles')
+      .select('photo_balance')
+      .eq('id', userId)
+      .single();
+    return { ok: true, balance: prof?.photo_balance };
   }
 
-  // If configured, delegate to payment provider
-  const result = await paymentGateway.createCheckout({
-    packageId,
-    userId: req.user!.id,
-    userEmail: req.user!.email,
-    amount: 100,
-    currency: currency || 'MDL',
-    returnUrl: `${process.env.APP_URL || 'http://localhost:3000'}/checkout/success`
+  // Upsert pending/completed row
+  await supabaseAdmin.from('payment_transactions').upsert(
+    {
+      user_id: userId,
+      package_id: packageId,
+      amount_eur: amountEur,
+      photos,
+      external_id: externalId,
+      provider,
+      status: 'processing',
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: 'external_id' }
+  );
+
+  const { data: newBalance, error: grantErr } = await supabaseAdmin.rpc('grant_photos_from_purchase', {
+    p_user_id: userId,
+    p_amount: photos,
+    p_package_id: packageId,
+    p_payment_ref: externalId
   });
 
-  res.json(result);
+  if (grantErr) {
+    await supabaseAdmin
+      .from('payment_transactions')
+      .update({ status: 'failed', error_message: grantErr.message })
+      .eq('external_id', externalId);
+    return { ok: false, error: grantErr.message };
+  }
+
+  // Levels: add EUR spend + one-time level bonuses
+  let levelResult: any = null;
+  try {
+    const { data: lvl } = await supabaseAdmin.rpc('record_purchase_spend', {
+      p_user_id: userId,
+      p_amount_eur: amountEur
+    });
+    levelResult = lvl;
+  } catch (e: any) {
+    console.error('record_purchase_spend failed (photos already granted):', e?.message || e);
+  }
+
+  await supabaseAdmin
+    .from('payment_transactions')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      error_message: null
+    })
+    .eq('external_id', externalId);
+
+  return { ok: true, balance: newBalance as number, level: levelResult };
+}
+
+// Start checkout — package price from DB, amount always EUR
+app.post('/api/payments/checkout', requireAuth, async (req: AuthRequest, res) => {
+  const { packageId } = req.body;
+  const userId = req.user!.id;
+
+  if (!packageId) {
+    return res.status(400).json({ error: 'packageId is required' });
+  }
+
+  try {
+    const { data: pkg, error: pkgErr } = await supabaseAdmin
+      .from('photo_packages')
+      .select('*')
+      .eq('id', packageId)
+      .eq('is_active', true)
+      .single();
+
+    if (pkgErr || !pkg) {
+      return res.status(404).json({ error: 'Package not found' });
+    }
+
+    const amountEur = Number(pkg.price_eur ?? pkg.priceEUR ?? 0);
+    const photos = Number(pkg.photos ?? 0);
+    if (amountEur <= 0 || photos <= 0) {
+      return res.status(400).json({ error: 'Invalid package pricing' });
+    }
+
+    const externalId = `pay_${userId.slice(0, 8)}_${packageId}_${Date.now()}`;
+
+    // Record pending payment
+    await supabaseAdmin.from('payment_transactions').insert({
+      user_id: userId,
+      package_id: packageId,
+      amount_eur: amountEur,
+      photos,
+      external_id: externalId,
+      provider: 'standard-gateway',
+      status: 'pending'
+    });
+
+    if (!paymentGateway.isConfigured()) {
+      return res.status(400).json({
+        isConfigured: false,
+        message:
+          'Modulul de plată online este în curs de configurare. Pentru adăugare foto de test, folosește panoul de administrare.'
+      });
+    }
+
+    const result = await paymentGateway.createCheckout({
+      packageId,
+      userId,
+      userEmail: req.user!.email,
+      amount: amountEur,
+      currency: 'EUR',
+      returnUrl: `${process.env.APP_URL || 'https://studio.labupgrade.ai'}/app/profile?payment=${externalId}`
+    });
+
+    // Attach our external id for confirm step
+    res.json({
+      ...result,
+      externalId,
+      amountEur,
+      photos
+    });
+  } catch (err: any) {
+    console.error('checkout error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Confirm payment after return from gateway (or manual/test confirm with admin).
+ * Body: { externalId } — must belong to current user and be paid at provider OR
+ * when PAYMENT_TEST_MODE=1 allows complete without provider.
+ */
+app.post('/api/payments/confirm', requireAuth, async (req: AuthRequest, res) => {
+  const externalId = String(req.body?.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({ error: 'externalId required' });
+  }
+
+  try {
+    const { data: tx, error } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('*')
+      .eq('external_id', externalId)
+      .eq('user_id', req.user!.id)
+      .single();
+
+    if (error || !tx) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    if (tx.status === 'completed') {
+      return res.json({ success: true, alreadyCompleted: true });
+    }
+
+    // Verify with provider when configured
+    if (paymentGateway.isConfigured() && process.env.PAYMENT_TEST_MODE !== '1') {
+      const verification = await paymentGateway.verifyPayment(externalId);
+      if (!verification.isSuccess || verification.status !== 'paid') {
+        return res.status(402).json({
+          error: verification.error || 'Payment not confirmed by provider',
+          status: verification.status
+        });
+      }
+    } else if (process.env.PAYMENT_TEST_MODE !== '1' && !paymentGateway.isConfigured()) {
+      return res.status(400).json({
+        error: 'Payment gateway not configured. Set PAYMENT_TEST_MODE=1 only for staging tests.'
+      });
+    }
+
+    const result = await fulfillPhotoPurchase({
+      userId: req.user!.id,
+      packageId: tx.package_id,
+      photos: Number(tx.photos),
+      amountEur: Number(tx.amount_eur),
+      externalId: tx.external_id,
+      provider: tx.provider || 'standard-gateway'
+    });
+
+    if (!result.ok) {
+      return res.status(500).json({ error: result.error || 'Fulfillment failed' });
+    }
+
+    res.json({
+      success: true,
+      newBalance: result.balance,
+      level: result.level
+    });
+  } catch (err: any) {
+    console.error('confirm payment', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Provider webhook — signature checked inside paymentGateway.handleWebhook.
+ * Expects payload to identify externalId / package / user after provider adapter parses it.
+ * For now: body.externalId + body.status === 'paid' (adapter can normalize).
+ */
+app.post('/api/payments/webhook', async (req, res) => {
+  try {
+    const signature = String(req.headers['x-payment-signature'] || req.headers['stripe-signature'] || '');
+    const handled = await paymentGateway.handleWebhook(req.body, signature);
+
+    if (handled.error && !handled.handled) {
+      return res.status(400).json({ error: handled.error });
+    }
+
+    const externalId = String(req.body?.externalId || req.body?.sessionId || '').trim();
+    const status = String(req.body?.status || '').toLowerCase();
+
+    if (!externalId || (status && status !== 'paid' && status !== 'completed' && status !== 'success')) {
+      return res.json({ received: true, fulfilled: false });
+    }
+
+    const { data: tx } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('*')
+      .eq('external_id', externalId)
+      .maybeSingle();
+
+    if (!tx) {
+      return res.status(404).json({ error: 'Unknown payment' });
+    }
+
+    if (tx.status === 'completed') {
+      return res.json({ received: true, fulfilled: true, alreadyCompleted: true });
+    }
+
+    const result = await fulfillPhotoPurchase({
+      userId: tx.user_id,
+      packageId: tx.package_id,
+      photos: Number(tx.photos),
+      amountEur: Number(tx.amount_eur),
+      externalId: tx.external_id,
+      provider: tx.provider || 'standard-gateway'
+    });
+
+    res.json({ received: true, fulfilled: result.ok, error: result.error });
+  } catch (err: any) {
+    console.error('webhook', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ====================================================================
@@ -826,6 +1076,26 @@ app.get('/api/admin/providers', requireAuth, requireAdmin, async (req: AuthReque
   }
 });
 
+
+
+// User level (spend-based)
+app.get('/api/me/levels', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('level, total_spent_eur, level_rewards_claimed')
+      .eq('id', req.user!.id)
+      .single();
+    if (error) throw error;
+    res.json({
+      level: data?.level ?? 1,
+      totalSpentEur: Number(data?.total_spent_eur) || 0,
+      rewardsClaimed: data?.level_rewards_claimed || []
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ====================================================================
 // ACCOUNT: delete, referral, profile extras
