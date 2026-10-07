@@ -17,6 +17,34 @@ const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
 
 const TELEGRAM_URL = 'https://t.me/aurastudio_help_bot';
 
+/** Pink flame — tongue of fire, not a drop */
+function FlameIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        fill="#ff2d8b"
+        d="M12.1 2.1c.15 2.4-.55 3.9-1.55 5.2-.95 1.25-1.95 2.45-1.95 4.35 0 2.55 1.95 4.55 4.4 4.55s4.4-2 4.4-4.55c0-1.7-.7-2.95-1.65-4.25C14.65 5.8 13.7 4.3 12.1 2.1z"
+      />
+      <path
+        fill="#ff2d8b"
+        fillOpacity="0.45"
+        d="M12 12.6c-1.15 0-2 .85-2 1.95 0 1.15.9 1.95 2 1.95s2-.8 2-1.95c0-1.1-.85-1.95-2-1.95z"
+      />
+    </svg>
+  );
+}
+
+function PinterestMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.43 7.63 11.17-.1-.95-.2-2.4.04-3.44.22-.94 1.4-5.96 1.4-5.96s-.36-.72-.36-1.78c0-1.67.97-2.91 2.17-2.91 1.02 0 1.52.77 1.52 1.69 0 1.03-.66 2.57-.99 4-.28 1.2.6 2.17 1.78 2.17 2.13 0 3.77-2.25 3.77-5.5 0-2.87-2.06-4.88-5.01-4.88-3.41 0-5.41 2.56-5.41 5.2 0 1.03.4 2.13.89 2.73.1.12.11.22.08.34l-.33 1.36c-.05.22-.18.27-.4.16-1.5-.7-2.44-2.89-2.44-4.65 0-3.78 2.75-7.26 7.93-7.26 4.16 0 7.4 2.97 7.4 6.93 0 4.14-2.61 7.46-6.23 7.46-1.22 0-2.36-.63-2.75-1.38l-.75 2.85c-.27 1.04-1 2.35-1.49 3.15A12 12 0 0 0 12 24c6.63 0 12-5.37 12-12S18.63 0 12 0z"
+      />
+    </svg>
+  );
+}
+
 function tabLabel(id: TabId, language: string) {
   const t = TABS.find((x) => x.id === id)!;
   return language === 'ru' ? t.ru : language === 'en' ? t.en : t.ro;
@@ -81,22 +109,11 @@ function todayCount(id: string): number {
   return 400 + (h % 4600);
 }
 
-/** Stable tilt −8°…+8° per template */
+/** Stable tilt degrees −7…+7 */
 function badgeTilt(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 17 + id.charCodeAt(i)) >>> 0;
-  return (h % 17) - 8;
-}
-
-function PinterestMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M12 0C5.37 0 0 5.37 0 12c0 5.08 3.16 9.43 7.63 11.17-.1-.95-.2-2.4.04-3.44.22-.94 1.4-5.96 1.4-5.96s-.36-.72-.36-1.78c0-1.67.97-2.91 2.17-2.91 1.02 0 1.52.77 1.52 1.69 0 1.03-.66 2.57-.99 4-.28 1.2.6 2.17 1.78 2.17 2.13 0 3.77-2.25 3.77-5.5 0-2.87-2.06-4.88-5.01-4.88-3.41 0-5.41 2.56-5.41 5.2 0 1.03.4 2.13.89 2.73.1.12.11.22.08.34l-.33 1.36c-.05.22-.18.27-.4.16-1.5-.7-2.44-2.89-2.44-4.65 0-3.78 2.75-7.26 7.93-7.26 4.16 0 7.4 2.97 7.4 6.93 0 4.14-2.61 7.46-6.23 7.46-1.22 0-2.36-.63-2.75-1.38l-.75 2.85c-.27 1.04-1 2.35-1.49 3.15A12 12 0 0 0 12 24c6.63 0 12-5.37 12-12S18.63 0 12 0z"
-      />
-    </svg>
-  );
+  return (h % 15) - 7;
 }
 
 interface ExploreCatalogProps {
@@ -173,264 +190,262 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         ];
 
   return (
-    <div className="mx-auto max-w-7xl bg-[#f3f5fa] dark:bg-[#090a0f] px-4 sm:px-6 lg:px-8 pb-28 pt-3 sm:pt-5 min-h-[60vh]">
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={searchPh}
-          className="w-full rounded-full border-0 bg-white dark:bg-white/[0.06] py-3 pl-11 pr-4 text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
-      </div>
-
-      <div className="mt-5 overflow-x-auto no-scrollbar -mx-4 px-4">
-        <div className="flex items-end gap-5 min-w-max pb-1">
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`relative pb-2.5 text-[18px] font-extrabold tracking-tight whitespace-nowrap transition-colors ${
-                  active ? 'text-[#12152a] dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
-                }`}
-              >
-                {tabLabel(t.id, language)}
-                {active && (
-                  <span className="absolute bottom-0 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-[#3b82f6]" />
-                )}
-              </button>
-            );
-          })}
+    <div className="bg-[#f3f5fa] dark:bg-[#090a0f] min-h-[60vh] pb-28">
+      {/* Content column — never full-bleed stretch on desktop */}
+      <div className="mx-auto w-full max-w-[480px] px-4 pt-3 sm:max-w-[520px] sm:px-5 lg:max-w-[560px]">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={searchPh}
+            className="w-full rounded-full border-0 bg-white py-3 pl-11 pr-4 text-[14px] text-slate-800 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:bg-white/[0.06] dark:text-slate-100"
+          />
         </div>
-      </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2.5">
-        <button
-          type="button"
-          onClick={onPinterest}
-          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-[#e60023] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25 text-white">
-            <PinterestMark />
-          </span>
-          <span className="text-[14px] font-bold leading-[1.15]">
-            {language === 'ru' ? (
-              <>
-                Повтор фото
-                <span className="block text-[12px] font-semibold text-white/90">из Pinterest</span>
-              </>
-            ) : language === 'en' ? (
-              <>
-                Replay photo
-                <span className="block text-[12px] font-semibold text-white/90">from Pinterest</span>
-              </>
-            ) : (
-              <>
-                Refă foto
-                <span className="block text-[12px] font-semibold text-white/90">din Pinterest</span>
-              </>
-            )}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (filtered[0]) onSelect(filtered[0]);
-          }}
-          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-white dark:bg-[#161924] px-3 py-3 text-left shadow-sm active:scale-[0.98] transition-transform"
-        >
-          <span className="flex items-center justify-between">
-            <span className="text-[20px] font-black tracking-tight text-[#12152a] dark:text-white">4K</span>
-            <ChevronRight className="h-4 w-4 -rotate-45 text-slate-300" />
-          </span>
-          <span className="text-[14px] font-bold leading-[1.15] text-[#12152a] dark:text-white">
-            {language === 'ru' ? (
-              <>
-                Улучшить
-                <span className="block text-[12px] font-semibold text-slate-400">качество</span>
-              </>
-            ) : language === 'en' ? (
-              <>
-                Enhance
-                <span className="block text-[12px] font-semibold text-slate-400">quality</span>
-              </>
-            ) : (
-              <>
-                Îmbunătățește
-                <span className="block text-[12px] font-semibold text-slate-400">calitatea</span>
-              </>
-            )}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setTgOpen(true)}
-          className="flex h-[120px] flex-col justify-between rounded-[22px] bg-[#3b9eff] px-3 py-3 text-left text-white active:scale-[0.98] transition-transform"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
-            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M21.5 4.5 2.8 11.7c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.6c.2.7.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5z"
-              />
-            </svg>
-          </span>
-          <span className="text-[14px] font-bold leading-[1.15]">
-            {language === 'ru' ? (
-              <>
-                Наш Telegram
-                <span className="block text-[12px] font-semibold text-white/90">подписка +1 фото</span>
-              </>
-            ) : language === 'en' ? (
-              <>
-                Our Telegram
-                <span className="block text-[12px] font-semibold text-white/90">subscribe +1 photo</span>
-              </>
-            ) : (
-              <>
-                Telegramul nostru
-                <span className="block text-[12px] font-semibold text-white/90">abonare +1 foto</span>
-              </>
-            )}
-          </span>
-        </button>
-      </div>
-
-      {/* В тренде */}
-      <section className="mt-7">
-        <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
-          {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
-        </h2>
-
-        {/* overflow-x auto, overflow-y visible so badges can stick out above cards */}
-        <div className="mt-4 -mx-4 overflow-x-auto overflow-y-visible no-scrollbar">
-          <div
-            className="flex items-start gap-2.5 px-4 pt-3 pb-1"
-            style={{ width: 'max-content' }}
-          >
-            {trending.map((tmpl) => {
-              const name = tmpl.name[lang] || tmpl.name.ro;
-              const count = todayCount(tmpl.id);
-              const tilt = badgeTilt(tmpl.id);
+        {/* Tabs */}
+        <div className="mt-5 -mx-4 overflow-x-auto px-4 no-scrollbar">
+          <div className="flex min-w-max items-end gap-5 pb-1">
+            {TABS.map((t) => {
+              const active = tab === t.id;
               return (
                 <button
-                  key={tmpl.id}
+                  key={t.id}
                   type="button"
-                  onClick={() => onPreview(tmpl)}
-                  className="relative shrink-0 text-left"
-                  style={{
-                    width: 'min(148px, 34.5vw)',
-                    height: 'min(198px, 46vw)'
-                  }}
+                  onClick={() => setTab(t.id)}
+                  className={`relative whitespace-nowrap pb-2.5 text-[17px] font-extrabold tracking-tight transition-colors ${
+                    active ? 'text-[#12152a] dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
+                  }`}
                 >
-                  {/* Photo shell — overflow hidden only here */}
-                  <span className="absolute inset-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800">
-                    <img
-                      src={tmpl.previewImage}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                    <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                    <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-[14px] font-bold leading-[1.15] text-white line-clamp-2">
-                      {name}
-                    </span>
-                  </span>
+                  {tabLabel(t.id, language)}
+                  {active && (
+                    <span className="absolute bottom-0 left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-[#3b82f6]" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-                  {/* Badge — pink flame + text, tight pill, sits on top edge */}
-                  <span
-                    className="absolute z-20 inline-flex items-center gap-[2px] whitespace-nowrap rounded-full bg-white shadow-md"
-                    style={{
-                      top: '-7px',
-                      left: '6px',
-                      padding: '4px 8px',
-                      transform: `rotate(${tilt}deg)`,
-                      lineHeight: 1
-                    }}
+        {/* 3 action tiles — equal, compact, not stretched */}
+        <div className="mt-4 grid grid-cols-3 gap-2.5">
+          <button
+            type="button"
+            onClick={onPinterest}
+            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#e60023] px-3 py-3 text-left text-white transition-transform active:scale-[0.98]"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
+              <PinterestMark />
+            </span>
+            <span className="text-[13px] font-bold leading-[1.15]">
+              {language === 'ru' ? (
+                <>
+                  Повтор фото
+                  <span className="block text-[11px] font-semibold text-white/90">из Pinterest</span>
+                </>
+              ) : language === 'en' ? (
+                <>
+                  Replay photo
+                  <span className="block text-[11px] font-semibold text-white/90">from Pinterest</span>
+                </>
+              ) : (
+                <>
+                  Refă foto
+                  <span className="block text-[11px] font-semibold text-white/90">din Pinterest</span>
+                </>
+              )}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (filtered[0]) onSelect(filtered[0]);
+            }}
+            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-white px-3 py-3 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924]"
+          >
+            <span className="flex items-center justify-between">
+              <span className="text-[19px] font-black tracking-tight text-[#12152a] dark:text-white">4K</span>
+              <ChevronRight className="h-4 w-4 -rotate-45 text-slate-300" />
+            </span>
+            <span className="text-[13px] font-bold leading-[1.15] text-[#12152a] dark:text-white">
+              {language === 'ru' ? (
+                <>
+                  Улучшить
+                  <span className="block text-[11px] font-semibold text-slate-400">качество</span>
+                </>
+              ) : language === 'en' ? (
+                <>
+                  Enhance
+                  <span className="block text-[11px] font-semibold text-slate-400">quality</span>
+                </>
+              ) : (
+                <>
+                  Îmbunătățește
+                  <span className="block text-[11px] font-semibold text-slate-400">calitatea</span>
+                </>
+              )}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTgOpen(true)}
+            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#3b9eff] px-3 py-3 text-left text-white transition-transform active:scale-[0.98]"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M21.5 4.5 2.8 11.7c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.6c.2.7.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5z"
+                />
+              </svg>
+            </span>
+            <span className="text-[13px] font-bold leading-[1.15]">
+              {language === 'ru' ? (
+                <>
+                  Наш Telegram
+                  <span className="block text-[11px] font-semibold text-white/90">подписка +1 фото</span>
+                </>
+              ) : language === 'en' ? (
+                <>
+                  Our Telegram
+                  <span className="block text-[11px] font-semibold text-white/90">subscribe +1 photo</span>
+                </>
+              ) : (
+                <>
+                  Telegramul nostru
+                  <span className="block text-[11px] font-semibold text-white/90">abonare +1 foto</span>
+                </>
+              )}
+            </span>
+          </button>
+        </div>
+
+        {/* ===== В ТРЕНДЕ ===== */}
+        <section className="mt-7">
+          <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
+            {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
+          </h2>
+
+          {/*
+            Card fixed size so ~2.75 fit in max-w ~480–560.
+            Badge sits on top edge (top negative), pink flame + text, tight padding.
+          */}
+          <div className="mt-3 -mx-4 overflow-x-auto overflow-y-visible no-scrollbar">
+            <div className="flex w-max items-start gap-2.5 px-4 pb-1 pt-3">
+              {trending.map((tmpl) => {
+                const name = tmpl.name[lang] || tmpl.name.ro;
+                const count = todayCount(tmpl.id);
+                const tilt = badgeTilt(tmpl.id);
+                return (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    onClick={() => onPreview(tmpl)}
+                    className="relative h-[196px] w-[142px] shrink-0 text-left"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="11"
-                      height="11"
-                      className="shrink-0"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fill="#ff2d8b"
-                        d="M12 2s5 5.2 5 10.2A5 5 0 0 1 7 12.2C7 9.4 8.4 7.2 10 5.5 10.3 7.8 11 9 12 9c0-2.2.3-4.5 0-7z"
-                      />
-                      <path
-                        fill="#ff2d8b"
-                        d="M12 13.2c-1.4 0-2.4 1-2.4 2.3 0 1.4 1.1 2.3 2.4 2.3s2.4-.9 2.4-2.3c0-1.3-1-2.3-2.4-2.3z"
-                        opacity=".35"
-                      />
-                    </svg>
+                    {/* Photo only — overflow hidden */}
+                    <span className="absolute inset-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800">
+                      {tmpl.previewImage ? (
+                        <img
+                          src={tmpl.previewImage}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                      <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-left text-[13px] font-bold leading-[1.15] text-white line-clamp-2">
+                        {name}
+                      </span>
+                    </span>
+
+                    {/* Badge sticker on top edge */}
                     <span
+                      className="absolute z-20 inline-flex items-center gap-[3px] whitespace-nowrap rounded-full bg-white shadow-md"
                       style={{
-                        color: '#ff2d8b',
-                        fontSize: '9px',
-                        fontWeight: 800,
-                        letterSpacing: '-0.02em',
-                        textTransform: 'uppercase'
+                        top: '-6px',
+                        left: '6px',
+                        padding: '3px 7px',
+                        transform: `rotate(${tilt}deg)`
                       }}
                     >
-                      {count.toLocaleString('ru-RU')} {todayWord}
+                      <FlameIcon size={10} />
+                      <span
+                        style={{
+                          color: '#ff2d8b',
+                          fontSize: '8.5px',
+                          fontWeight: 800,
+                          letterSpacing: '-0.01em',
+                          textTransform: 'uppercase',
+                          lineHeight: 1
+                        }}
+                      >
+                        {count.toLocaleString('ru-RU')} {todayWord}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        <p className="mt-2 text-[13px] text-slate-400">{swipeHint}</p>
-      </section>
+          <p className="mt-1.5 text-[13px] text-slate-400">{swipeHint}</p>
+        </section>
 
-      <section className="mt-7">
-        <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
-          {language === 'ru'
-            ? 'стоит попробовать'
-            : language === 'en'
-            ? 'worth trying'
-            : 'merită încercat'}
-        </h2>
-        {filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-400">
+        {/* ===== СТОИТ ПОПРОБОВАТЬ — ровно 2 колонки ===== */}
+        <section className="mt-8">
+          <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
             {language === 'ru'
-              ? 'Пока нет шаблонов в этой категории'
+              ? 'стоит попробовать'
               : language === 'en'
-              ? 'No templates in this category yet'
-              : 'Încă nu sunt șabloane în această categorie'}
-          </p>
-        ) : (
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {filtered.map((tmpl) => {
-              const name = tmpl.name[lang] || tmpl.name.ro;
-              return (
-                <button
-                  key={tmpl.id}
-                  type="button"
-                  onClick={() => onPreview(tmpl)}
-                  className="relative aspect-[3/4] overflow-hidden rounded-[16px] bg-slate-100 dark:bg-slate-800 text-left"
-                >
-                  <img src={tmpl.previewImage} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-[13px] font-bold leading-snug text-white line-clamp-2">
-                    {name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
+              ? 'worth trying'
+              : 'merită încercat'}
+          </h2>
 
+          {filtered.length === 0 ? (
+            <p className="py-10 text-center text-sm text-slate-400">
+              {language === 'ru'
+                ? 'Пока нет шаблонов в этой категории'
+                : language === 'en'
+                ? 'No templates in this category yet'
+                : 'Încă nu sunt șabloane în această categorie'}
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              {filtered.map((tmpl) => {
+                const name = tmpl.name[lang] || tmpl.name.ro;
+                return (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    onClick={() => onPreview(tmpl)}
+                    className="relative aspect-[3/4] overflow-hidden rounded-[16px] bg-slate-200 text-left dark:bg-slate-800"
+                  >
+                    {tmpl.previewImage ? (
+                      <img
+                        src={tmpl.previewImage}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                    <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-[13px] font-bold leading-snug text-white line-clamp-2">
+                      {name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Telegram bottom sheet */}
       {tgOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <button
@@ -439,7 +454,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             aria-label="Close"
             onClick={() => setTgOpen(false)}
           />
-          <div className="relative w-full max-w-md rounded-t-[28px] sm:rounded-[28px] bg-white px-5 pb-6 pt-4 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-t-[28px] bg-white px-5 pb-6 pt-4 shadow-2xl sm:rounded-[28px]">
             <button
               type="button"
               onClick={() => setTgOpen(false)}
