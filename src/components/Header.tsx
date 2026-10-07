@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Sparkles, User, Globe, ChevronDown, LogOut, Sun, Moon, Shield, Menu, X } from 'lucide-react';
-import { Language, Currency } from '../types';
+import {
+  Sparkles,
+  User,
+  Globe,
+  ChevronDown,
+  LogOut,
+  Sun,
+  Moon,
+  Shield,
+  Menu,
+  X,
+  Images
+} from 'lucide-react';
+import { Language } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
 
@@ -10,8 +22,6 @@ export const Header: React.FC = () => {
     t,
     language,
     setLanguage,
-    currency,
-    setCurrency,
     theme,
     toggleTheme,
     currentUser,
@@ -19,12 +29,14 @@ export const Header: React.FC = () => {
     signOut,
     currentView,
     setCurrentView,
-    setIsAuthModalOpen
+    setIsAuthModalOpen,
+    setIsPhotoModalOpen
   } = useApp();
 
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
 
   const languages: { code: Language; label: string }[] = [
     { code: 'ro', label: 'Română' },
@@ -32,12 +44,34 @@ export const Header: React.FC = () => {
     { code: 'en', label: 'English' }
   ];
 
-  const currencies: Currency[] = ['MDL', 'RON', 'EUR'];
+  const isAppShell =
+    currentView !== 'landing' &&
+    currentView !== 'privacy' &&
+    currentView !== 'terms' &&
+    currentView !== 'offer';
 
-  const navigate = (view: 'landing' | 'explore' | 'profile' | 'gallery' | 'library' | 'admin') => {
+  // Close menus on outside click
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!headerRef.current?.contains(e.target as Node)) {
+        setIsLangMenuOpen(false);
+        setIsUserMenuOpen(false);
+        setIsBurgerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const navigate = (
+    view: 'landing' | 'explore' | 'profile' | 'gallery' | 'library' | 'admin' | 'history' | 'levels'
+  ) => {
     setCurrentView(view as any);
     window.history.pushState({}, '', viewToPath(view as any));
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsBurgerOpen(false);
+    setIsUserMenuOpen(false);
+    setIsLangMenuOpen(false);
   };
 
   const goLanding = () => navigate('landing');
@@ -57,47 +91,94 @@ export const Header: React.FC = () => {
       navigate('landing');
       setTimeout(() => {
         document.getElementById('photo-packages')?.scrollIntoView({ behavior: 'smooth' });
-      }, 80);
+      }, 100);
     } else {
       document.getElementById('photo-packages')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
-  const photoLabel =
-    language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
-  const photosDisplay = currentUser ? String(currentUser.photoBalance ?? 0) : session ? '...' : '0';
+  const onPhotoPill = () => {
+    if (isAppShell) {
+      // Already in app: open top-up / packages modal
+      if (!session) {
+        setIsAuthModalOpen(true);
+        return;
+      }
+      setIsPhotoModalOpen(true);
+    } else {
+      goApp();
+    }
+  };
+
+  const photoLabel = language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
+  const photosDisplay = currentUser
+    ? String(currentUser.photoBalance ?? 0)
+    : session
+    ? '…'
+    : '0';
+
+  const tariffsLabel = language === 'ru' ? 'Тарифы' : language === 'en' ? 'Pricing' : 'Tarife';
+  const profileLabel = language === 'ru' ? 'Профиль' : language === 'en' ? 'Profile' : 'Profil';
+  const loginLabel = language === 'ru' ? 'Вход' : language === 'en' ? 'Log in' : 'Autentificare';
+  const themeLabel =
+    theme === 'light'
+      ? language === 'ru'
+        ? 'Тёмная тема'
+        : language === 'en'
+        ? 'Dark mode'
+        : 'Temă închisă'
+      : language === 'ru'
+      ? 'Светлая тема'
+      : language === 'en'
+      ? 'Light mode'
+      : 'Temă deschisă';
+
+  const menuPanel =
+    'absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50';
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-white/[0.07] bg-white/95 dark:bg-[#090a0f]/95 backdrop-blur-xl transition-colors">
-      <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
-        {/* Logo */}
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-white/[0.07] bg-white/95 dark:bg-[#090a0f]/95 backdrop-blur-xl transition-colors"
+    >
+      <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
+        {/* Logo — same asset & size as landing */}
         <button
+          type="button"
           onClick={goLanding}
-          className="flex items-center gap-2 shrink-0 transition-transform active:scale-95 cursor-pointer"
+          className="flex items-center shrink-0 transition-transform active:scale-[0.98] cursor-pointer"
           aria-label={t.appName}
         >
           <img
             src={logoImg}
             alt="AuraStudio"
-            className="h-7 sm:h-9 w-auto max-w-[140px] sm:max-w-[180px] object-contain dark:brightness-110"
+            className="h-8 sm:h-9 w-auto max-w-[150px] sm:max-w-[180px] object-contain object-left dark:brightness-110"
           />
         </button>
 
-        {/* Right cluster */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* Right cluster — identical structure on landing & /app */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={goTariffs}
-            className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors px-1"
+            className="hidden xs:inline text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors px-1.5 sm:px-2"
           >
-            {language === 'ru' ? 'Тарифы' : language === 'en' ? 'Pricing' : 'Tarife'}
+            {tariffsLabel}
           </button>
-
-          {/* Photo balance pill → /app */}
+          {/* Always show tariffs on small screens too */}
           <button
             type="button"
-            onClick={goApp}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60 text-[11px] sm:text-xs font-bold transition-all"
+            onClick={goTariffs}
+            className="sm:hidden text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 px-1"
+          >
+            {tariffsLabel}
+          </button>
+
+          {/* Photo balance pill */}
+          <button
+            type="button"
+            onClick={onPhotoPill}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60 text-[11px] sm:text-xs font-bold transition-all tabular-nums"
           >
             <Sparkles className="h-3.5 w-3.5 shrink-0" />
             <span>
@@ -105,10 +186,14 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          {/* Language — desktop only */}
+          {/* Language — desktop */}
           <div className="relative hidden sm:block">
             <button
-              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              type="button"
+              onClick={() => {
+                setIsLangMenuOpen((v) => !v);
+                setIsUserMenuOpen(false);
+              }}
               className="flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:border-white/20 transition-colors"
             >
               <Globe className="h-3.5 w-3.5 text-slate-500" />
@@ -116,13 +201,14 @@ export const Header: React.FC = () => {
               <ChevronDown className="h-3 w-3 text-slate-400" />
             </button>
             {isLangMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50">
+              <div className={menuPanel}>
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   {t.language}
                 </div>
                 {languages.map((l) => (
                   <button
                     key={l.code}
+                    type="button"
                     onClick={() => {
                       setLanguage(l.code);
                       setIsLangMenuOpen(false);
@@ -138,57 +224,43 @@ export const Header: React.FC = () => {
                   </button>
                 ))}
                 <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
-                <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  {t.currency}
-                </div>
-                <div className="grid grid-cols-3 gap-1 p-1">
-                  {currencies.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => {
-                        setCurrency(c);
-                        setIsLangMenuOpen(false);
-                      }}
-                      className={`rounded-lg py-1.5 text-[11px] font-bold transition-colors ${
-                        currency === c
-                          ? 'bg-blue-500 text-white shadow-sm'
-                          : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-                <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
                 <button
+                  type="button"
                   onClick={() => {
                     toggleTheme();
                     setIsLangMenuOpen(false);
                   }}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
-                  {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5 text-amber-400" />}
-                  <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+                  {theme === 'light' ? (
+                    <Moon className="h-3.5 w-3.5" />
+                  ) : (
+                    <Sun className="h-3.5 w-3.5 text-amber-400" />
+                  )}
+                  <span>{themeLabel}</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Profile icon — desktop only */}
+          {/* Profile — desktop */}
           <div className="relative hidden sm:block">
             <button
               type="button"
               onClick={() => {
                 if (!session) {
                   setIsAuthModalOpen(true);
-                } else if (currentUser) {
-                  setIsUserMenuOpen(!isUserMenuOpen);
+                  return;
+                }
+                if (currentUser) {
+                  setIsUserMenuOpen((v) => !v);
+                  setIsLangMenuOpen(false);
                 } else {
-                  navigate('profile');
+                  goProfile();
                 }
               }}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              aria-label="Profile"
+              aria-label={profileLabel}
             >
               {currentUser ? (
                 <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
@@ -200,36 +272,33 @@ export const Header: React.FC = () => {
             </button>
 
             {isUserMenuOpen && currentUser && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50">
+              <div className={menuPanel}>
                 <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{currentUser.name || 'Account'}</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    {currentUser.name || 'Account'}
+                  </p>
                   <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
                 </div>
                 <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    goProfile();
-                  }}
+                  type="button"
+                  onClick={() => goProfile()}
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
                   <User className="h-3.5 w-3.5" />
-                  <span>{language === 'ru' ? 'Профиль' : language === 'en' ? 'Profile' : 'Profil'}</span>
+                  <span>{profileLabel}</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('gallery');
-                  }}
+                  type="button"
+                  onClick={() => navigate('gallery')}
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
+                  <Images className="h-3.5 w-3.5" />
                   <span>{t.myGallery}</span>
                 </button>
                 {currentUser.role === 'admin' && (
                   <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setCurrentView('admin');
-                    }}
+                    type="button"
+                    onClick={() => navigate('admin')}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-medium"
                   >
                     <Shield className="h-3.5 w-3.5" />
@@ -238,6 +307,7 @@ export const Header: React.FC = () => {
                 )}
                 <div className="border-t border-slate-100 dark:border-white/5 pt-1">
                   <button
+                    type="button"
                     onClick={() => {
                       setIsUserMenuOpen(false);
                       signOut();
@@ -252,29 +322,32 @@ export const Header: React.FC = () => {
             )}
           </div>
 
-          {/* Burger — mobile only */}
+          {/* Burger — mobile only (same menu as desktop lang + profile) */}
           <div className="relative sm:hidden">
             <button
               type="button"
-              onClick={() => setIsBurgerOpen(!isBurgerOpen)}
+              onClick={() => {
+                setIsBurgerOpen((v) => !v);
+                setIsLangMenuOpen(false);
+                setIsUserMenuOpen(false);
+              }}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
               aria-label="Menu"
+              aria-expanded={isBurgerOpen}
             >
               {isBurgerOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
 
             {isBurgerOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50">
-                {/* Language */}
+              <div className={menuPanel}>
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   {t.language}
                 </div>
                 {languages.map((l) => (
                   <button
                     key={l.code}
-                    onClick={() => {
-                      setLanguage(l.code);
-                    }}
+                    type="button"
+                    onClick={() => setLanguage(l.code)}
                     className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors ${
                       language === l.code
                         ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold'
@@ -288,60 +361,44 @@ export const Header: React.FC = () => {
 
                 <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
 
-                {/* Theme */}
                 <button
-                  onClick={() => {
-                    toggleTheme();
-                  }}
+                  type="button"
+                  onClick={() => toggleTheme()}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
-                  {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5 text-amber-400" />}
-                  <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+                  {theme === 'light' ? (
+                    <Moon className="h-3.5 w-3.5" />
+                  ) : (
+                    <Sun className="h-3.5 w-3.5 text-amber-400" />
+                  )}
+                  <span>{themeLabel}</span>
                 </button>
 
                 <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
 
-                {/* Profile */}
                 <button
-                  onClick={() => {
-                    setIsBurgerOpen(false);
-                    goProfile();
-                  }}
+                  type="button"
+                  onClick={() => goProfile()}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                 >
                   <User className="h-3.5 w-3.5" />
-                  <span>
-                    {currentUser
-                      ? language === 'ru'
-                        ? 'Профиль'
-                        : language === 'en'
-                          ? 'Profile'
-                          : 'Profil'
-                      : language === 'ru'
-                        ? 'Вход'
-                        : language === 'en'
-                          ? 'Login'
-                          : 'Autentificare'}
-                  </span>
+                  <span>{currentUser ? profileLabel : loginLabel}</span>
                 </button>
 
                 {currentUser && (
                   <>
                     <button
-                      onClick={() => {
-                        setIsBurgerOpen(false);
-                        navigate('gallery');
-                      }}
+                      type="button"
+                      onClick={() => navigate('gallery')}
                       className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
                     >
+                      <Images className="h-3.5 w-3.5" />
                       <span>{t.myGallery}</span>
                     </button>
                     {currentUser.role === 'admin' && (
                       <button
-                        onClick={() => {
-                          setIsBurgerOpen(false);
-                          setCurrentView('admin');
-                        }}
+                        type="button"
+                        onClick={() => navigate('admin')}
                         className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-medium"
                       >
                         <Shield className="h-3.5 w-3.5" />
@@ -350,6 +407,7 @@ export const Header: React.FC = () => {
                     )}
                     <div className="border-t border-slate-100 dark:border-white/5 pt-1">
                       <button
+                        type="button"
                         onClick={() => {
                           setIsBurgerOpen(false);
                           signOut();
