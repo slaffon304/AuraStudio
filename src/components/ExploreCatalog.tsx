@@ -17,10 +17,10 @@ const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
 
 const TELEGRAM_URL = 'https://t.me/aurastudio_help_bot';
 
-/** Pink flame — tongue of fire, not a drop */
-function FlameIcon({ size = 9 }: { size?: number }) {
+/** Pink flame icon — tight viewBox, no empty padding */
+function FlameIcon({ className }: { className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="6 2 12 20" fill="none" aria-hidden="true" className="block">
+    <svg viewBox="7 2 10 20" fill="none" aria-hidden="true" className={className}>
       <path
         fill="#ff2d8b"
         d="M12.1 2.1c.15 2.4-.55 3.9-1.55 5.2-.95 1.25-1.95 2.45-1.95 4.35 0 2.55 1.95 4.55 4.4 4.55s4.4-2 4.4-4.55c0-1.7-.7-2.95-1.65-4.25C14.65 5.8 13.7 4.3 12.1 2.1z"
@@ -104,7 +104,6 @@ function todayCount(id: string): number {
   return 400 + (h % 4600);
 }
 
-/** Stable tilt degrees −7…+7 */
 function badgeTilt(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 17 + id.charCodeAt(i)) >>> 0;
@@ -185,9 +184,12 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         ];
 
   return (
-    <div className="bg-[#f3f5fa] dark:bg-[#090a0f] min-h-[60vh] pb-28">
-      {/* Content column — never full-bleed stretch on desktop */}
-      <div className="mx-auto w-full max-w-[720px] px-4 pt-3 sm:px-5">
+    <div className="min-h-[60vh] bg-[#f3f5fa] pb-28 dark:bg-[#090a0f]">
+      {/*
+        Mobile: full width + px-4 (reference phone layout).
+        Desktop (md+): centered column max-w-[720px] — not full 1920, not a 480 stub.
+      */}
+      <div className="mx-auto w-full px-4 pt-3 md:max-w-[720px] md:px-5">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -201,7 +203,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="mt-5 -mx-4 overflow-x-auto px-4 no-scrollbar">
+        <div className="-mx-4 mt-5 overflow-x-auto px-4 no-scrollbar">
           <div className="flex min-w-max items-end gap-5 pb-1">
             {TABS.map((t) => {
               const active = tab === t.id;
@@ -210,7 +212,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setTab(t.id)}
-                  className={`relative whitespace-nowrap pb-2.5 text-[17px] font-extrabold tracking-tight transition-colors ${
+                  className={`relative whitespace-nowrap pb-2.5 text-[17px] font-extrabold tracking-tight transition-colors md:text-[18px] ${
                     active ? 'text-[#12152a] dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
                   }`}
                 >
@@ -224,31 +226,37 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           </div>
         </div>
 
-        {/* 3 action tiles — equal, compact, not stretched */}
+        {/* 3 action tiles */}
         <div className="mt-4 grid grid-cols-3 gap-2.5">
           <button
             type="button"
             onClick={onPinterest}
-            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#e60023] px-3 py-3 text-left text-white transition-transform active:scale-[0.98]"
+            className="flex h-[112px] flex-col justify-between rounded-[20px] bg-[#e60023] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 md:h-9 md:w-9">
               <PinterestMark />
             </span>
-            <span className="text-[13px] font-bold leading-[1.15]">
+            <span className="text-[12px] font-bold leading-[1.15] md:text-[13px]">
               {language === 'ru' ? (
                 <>
                   Повтор фото
-                  <span className="block text-[11px] font-semibold text-white/90">из Pinterest</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    из Pinterest
+                  </span>
                 </>
               ) : language === 'en' ? (
                 <>
                   Replay photo
-                  <span className="block text-[11px] font-semibold text-white/90">from Pinterest</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    from Pinterest
+                  </span>
                 </>
               ) : (
                 <>
                   Refă foto
-                  <span className="block text-[11px] font-semibold text-white/90">din Pinterest</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    din Pinterest
+                  </span>
                 </>
               )}
             </span>
@@ -259,27 +267,35 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             onClick={() => {
               if (filtered[0]) onSelect(filtered[0]);
             }}
-            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-white px-3 py-3 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924]"
+            className="flex h-[112px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
           >
             <span className="flex items-center justify-between">
-              <span className="text-[19px] font-black tracking-tight text-[#12152a] dark:text-white">4K</span>
+              <span className="text-[18px] font-black tracking-tight text-[#12152a] dark:text-white md:text-[19px]">
+                4K
+              </span>
               <ChevronRight className="h-4 w-4 -rotate-45 text-slate-300" />
             </span>
-            <span className="text-[13px] font-bold leading-[1.15] text-[#12152a] dark:text-white">
+            <span className="text-[12px] font-bold leading-[1.15] text-[#12152a] dark:text-white md:text-[13px]">
               {language === 'ru' ? (
                 <>
                   Улучшить
-                  <span className="block text-[11px] font-semibold text-slate-400">качество</span>
+                  <span className="block text-[10px] font-semibold text-slate-400 md:text-[11px]">
+                    качество
+                  </span>
                 </>
               ) : language === 'en' ? (
                 <>
                   Enhance
-                  <span className="block text-[11px] font-semibold text-slate-400">quality</span>
+                  <span className="block text-[10px] font-semibold text-slate-400 md:text-[11px]">
+                    quality
+                  </span>
                 </>
               ) : (
                 <>
                   Îmbunătățește
-                  <span className="block text-[11px] font-semibold text-slate-400">calitatea</span>
+                  <span className="block text-[10px] font-semibold text-slate-400 md:text-[11px]">
+                    calitatea
+                  </span>
                 </>
               )}
             </span>
@@ -288,9 +304,9 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <button
             type="button"
             onClick={() => setTgOpen(true)}
-            className="flex h-[118px] flex-col justify-between rounded-[22px] bg-[#3b9eff] px-3 py-3 text-left text-white transition-transform active:scale-[0.98]"
+            className="flex h-[112px] flex-col justify-between rounded-[20px] bg-[#3b9eff] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/25">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 md:h-9 md:w-9">
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -298,39 +314,45 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                 />
               </svg>
             </span>
-            <span className="text-[13px] font-bold leading-[1.15]">
+            <span className="text-[12px] font-bold leading-[1.15] md:text-[13px]">
               {language === 'ru' ? (
                 <>
                   Наш Telegram
-                  <span className="block text-[11px] font-semibold text-white/90">подписка +1 фото</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    подписка +1 фото
+                  </span>
                 </>
               ) : language === 'en' ? (
                 <>
                   Our Telegram
-                  <span className="block text-[11px] font-semibold text-white/90">subscribe +1 photo</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    subscribe +1 photo
+                  </span>
                 </>
               ) : (
                 <>
                   Telegramul nostru
-                  <span className="block text-[11px] font-semibold text-white/90">abonare +1 foto</span>
+                  <span className="block text-[10px] font-semibold text-white/90 md:text-[11px]">
+                    abonare +1 foto
+                  </span>
                 </>
               )}
             </span>
           </button>
         </div>
 
-        {/* ===== В ТРЕНДЕ ===== */}
+        {/* ===== В ТРЕНДЕ =====
+            Mobile:  ~2.75 cards  → width ≈ 34.5vw
+            Desktop (md+): exactly 4 full cards in the 720px column
+              (720 - 40 padding - 30 gaps) / 4 ≈ 162.5px
+        */}
         <section className="mt-7">
           <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
             {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
           </h2>
 
-          {/*
-            Card fixed size so ~2.75 fit in max-w ~480–560.
-            Badge sits on top edge (top negative), pink flame + text, tight padding.
-          */}
-          <div className="mt-3 -mx-4 overflow-x-auto overflow-y-visible no-scrollbar">
-            <div className="flex w-max items-start gap-2.5 px-4 pb-1 pt-3">
+          <div className="-mx-4 mt-3 overflow-x-auto overflow-y-visible no-scrollbar md:mx-0">
+            <div className="flex w-max items-start gap-2.5 px-4 pb-1 pt-4 md:w-full md:px-0">
               {trending.map((tmpl) => {
                 const name = tmpl.name[lang] || tmpl.name.ro;
                 const count = todayCount(tmpl.id);
@@ -340,15 +362,14 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                     key={tmpl.id}
                     type="button"
                     onClick={() => onPreview(tmpl)}
-                    className="relative shrink-0 text-left"
-                    style={{
-                      /* 4 full cards: (row - 3 gaps) / 4 ; gap = 10px */
-                      width: 'calc((100vw - 2rem - 30px) / 4)',
-                      maxWidth: 'calc((720px - 2rem - 30px) / 4)',
-                      aspectRatio: '3 / 4'
-                    }}
+                    className={[
+                      'relative shrink-0 text-left',
+                      /* mobile: ~2.75 visible */
+                      'w-[34.5vw] max-w-[148px] aspect-[3/4]',
+                      /* desktop: 4 full cards in row (3 gaps × 10px = 30px) */
+                      'md:w-[calc((100%-30px)/4)] md:max-w-none'
+                    ].join(' ')}
                   >
-                    {/* Photo only — overflow hidden */}
                     <span className="absolute inset-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800">
                       {tmpl.previewImage ? (
                         <img
@@ -359,33 +380,23 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                         />
                       ) : null}
                       <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-                      <span className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 text-left text-[13px] font-bold leading-[1.15] text-white line-clamp-2">
+                      <span className="absolute bottom-0 left-0 right-0 px-2 pb-2 text-left text-[12px] font-bold leading-[1.15] text-white line-clamp-2 md:px-2.5 md:pb-2.5 md:text-[13px]">
                         {name}
                       </span>
                     </span>
 
-                    {/* Badge sticker on top edge */}
+                    {/* Badge: mobile compact, desktop slightly larger (was too tiny) */}
                     <span
-                      className="absolute z-20 inline-flex items-center gap-[3px] whitespace-nowrap rounded-full bg-white shadow-md"
+                      className="absolute z-20 inline-flex items-center gap-[2px] whitespace-nowrap rounded-full bg-white shadow-md md:gap-[3px]"
                       style={{
-                        top: '-7px',
+                        top: '-6px',
                         left: '50%',
-                        padding: '2px 6px 2px 4px',
                         transform: `translateX(-50%) rotate(${tilt}deg)`,
-                        gap: '2px'
+                        padding: '2px 5px 2px 4px'
                       }}
                     >
-                      <FlameIcon size={9} />
-                      <span
-                        style={{
-                          color: '#ff2d8b',
-                          fontSize: '8px',
-                          fontWeight: 800,
-                          letterSpacing: '-0.02em',
-                          textTransform: 'uppercase',
-                          lineHeight: 1
-                        }}
-                      >
+                      <FlameIcon className="block h-[9px] w-[9px] md:h-[11px] md:w-[11px]" />
+                      <span className="text-[8px] font-extrabold uppercase leading-none tracking-tight text-[#ff2d8b] md:text-[10px]">
                         {count.toLocaleString('ru-RU')} {todayWord}
                       </span>
                     </span>
@@ -398,7 +409,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <p className="mt-1.5 text-[13px] text-slate-400">{swipeHint}</p>
         </section>
 
-        {/* ===== СТОИТ ПОПРОБОВАТЬ — ровно 2 колонки ===== */}
+        {/* ===== СТОИТ ПОПРОБОВАТЬ — всегда 2 колонки ===== */}
         <section className="mt-8">
           <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
             {language === 'ru'
@@ -447,7 +458,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         </section>
       </div>
 
-      {/* Telegram bottom sheet */}
+      {/* Telegram sheet */}
       {tgOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <button
