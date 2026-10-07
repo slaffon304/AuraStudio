@@ -191,5 +191,13 @@ curl http://localhost:3000/api/health
 
 ---
 
+## Каталог /app (2026-10-07, вечер)
+
+- `ExploreCatalog`: вкладки, 3 плитки (Pinterest / 4K / Telegram), карусель «в тренде» с бейджем «N СЕГОДНЯ», подпись «листай вправо».
+- Клик по синей плитке открывает шит «Подпишись на Telegram». Кнопка ведёт на **https://t.me/aurastudio_help_bot** (потом заменим).
+- **НЕ ЗАБЫТЬ:** бонус +1 фото за подписку на Telegram **не начисляется**. Сейчас только ссылка. Нужна проверка подписки (бот / webhook) и идемпотентный grant один раз на аккаунт.
+- Бейджи «сегодня» — псевдосчёт от id шаблона, не реальная аналитика.
+- 
+
 *AuraStudio · Lab Upgrade S.R.L. · studio.labupgrade.ai*  
 *README обновлён: 2026-10-07 — photo economy, profile, levels, payments fulfill path.*
