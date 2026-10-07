@@ -64,7 +64,7 @@ export const Header: React.FC = () => {
 
   const photoLabel =
     language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
-  const photosCount = currentUser ? currentUser.creditBalance : 1;
+  const photosCount = currentUser ? currentUser.photoBalance : 1;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-white/[0.07] bg-white/95 dark:bg-[#090a0f]/95 backdrop-blur-xl transition-colors">
