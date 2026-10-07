@@ -15,6 +15,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { ProfileView } from './components/ProfileView';
 import { HistoryView } from './components/HistoryView';
+import { LevelsView } from './components/LevelsView';
 import { LegalView } from './components/LegalView';
 import { PhotoTemplate } from './types';
 import { pathToView, viewToPath } from './lib/navigation';
@@ -204,6 +205,12 @@ const MainAppContent: React.FC = () => {
         {currentView === ('history' as any) && (
           <div className="pb-20 md:pb-10 bg-[#f4f5f9] dark:bg-[#090a0f] min-h-[70vh]">
             <HistoryView />
+          </div>
+        )}
+
+        {currentView === ('levels' as any) && (
+          <div className="pb-20 md:pb-10 bg-[#f4f5f9] dark:bg-[#090a0f] min-h-[70vh]">
+            <LevelsView />
           </div>
         )}
 
