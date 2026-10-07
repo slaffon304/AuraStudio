@@ -13,7 +13,7 @@ import {
   Trophy
 } from 'lucide-react';
 import logoImg from '../assets/images/aurastudio-logo.png';
-import { viewToPath } from '../lib/navigation';
+import { viewToPath, markFromProfile } from '../lib/navigation';
 
 export const ProfileView: React.FC = () => {
   const {
@@ -247,6 +247,7 @@ export const ProfileView: React.FC = () => {
         <button
           type="button"
           onClick={() => {
+            markFromProfile();
             setCurrentView('gallery');
             window.history.pushState({}, '', viewToPath('gallery'));
           }}
@@ -277,6 +278,7 @@ export const ProfileView: React.FC = () => {
       <button
         type="button"
         onClick={() => {
+          markFromProfile();
           setCurrentView('library');
           window.history.pushState({}, '', viewToPath('library'));
         }}
@@ -297,7 +299,12 @@ export const ProfileView: React.FC = () => {
 
       <button
         type="button"
-        onClick={() => setIsPhotoModalOpen(true)}
+        onClick={() => {
+          markFromProfile();
+          setCurrentView('history' as any);
+          window.history.pushState({}, '', viewToPath('history' as any));
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
         className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white p-4 shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5 text-left"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
