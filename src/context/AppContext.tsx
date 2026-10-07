@@ -39,8 +39,8 @@ interface AppContextType {
   isEmailConfirmed: boolean;
 
   // Current view & navigation
-  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'privacy' | 'terms' | 'offer';
-  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'privacy' | 'terms' | 'offer') => void;
+  currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'levels' | 'privacy' | 'terms' | 'offer';
+  setCurrentView: (view: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'levels' | 'privacy' | 'terms' | 'offer') => void;
 
   // User & Real Supabase Auth
   currentUser: UserAccount | null;
@@ -163,7 +163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const t = TRANSLATIONS[language];
 
   // Navigation
-  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'privacy' | 'terms' | 'offer'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'history' | 'levels' | 'privacy' | 'terms' | 'offer'>('landing');
 
   // Studio Mode & Gender Filter (PifPaf AI Features)
   const [studioMode, setStudioMode] = useState<StudioMode>('template');
