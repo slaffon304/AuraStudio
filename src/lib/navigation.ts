@@ -7,6 +7,7 @@ export type AppView =
   | 'admin'
   | 'profile'
   | 'history'
+  | 'levels'
   | 'privacy'
   | 'terms'
   | 'offer';
@@ -22,6 +23,8 @@ export function viewToPath(view: AppView): string {
       return '/app/profile';
     case 'history':
       return '/app/history';
+    case 'levels':
+      return '/app/levels';
     case 'privacy':
       return '/privacy';
     case 'terms':
@@ -43,6 +46,7 @@ export function pathToView(pathname: string): AppView {
   const p = pathname.replace(/\/$/, '') || '/';
   if (p === '/app/profile') return 'profile';
   if (p === '/app/history') return 'history';
+  if (p === '/app/levels') return 'levels';
   if (p === '/privacy') return 'privacy';
   if (p === '/terms') return 'terms';
   if (p === '/offer') return 'offer';
@@ -67,7 +71,6 @@ export function consumeAfterAuthRedirect(): AppView | null {
   return v;
 }
 
-/** Mark navigation that started from profile — subpages show ← back to profile */
 export function markFromProfile() {
   try {
     sessionStorage.setItem(FROM_PROFILE_KEY, '1');
