@@ -22,6 +22,7 @@ import {
 export const AdminDashboard: React.FC = () => {
   const {
     t,
+    language,
     templates,
     addTemplate,
     updateTemplate,
@@ -34,6 +35,10 @@ export const AdminDashboard: React.FC = () => {
     currentUser,
     authToken
   } = useApp();
+
+  const L = (ro: string, ru: string, en: string) =>
+    language === 'ru' ? ru : language === 'en' ? en : ro;
+
 
   const [activeTab, setActiveTab] = useState<'stats' | 'templates' | 'jobs' | 'users' | 'providers'>('stats');
 
@@ -153,9 +158,13 @@ export const AdminDashboard: React.FC = () => {
         <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto mb-4">
           <Shield className="h-8 w-8" />
         </div>
-        <h2 className="text-xl font-bold text-white font-display">Acces Restricționat</h2>
+        <h2 className="text-xl font-bold text-white font-display">{L('Acces restricționat', 'Доступ ограничен', 'Access restricted')}</h2>
         <p className="mt-2 text-xs text-slate-400 max-w-md mx-auto">
-          Această zonă este rezervată administratorilor AuraStudio. Rolul de administrator este configurat direct în tabela <code>profiles</code> din PostgreSQL.
+          {L(
+            'Această zonă este rezervată administratorilor AuraStudio. Rolul se configurează în tabela profiles din PostgreSQL.',
+            'Этот раздел только для администраторов AuraStudio. Роль задаётся в таблице profiles в PostgreSQL.',
+            'This area is for AuraStudio admins only. The admin role is set in the profiles table in PostgreSQL.'
+          )}
         </p>
       </div>
     );
@@ -190,7 +199,7 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             <TrendingUp className="h-3.5 w-3.5" />
-            <span>Statistici</span>
+            <span>{L('Statistici', 'Статистика', 'Stats')}</span>
           </button>
           <button
             onClick={() => setActiveTab('templates')}
@@ -241,9 +250,9 @@ export const AdminDashboard: React.FC = () => {
                 {totalGenerations}
               </div>
               <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
-                <span className="text-emerald-400 font-semibold">{completedGenerations} finalizate</span>
+                <span className="text-emerald-400 font-semibold">{completedGenerations} {L('finalizate', 'успешно', 'done')}</span>
                 <span>·</span>
-                <span className="text-rose-400">{failedGenerations} eșuate</span>
+                <span className="text-rose-400">{failedGenerations} {L('eșuate', 'ошибки', 'failed')}</span>
               </div>
             </div>
 
@@ -253,27 +262,27 @@ export const AdminDashboard: React.FC = () => {
                 {allUsers.length}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Înregistrați în baza Supabase
+                {L('Înregistrați în baza Supabase', 'В базе Supabase', 'Registered in Supabase')}
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
-              <span className="text-xs font-medium text-slate-400">Foto consumate</span>
+              <span className="text-xs font-medium text-slate-400">{L('Foto consumate', 'Фото списано', 'Photos used')}</span>
               <div className="mt-2 text-2xl sm:text-3xl font-display font-bold text-amber-400 tabular-nums">
                 {totalPhotosSpent}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Generări finalizate cu succes
+                {L('Generări finalizate cu succes', 'Успешные генерации', 'Successful generations')}
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
-              <span className="text-xs font-medium text-slate-400">{t.totalRevenue} (Încasări Reale)</span>
+              <span className="text-xs font-medium text-slate-400">{t.totalRevenue} ({L('Încasări reale', 'Реальные поступления', 'Verified revenue')})</span>
               <div className="mt-2 text-2xl sm:text-3xl font-display font-bold text-emerald-400 tabular-nums">
                 {formatPrice(verifiedRevenueMDL, verifiedRevenueRON, verifiedRevenueEUR)}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                Tranzacții plătite verificate
+                {L('Tranzacții plătite verificate', 'Проверенные оплаты', 'Verified paid transactions')}
               </div>
             </div>
           </div>
@@ -296,7 +305,7 @@ export const AdminDashboard: React.FC = () => {
               onClick={() => setActiveTab('providers')}
               className="flex items-center gap-1.5 self-start sm:self-auto rounded-xl bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 hover:brightness-110"
             >
-              <span>Gestionează Furnizori AI</span>
+              <span>{L('Gestionează Furnizori AI', 'Управление AI-провайдерами', 'Manage AI providers')}</span>
             </button>
           </div>
         </div>
@@ -307,7 +316,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white font-display">
-              Șabloane din Baza de Date ({templates.length})
+              {L('Șabloane din baza de date', 'Шаблоны из базы', 'Templates in database')} ({templates.length})
             </h2>
 
             <button
@@ -323,13 +332,13 @@ export const AdminDashboard: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-white/[0.08] bg-white/[0.02] text-slate-400 uppercase tracking-wider font-semibold">
                 <tr>
-                  <th className="py-3 px-4">Previzualizare</th>
-                  <th className="py-3 px-4">Nume</th>
-                  <th className="py-3 px-4">Categorie</th>
-                  <th className="py-3 px-4">Aspect</th>
+                  <th className="py-3 px-4">{L('Previzualizare', 'Превью', 'Preview')}</th>
+                  <th className="py-3 px-4">{L('Nume', 'Название', 'Name')}</th>
+                  <th className="py-3 px-4">{L('Categorie', 'Категория', 'Category')}</th>
+                  <th className="py-3 px-4">{L('Aspect', 'Формат', 'Aspect')}</th>
                   <th className="py-3 px-4">Foto</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Acțiuni</th>
+                  <th className="py-3 px-4">{L('Status', 'Статус', 'Status')}</th>
+                  <th className="py-3 px-4 text-right">{L('Acțiuni', 'Действия', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05] text-slate-300">
@@ -397,7 +406,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white font-display">
-              Joburi de Generare din PostgreSQL ({jobs.length})
+              {L('Joburi de generare din PostgreSQL', 'Задачи генерации (PostgreSQL)', 'Generation jobs (PostgreSQL)')} ({jobs.length})
             </h2>
           </div>
 
@@ -406,12 +415,12 @@ export const AdminDashboard: React.FC = () => {
               <thead className="border-b border-white/[0.08] bg-white/[0.02] text-slate-400 uppercase tracking-wider font-semibold">
                 <tr>
                   <th className="py-3 px-4">Job ID</th>
-                  <th className="py-3 px-4">Șablon</th>
-                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">{L('Șablon', 'Шаблон', 'Template')}</th>
+                  <th className="py-3 px-4">{L('Status', 'Статус', 'Status')}</th>
                   <th className="py-3 px-4">Engine AI</th>
                   <th className="py-3 px-4">Foto</th>
-                  <th className="py-3 px-4">Data</th>
-                  <th className="py-3 px-4 text-right">Acțiuni</th>
+                  <th className="py-3 px-4">{L('Data', 'Дата', 'Date')}</th>
+                  <th className="py-3 px-4 text-right">{L('Acțiuni', 'Действия', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05] text-slate-300">
