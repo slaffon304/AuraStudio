@@ -10,6 +10,7 @@ import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { CreditPurchaseModal } from './components/CreditPurchaseModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
+import { EmailConfirmBanner } from './components/EmailConfirmBanner';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TemplateCard } from './components/TemplateCard';
 import { ProfileView } from './components/ProfileView';
@@ -73,6 +74,7 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-white text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 flex flex-col transition-colors">
       <Header />
+      <EmailConfirmBanner />
 
       {!isBackendConnected && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-amber-800 dark:text-amber-300">
