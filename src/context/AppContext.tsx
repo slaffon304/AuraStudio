@@ -35,6 +35,8 @@ interface AppContextType {
   isBackendConnected: boolean;
   session: Session | null;
   authToken: string | null;
+  /** false until Supabase email_confirmed_at is set */
+  isEmailConfirmed: boolean;
 
   // Current view & navigation
   currentView: 'landing' | 'explore' | 'create' | 'gallery' | 'library' | 'admin' | 'profile' | 'privacy' | 'terms' | 'offer';
@@ -44,7 +46,7 @@ interface AppContextType {
   currentUser: UserAccount | null;
   allUsers: UserAccount[];
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string, country?: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string, country?: string) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
 
   // Templates (Database is source of truth)
@@ -193,6 +195,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const authToken = session?.access_token || null;
+  const isEmailConfirmed = Boolean(
+    session?.user?.email_confirmed_at ||
+    session?.user?.confirmed_at ||
+    // some clients only expose user_metadata
+    (session?.user as any)?.email_confirmed_at
+  );
 
   // Helper: authenticated API fetch
   const authFetch = useCallback(
@@ -254,7 +262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             email: profile.email,
             avatar: profile.avatar_url || '',
             role: profile.role,
-            photoBalance: profile.photo_balance,
+            photoBalance: profile.photo_balance ?? profile.credit_balance ?? 0,
             preferredLanguage,
             preferredCurrency,
             country: profile.country || 'Moldova',
@@ -271,7 +279,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Notice: Could not load user profile from server:', err);
     }
-  }, [authToken, authFetch]);
+
+    // If still no currentUser but JWT is valid — minimal profile so UI treats user as logged in
+    const { data: userData } = await supabase.auth.getUser();
+    const u = userData?.user;
+    if (u) {
+      setCurrentUser((prev) => prev || {
+        id: u.id,
+        name: (u.user_metadata?.name as string) || (u.email || 'User').split('@')[0],
+        email: u.email || '',
+        avatar: (u.user_metadata?.avatar_url as string) || '',
+        role: 'user',
+        photoBalance: 0,
+        preferredLanguage: language,
+        preferredCurrency: currency,
+        country: 'Moldova',
+        createdAt: u.created_at || new Date().toISOString()
+      });
+    }
+  }, [authToken, authFetch, language, currency]);
 
   // Fetch User Photos from Storage / DB
   const fetchUserPhotos = useCallback(async () => {
@@ -438,6 +464,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       setSession(data.session);
+
+      // Capture ?ref= on first auth
+      try {
+        const ref = new URLSearchParams(window.location.search).get('ref');
+        if (ref && data.session?.access_token) {
+          await fetch('/api/me/referral', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${data.session.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code: ref })
+          });
+        }
+      } catch { /* non-blocking */ }
+
       setIsAuthModalOpen(false);
       return { success: true };
     } catch (err: any) {
@@ -463,6 +505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email,
         password,
         options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : 'https://studio.labupgrade.ai/',
           data: {
             name,
             country,
@@ -477,16 +520,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: false, error: error.message };
       }
 
-      if (data.session) {
-        setSession(data.session);
-      }
-
       const curr =
         country === 'Romania' ? 'RON' : country === 'Moldova' ? 'MDL' : 'EUR';
       setCurrency(curr as Currency);
 
-      setIsAuthModalOpen(false);
-      return { success: true };
+      if (data.session) {
+        setSession(data.session);
+
+      // Capture ?ref= on first auth
+      try {
+        const ref = new URLSearchParams(window.location.search).get('ref');
+        if (ref && data.session?.access_token) {
+          await fetch('/api/me/referral', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${data.session.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code: ref })
+          });
+        }
+      } catch { /* non-blocking */ }
+
+        setIsAuthModalOpen(false);
+        return { success: true };
+      }
+
+      // Confirm email required: no session until link clicked
+      return {
+        success: true,
+        needsEmailConfirmation: true,
+        error: undefined
+      };
     } catch (err: any) {
       return { success: false, error: err.message || 'Eroare la crearea contului.' };
     }
@@ -509,6 +574,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!session) {
       setIsAuthModalOpen(true);
       throw new Error('Autentificare necesară.');
+    }
+    const confirmed = Boolean(session.user?.email_confirmed_at || (session.user as any)?.confirmed_at);
+    if (!confirmed) {
+      setIsAuthModalOpen(true);
+      throw new Error('Confirmă emailul pentru a continua. Verifică inbox-ul.');
     }
 
     const res = await authFetch('/api/photos', {
@@ -576,6 +646,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!session || !currentUser) {
       setIsAuthModalOpen(true);
       throw new Error('Te rugăm să te autentifici pentru a genera fotografii.');
+    }
+    const confirmed = Boolean(session.user?.email_confirmed_at || (session.user as any)?.confirmed_at);
+    if (!confirmed) {
+      setIsAuthModalOpen(true);
+      throw new Error('Confirmă emailul înainte de generare. Verifică inbox-ul și apasă linkul din scrisoare.');
     }
 
     const template = templates.find((t) => t.id === templateId) || {
@@ -803,6 +878,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBackendConnected,
         session,
         authToken,
+    isEmailConfirmed,
         currentView,
         setCurrentView,
         currentUser,
