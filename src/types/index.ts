@@ -44,7 +44,7 @@ export interface PhotoTemplate {
   prompt: string;
   negativePrompt?: string;
   aspectRatio: AspectRatio;
-  creditCost: number;
+  photoCost: number;
   requiredInputType: RequiredInputType;
   isActive: boolean;
   displayOrder: number;
@@ -60,7 +60,7 @@ export interface UserPhoto {
   uploadedAt: string;
   width?: number;
   height?: number;
-  label?: string; // e.g. "Me", "Partner"
+  label?: string;
 }
 
 export interface SavedFace {
@@ -83,14 +83,14 @@ export interface GenerationJob {
   partnerPhotoUrl?: string;
   isPack?: boolean;
   status: JobStatus;
-  progress: number; // 0 - 100
+  progress: number;
   currentStepMessage?: string;
   resultImageUrl?: string;
   resultImagesPack?: string[];
   errorMessage?: string;
   providerId: string;
   providerName: string;
-  creditCost: number;
+  photoCost: number;
   aspectRatio: AspectRatio;
   createdAt: string;
   completedAt?: string;
@@ -102,7 +102,7 @@ export interface UserAccount {
   email: string;
   avatar: string;
   role: 'user' | 'admin';
-  creditBalance: number;
+  photoBalance: number;
   preferredLanguage: Language;
   preferredCurrency: Currency;
   country: 'Moldova' | 'Romania' | 'Other';
@@ -117,28 +117,36 @@ export type TransactionType =
   | 'admin_deduct'
   | 'welcome_bonus';
 
-export interface CreditTransaction {
+export interface PhotoTransaction {
   id: string;
   userId: string;
   type: TransactionType;
-  amount: number; // positive or negative
+  amount: number;
   balanceAfter: number;
   description: string;
-  referenceId?: string; // jobId or packageId
+  referenceId?: string;
   createdAt: string;
 }
 
-export interface CreditPackage {
+/** @deprecated use PhotoTransaction */
+export type CreditTransaction = PhotoTransaction;
+
+export interface PhotoPackage {
   id: string;
   name: LocalizedString;
-  credits: number;
-  bonusCredits: number;
-  priceMDL: number;
-  priceRON: number;
+  photos: number;
   priceEUR: number;
   isPopular?: boolean;
   isBestValue?: boolean;
 }
+
+/** @deprecated use PhotoPackage */
+export type CreditPackage = PhotoPackage & {
+  credits?: number;
+  bonusCredits?: number;
+  priceMDL?: number;
+  priceRON?: number;
+};
 
 export interface AIProviderMeta {
   id: string;
@@ -161,4 +169,5 @@ export interface GenerationRequestPayload {
   customReferenceUrl?: string;
   partnerPhotoUrl?: string;
   isPack?: boolean;
+  quality4k?: boolean;
 }
