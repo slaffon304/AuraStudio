@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { GenerationJob } from '../types';
+import { viewToPath, isFromProfile, clearFromProfile } from '../lib/navigation';
 import {
+  ArrowLeft,
   Download,
   Sparkles,
   RefreshCw,
@@ -22,12 +24,25 @@ export const GalleryView: React.FC = () => {
     templates,
     setIsCreateModalOpen,
     currentUser,
-    setIsAuthModalOpen
+    setIsAuthModalOpen,
+    setCurrentView
   } = useApp();
 
   const [comparingJob, setComparingJob] = useState<GenerationJob | null>(null);
   const [filter, setFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [sliderPosition, setSliderPosition] = useState(50);
+
+  const goBack = () => {
+    if (isFromProfile()) {
+      clearFromProfile();
+      setCurrentView('profile' as any);
+      window.history.pushState({}, '', viewToPath('profile'));
+    } else {
+      setCurrentView('explore');
+      window.history.pushState({}, '', viewToPath('explore'));
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (!currentUser) {
     return (
@@ -71,13 +86,23 @@ export const GalleryView: React.FC = () => {
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/[0.08] pb-6">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {t.galleryTitle}
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            {t.gallerySub}
-          </p>
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={goBack}
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/5 shadow-sm border border-slate-100 dark:border-white/10"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+          </button>
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+              {t.galleryTitle}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              {t.gallerySub}
+            </p>
+          </div>
         </div>
 
         {/* Filter Controls (Segmented Buttons) */}
@@ -243,7 +268,7 @@ export const GalleryView: React.FC = () => {
                       <span>·</span>
                       <span className="flex items-center gap-1">
                         <Coins className="h-3 w-3 text-amber-500" />
-                        <span>{job.creditCost} {t.credits}</span>
+                        <span>{(job as any).photoCost ?? (job as any).creditCost ?? 1} foto</span>
                       </span>
                     </div>
                   </div>
