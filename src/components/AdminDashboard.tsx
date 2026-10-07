@@ -29,7 +29,7 @@ export const AdminDashboard: React.FC = () => {
     jobs,
     retryJob,
     allUsers,
-    adjustCredits,
+    adjustPhotos,
     formatPrice,
     currentUser,
     authToken
@@ -45,9 +45,9 @@ export const AdminDashboard: React.FC = () => {
   const [paymentTransactions, setPaymentTransactions] = useState<any[]>([]);
 
   // User credit adjust modal
-  const [selectedUserForCredit, setSelectedUserForCredit] = useState<string | null>(null);
-  const [creditAdjustmentAmount, setCreditAdjustmentAmount] = useState<number>(10);
-  const [creditAdjustmentReason, setCreditAdjustmentReason] = useState<string>('Bonus acordat de administrator');
+  const [selectedUserForPhotos, setSelectedUserForCredit] = useState<string | null>(null);
+  const [photoAdjustmentAmount, setCreditAdjustmentAmount] = useState<number>(10);
+  const [photoAdjustmentReason, setCreditAdjustmentReason] = useState<string>('Bonus acordat de administrator');
 
   // Template edit modal
   const [editingTemplate, setEditingTemplate] = useState<PhotoTemplate | null>(null);
@@ -62,7 +62,7 @@ export const AdminDashboard: React.FC = () => {
     prompt: '',
     negativePrompt: '',
     aspectRatio: '3:4' as AspectRatio,
-    creditCost: 2,
+    photoCost: 2,
     requiredInputType: 'single_portrait' as RequiredInputType,
     isActive: true,
     displayOrder: 1
@@ -88,7 +88,7 @@ export const AdminDashboard: React.FC = () => {
   const totalGenerations = jobs.length;
   const completedGenerations = jobs.filter((j) => j.status === 'completed').length;
   const failedGenerations = jobs.filter((j) => j.status === 'failed').length;
-  const totalCreditsSpent = jobs.reduce((acc, j) => acc + (j.status === 'completed' ? j.creditCost : 0), 0);
+  const totalPhotosSpent = jobs.reduce((acc, j) => acc + (j.status === 'completed' ? j.photoCost : 0), 0);
   
   // Real verified revenue strictly from completed payment transactions
   const verifiedRevenueMDL = paymentTransactions
@@ -125,7 +125,7 @@ export const AdminDashboard: React.FC = () => {
       prompt: newTemplateForm.prompt,
       negativePrompt: newTemplateForm.negativePrompt,
       aspectRatio: newTemplateForm.aspectRatio,
-      creditCost: Number(newTemplateForm.creditCost),
+      photoCost: Number(newTemplateForm.photoCost),
       requiredInputType: newTemplateForm.requiredInputType,
       isActive: newTemplateForm.isActive,
       displayOrder: Number(newTemplateForm.displayOrder)
@@ -140,10 +140,10 @@ export const AdminDashboard: React.FC = () => {
     setEditingTemplate(null);
   };
 
-  const handleAdjustCreditsSubmit = async (e: React.FormEvent) => {
+  const handleAdjustPhotosSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserForCredit) return;
-    await adjustCredits(selectedUserForCredit, creditAdjustmentAmount, creditAdjustmentReason);
+    if (!selectedUserForPhotos) return;
+    await adjustPhotos(selectedUserForPhotos, photoAdjustmentAmount, photoAdjustmentReason);
     setSelectedUserForCredit(null);
   };
 
@@ -258,9 +258,9 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="rounded-2xl border border-white/[0.08] bg-[#12141c] p-5">
-              <span className="text-xs font-medium text-slate-400">Credite Consumate Real</span>
+              <span className="text-xs font-medium text-slate-400">Foto consumate</span>
               <div className="mt-2 text-2xl sm:text-3xl font-display font-bold text-amber-400 tabular-nums">
-                {totalCreditsSpent}
+                {totalPhotosSpent}
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
                 Generări finalizate cu succes
@@ -327,7 +327,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="py-3 px-4">Nume</th>
                   <th className="py-3 px-4">Categorie</th>
                   <th className="py-3 px-4">Aspect</th>
-                  <th className="py-3 px-4">Credite</th>
+                  <th className="py-3 px-4">Foto</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Acțiuni</th>
                 </tr>
@@ -350,7 +350,7 @@ export const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-4">{tmpl.aspectRatio}</td>
                     <td className="py-2.5 px-4 font-semibold text-white">
-                      {tmpl.creditCost} {t.credits}
+                      {tmpl.photoCost} {'foto'}
                     </td>
                     <td className="py-2.5 px-4">
                       <button
@@ -409,7 +409,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="py-3 px-4">Șablon</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Engine AI</th>
-                  <th className="py-3 px-4">Credite</th>
+                  <th className="py-3 px-4">Foto</th>
                   <th className="py-3 px-4">Data</th>
                   <th className="py-3 px-4 text-right">Acțiuni</th>
                 </tr>
@@ -449,7 +449,7 @@ export const AdminDashboard: React.FC = () => {
                         {job.providerId}
                       </td>
                       <td className="py-2.5 px-4 text-[11px] text-amber-400 font-semibold">
-                        {job.creditCost}
+                        {job.photoCost}
                       </td>
                       <td className="py-2.5 px-4 text-[11px] text-slate-400">
                         {new Date(job.createdAt).toLocaleTimeString()}
@@ -524,7 +524,7 @@ export const AdminDashboard: React.FC = () => {
                           onClick={() => setSelectedUserForCredit(u.id)}
                           className="rounded-lg bg-amber-400/10 border border-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-400/20"
                         >
-                          {t.adjustCredits}
+                          {t.adjustPhotos}
                         </button>
                       </td>
                     </tr>
@@ -604,24 +604,24 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* MODAL: ADJUST USER CREDITS */}
-      {selectedUserForCredit && (
+      {selectedUserForPhotos && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#12141c] p-6 shadow-2xl">
             <h3 className="text-base font-bold text-white font-display">
-              {t.adjustCredits}
+              {t.adjustPhotos}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               Adaugă sau scade credite în mod atomic prin funcția securizată din PostgreSQL.
             </p>
 
-            <form onSubmit={handleAdjustCreditsSubmit} className="mt-5 space-y-4">
+            <form onSubmit={handleAdjustPhotosSubmit} className="mt-5 space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
                   Valoare credite (+ sau -)
                 </label>
                 <input
                   type="number"
-                  value={creditAdjustmentAmount}
+                  value={photoAdjustmentAmount}
                   onChange={(e) => setCreditAdjustmentAmount(Number(e.target.value))}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-amber-400"
                 />
@@ -633,7 +633,7 @@ export const AdminDashboard: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  value={creditAdjustmentReason}
+                  value={photoAdjustmentReason}
                   onChange={(e) => setCreditAdjustmentReason(e.target.value)}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-amber-400"
                 />
@@ -754,8 +754,8 @@ export const AdminDashboard: React.FC = () => {
                     type="number"
                     min={1}
                     max={10}
-                    value={newTemplateForm.creditCost}
-                    onChange={(e) => setNewTemplateForm({ ...newTemplateForm, creditCost: Number(e.target.value) })}
+                    value={newTemplateForm.photoCost}
+                    onChange={(e) => setNewTemplateForm({ ...newTemplateForm, photoCost: Number(e.target.value) })}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white"
                   />
                 </div>
@@ -846,11 +846,11 @@ export const AdminDashboard: React.FC = () => {
                   <input
                     type="number"
                     min={1}
-                    value={editingTemplate.creditCost}
+                    value={editingTemplate.photoCost}
                     onChange={(e) =>
                       setEditingTemplate({
                         ...editingTemplate,
-                        creditCost: Number(e.target.value)
+                        photoCost: Number(e.target.value)
                       })
                     }
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white"
