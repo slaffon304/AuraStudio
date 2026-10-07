@@ -160,6 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [theme]);
 
+
   const t = TRANSLATIONS[language];
 
   // Navigation
@@ -271,8 +272,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (preferredCurrency === 'MDL' || preferredCurrency === 'RON' || preferredCurrency === 'EUR') {
             setCurrency(preferredCurrency);
           }
-          if (preferredLanguage === 'ro' || preferredLanguage === 'ru' || preferredLanguage === 'en') {
-            setLanguage(preferredLanguage);
+          // Language: localStorage wins. Only apply profile language if user never chose one locally.
+          const localLang = localStorage.getItem('aurastudio_lang');
+          if (localLang === 'ro' || localLang === 'ru' || localLang === 'en') {
+            // keep local choice; optionally sync to profile if mismatch
+            if (preferredLanguage !== localLang && profile.id) {
+              supabase
+                .from('profiles')
+                .update({ preferred_language: localLang })
+                .eq('id', profile.id)
+                .then(() => {});
+            }
+          } else if (preferredLanguage === 'ro' || preferredLanguage === 'ru' || preferredLanguage === 'en') {
+            setLanguageState(preferredLanguage);
+            localStorage.setItem('aurastudio_lang', preferredLanguage);
           }
         }
       }
@@ -436,6 +449,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fetchTransactions();
     }
   }, [session, fetchUserProfile, fetchUserPhotos, fetchJobs, fetchTransactions]);
+
+  // Sync language preference to Supabase profile (localStorage is source of truth)
+  useEffect(() => {
+    if (!session?.user?.id || !isBackendConnected) return;
+    const localLang = localStorage.getItem('aurastudio_lang');
+    if (localLang !== 'ro' && localLang !== 'ru' && localLang !== 'en') return;
+    supabase
+      .from('profiles')
+      .update({ preferred_language: localLang })
+      .eq('id', session.user.id)
+      .then(({ error }) => {
+        if (error) console.warn('preferred_language sync:', error.message);
+      });
+  }, [language, session?.user?.id, isBackendConnected]);
 
   // When user role is admin, load admin data
   useEffect(() => {
