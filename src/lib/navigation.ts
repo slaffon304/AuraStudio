@@ -5,7 +5,10 @@ export type AppView =
   | 'gallery'
   | 'library'
   | 'admin'
-  | 'profile';
+  | 'profile'
+  | 'privacy'
+  | 'terms'
+  | 'offer';
 
 export function viewToPath(view: AppView): string {
   switch (view) {
@@ -16,6 +19,12 @@ export function viewToPath(view: AppView): string {
       return '/app';
     case 'profile':
       return '/app/profile';
+    case 'privacy':
+      return '/privacy';
+    case 'terms':
+      return '/terms';
+    case 'offer':
+      return '/offer';
     case 'gallery':
       return '/app/gallery';
     case 'library':
@@ -30,6 +39,9 @@ export function viewToPath(view: AppView): string {
 export function pathToView(pathname: string): AppView {
   const p = pathname.replace(/\/$/, '') || '/';
   if (p === '/app/profile') return 'profile';
+  if (p === '/privacy') return 'privacy';
+  if (p === '/terms') return 'terms';
+  if (p === '/offer') return 'offer';
   if (p === '/app/gallery') return 'gallery';
   if (p === '/app/library') return 'library';
   if (p === '/app/admin') return 'admin';
