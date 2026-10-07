@@ -12,6 +12,7 @@ import {
   Star
 } from 'lucide-react';
 import logoImg from '../assets/images/aurastudio-logo.png';
+import { viewToPath } from '../lib/navigation';
 import heroFaceBeforeImg from '../assets/images/hero_face_before_1791279356294.jpg';
 import heroEditorialAfterImg from '../assets/images/hero_editorial_after_1791279364462.jpg';
 import refWoman2FaceImg from '../assets/images/ref_face_woman2_1791279674470.jpg';
