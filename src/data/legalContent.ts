@@ -36,11 +36,11 @@ export const LEGAL: Record<'ro' | 'ru' | 'en', Record<LegalPageId, LegalDoc>> = 
         },
         {
           heading: '4. Цели обработки',
-          body: `Предоставление доступа к Сервису AuraStudio; генерация визуальных материалов; обработка платежей; поддержка пользователей; безопасность и предотвращение злоупотреблений; исполнение требований законодательства Республики Молдова, в том числе Закона № 133/2011 «О защите персональных данных».`
+          body: `Предоставление доступа к Сервису AuraStudio; генерация визуальных материалов; обработка платежей; поддержка пользователей; безопасность и предотвращение злоупотреблений; исполнение требований законодательства Республики Молдова, в том числе Закона № 195/2024 «О защите персональных данных».`
         },
         {
           heading: '5. Правовые основания',
-          body: `Согласие пользователя при регистрации и использовании Сервиса; исполнение договора (Публичной оферты); требования Закона № 133/2011 «О защите персональных данных» и иных применимых норм права Республики Молдова.`
+          body: `Согласие пользователя при регистрации и использовании Сервиса; исполнение договора (Публичной оферты); требования Закона № 195/2024 «О защите персональных данных» и иных применимых норм права Республики Молдова.`
         },
         {
           heading: '6. Кому мы передаём данные',
@@ -228,11 +228,11 @@ Contacte: email info@labupgrade.ai, Telegram @aurastudio_help_bot.`
         },
         {
           heading: '4. Scopuri',
-          body: `Furnizarea AuraStudio; generare; plăți; suport; securitate; conformitate cu legislația Republicii Moldova, inclusiv Legea nr. 133/2011 privind protecția datelor cu caracter personal.`
+          body: `Furnizarea AuraStudio; generare; plăți; suport; securitate; conformitate cu legislația Republicii Moldova, inclusiv Legea nr. 195/2024 privind protecția datelor cu caracter personal.`
         },
         {
           heading: '5. Temei juridic',
-          body: `Consimțământ; executarea contractului (oferta publică); Legea nr. 133/2011 și alte norme aplicabile ale Republicii Moldova.`
+          body: `Consimțământ; executarea contractului (oferta publică); Legea nr. 195/2024 și alte norme aplicabile ale Republicii Moldova.`
         },
         {
           heading: '6. Destinatari',
@@ -374,11 +374,11 @@ Contact: info@labupgrade.ai, Telegram @aurastudio_help_bot.`
         },
         {
           heading: '4. Purposes',
-          body: `Provide AuraStudio; generate content; payments; support; security; compliance with the laws of the Republic of Moldova, including Law No. 133/2011 on personal data protection.`
+          body: `Provide AuraStudio; generate content; payments; support; security; compliance with the laws of the Republic of Moldova, including Law No. 195/2024 on personal data protection.`
         },
         {
           heading: '5. Legal bases',
-          body: `Consent; performance of the contract (Public Offer); Law No. 133/2011 and other applicable Moldovan law.`
+          body: `Consent; performance of the contract (Public Offer); Law No. 195/2024 and other applicable Moldovan law.`
         },
         {
           heading: '6. Recipients',
