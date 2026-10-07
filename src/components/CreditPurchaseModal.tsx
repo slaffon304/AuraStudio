@@ -2,50 +2,47 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   X,
-  Coins,
+  Camera,
   CreditCard,
-  Building2,
-  Smartphone,
   ShieldCheck,
   History,
   AlertCircle,
   Sparkles
 } from 'lucide-react';
-import { Currency } from '../types';
 
-interface CreditPurchaseModalProps {
+interface PhotoPurchaseModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
+/** Kept export name for existing imports */
+export const CreditPurchaseModal: React.FC<PhotoPurchaseModalProps> = ({
   isOpen,
   onClose
 }) => {
   const {
     t,
-    currency,
-    setCurrency,
+    language,
     currentUser,
-    creditPackages,
-    creditTransactions,
-    purchaseCredits,
-    formatPrice,
+    photoPackages,
+    photoTransactions,
+    purchasePhotos,
     setIsAuthModalOpen
   } = useApp();
 
   const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    creditPackages.find((p) => p.isPopular)?.id || creditPackages[0]?.id || 'pack-creator'
+    photoPackages.find((p) => p.isPopular)?.id || photoPackages[0]?.id || 'pack10'
   );
 
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank_md' | 'bank_ro' | 'apple_pay'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
   if (!isOpen) return null;
 
-  const selectedPackage = creditPackages.find((p) => p.id === selectedPackageId) || creditPackages[0];
+  const selectedPackage = photoPackages.find((p) => p.id === selectedPackageId) || photoPackages[0];
+  const pkgName = (pkg: typeof selectedPackage) =>
+    pkg?.name?.[language] || pkg?.name?.ro || pkg?.id || '';
 
   const handleCheckout = async () => {
     if (!currentUser) {
@@ -57,7 +54,7 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
     setNoticeMessage(null);
 
     try {
-      const res = await purchaseCredits(selectedPackage.id, paymentMethod);
+      const res = await purchasePhotos(selectedPackage.id, 'card');
       if (!res.success && res.message) {
         setNoticeMessage(res.message);
       }
@@ -69,7 +66,6 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl my-auto overflow-hidden rounded-3xl border border-white/10 bg-[#12141c] p-6 sm:p-7 shadow-2xl">
-        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white"
@@ -77,64 +73,40 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
           <X className="h-5 w-5" />
         </button>
 
-        {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-white/[0.08] pb-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
-              <Coins className="h-5 w-5" />
+              <Camera className="h-5 w-5" />
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-white font-display">
                 {t.creditShopTitle}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {t.creditShopSub}
-              </p>
+              <p className="text-xs text-slate-400 mt-0.5">{t.creditShopSub}</p>
             </div>
           </div>
 
-          {/* Current Balance Note */}
           <div className="text-right mr-7 sm:mr-0">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
               {t.currentBalance}
             </span>
             <span className="text-base font-bold text-amber-300 tabular-nums">
-              {currentUser?.creditBalance || 0} {t.credits}
+              {currentUser?.photoBalance || 0} {language === 'ru' ? 'фото' : language === 'en' ? 'photos' : 'foto'}
             </span>
           </div>
         </div>
 
-        {/* Informative notice if online payments are pending live keys */}
         {noticeMessage && (
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300">
             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold">Notificare Gateway Plăți:</div>
+              <div className="font-semibold">Notificare:</div>
               <p className="mt-0.5 text-amber-200/90">{noticeMessage}</p>
             </div>
           </div>
         )}
 
-        {/* Toggle between Package Shop & Transaction History */}
-        <div className="mt-5 flex items-center justify-between">
-          {/* Currency Toggle */}
-          <div className="flex items-center gap-1 rounded-xl bg-white/5 p-1">
-            {(['MDL', 'RON', 'EUR'] as Currency[]).map((curr) => (
-              <button
-                key={curr}
-                onClick={() => setCurrency(curr)}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                  currency === curr
-                    ? 'bg-amber-400 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {curr}
-              </button>
-            ))}
-          </div>
-
-          {/* Transaction History Button */}
+        <div className="mt-5 flex items-center justify-end">
           {currentUser && (
             <button
               onClick={() => setShowHistory(!showHistory)}
@@ -146,16 +118,11 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
           )}
         </div>
 
-        {/* VIEW A: PACKAGES AND CHECKOUT */}
         {!showHistory ? (
           <div className="mt-6 space-y-6">
-            {/* Packages Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              {creditPackages.map((pkg) => {
+              {photoPackages.map((pkg) => {
                 const isSelected = selectedPackageId === pkg.id;
-                const totalCredits = pkg.credits + pkg.bonusCredits;
-                const price = formatPrice(pkg.priceMDL, pkg.priceRON, pkg.priceEUR);
-
                 return (
                   <div
                     key={pkg.id}
@@ -178,25 +145,17 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                     )}
 
                     <div className="text-center pt-2">
-                      <h4 className="text-xs font-semibold text-slate-300">
-                        {pkg.name.ro}
-                      </h4>
-
+                      <h4 className="text-xs font-semibold text-slate-300">{pkgName(pkg)}</h4>
                       <div className="mt-2 flex items-baseline justify-center gap-1">
                         <span className="font-display text-2xl sm:text-3xl font-bold text-white tabular-nums">
-                          {totalCredits}
+                          {pkg.photos}
                         </span>
-                        <span className="text-xs text-amber-300 font-semibold">{t.credits}</span>
+                        <span className="text-xs text-amber-300 font-semibold">
+                          {language === 'ru' ? 'фото' : language === 'en' ? 'photos' : 'foto'}
+                        </span>
                       </div>
-
-                      {pkg.bonusCredits > 0 && (
-                        <span className="mt-1 inline-block text-[10px] text-emerald-400 font-medium">
-                          +{pkg.bonusCredits} {t.bonusText}
-                        </span>
-                      )}
-
                       <div className="mt-4 pt-3 border-t border-white/5 text-sm font-bold text-slate-200">
-                        {price}
+                        {pkg.priceEUR.toFixed(2)}€
                       </div>
                     </div>
                   </div>
@@ -204,80 +163,23 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
               })}
             </div>
 
-            {/* Payment Method Selector */}
             <div className="space-y-3">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 {t.payWith}
               </label>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  onClick={() => setPaymentMethod('card')}
-                  className={`flex items-center gap-3 rounded-xl p-3 text-left border transition-all ${
-                    paymentMethod === 'card'
-                      ? 'border-amber-400 bg-white/[0.08] text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <CreditCard className="h-5 w-5 text-amber-400 shrink-0" />
-                  <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Card Bancar (Visa / Mastercard)</div>
-                    <div className="text-[11px] text-slate-400">MDL, RON, EUR · 3D Secure</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setPaymentMethod('bank_md')}
-                  className={`flex items-center gap-3 rounded-xl p-3 text-left border transition-all ${
-                    paymentMethod === 'bank_md'
-                      ? 'border-amber-400 bg-white/[0.08] text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Building2 className="h-5 w-5 text-amber-400 shrink-0" />
-                  <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Plată Transfer MDL</div>
-                    <div className="text-[11px] text-slate-400">MAIB, VictoriaBank, RunPay</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setPaymentMethod('bank_ro')}
-                  className={`flex items-center gap-3 rounded-xl p-3 text-left border transition-all ${
-                    paymentMethod === 'bank_ro'
-                      ? 'border-amber-400 bg-white/[0.08] text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Building2 className="h-5 w-5 text-amber-400 shrink-0" />
-                  <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Plată Transfer RON</div>
-                    <div className="text-[11px] text-slate-400">BT, BCR, Revolut Pay</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setPaymentMethod('apple_pay')}
-                  className={`flex items-center gap-3 rounded-xl p-3 text-left border transition-all ${
-                    paymentMethod === 'apple_pay'
-                      ? 'border-amber-400 bg-white/[0.08] text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Smartphone className="h-5 w-5 text-amber-400 shrink-0" />
-                  <div className="overflow-hidden text-xs">
-                    <div className="font-semibold text-white">Apple Pay / Google Pay</div>
-                    <div className="text-[11px] text-slate-400">Plată rapidă cu un click</div>
-                  </div>
-                </button>
+              <div className="flex items-center gap-3 rounded-xl p-3 border border-amber-400 bg-white/[0.08] text-white">
+                <CreditCard className="h-5 w-5 text-amber-400 shrink-0" />
+                <div className="text-xs">
+                  <div className="font-semibold text-white">Card (Visa / Mastercard)</div>
+                  <div className="text-[11px] text-slate-400">EUR · 3D Secure</div>
+                </div>
               </div>
             </div>
 
-            {/* Bottom Checkout CTA */}
             <div className="border-t border-white/[0.08] pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>Tranzacție securizată de serverul AuraStudio.</span>
+                <span>Tranzacție securizată AuraStudio.</span>
               </div>
 
               <button
@@ -289,23 +191,18 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                 <span>
                   {isProcessing
                     ? 'Procesare...'
-                    : `${t.instantCheckout} (${formatPrice(
-                        selectedPackage?.priceMDL || 0,
-                        selectedPackage?.priceRON || 0,
-                        selectedPackage?.priceEUR || 0
-                      )})`}
+                    : `${t.instantCheckout} (${selectedPackage?.priceEUR.toFixed(2)}€)`}
                 </span>
               </button>
             </div>
           </div>
         ) : (
-          /* VIEW B: REAL TRANSACTION HISTORY FROM SUPABASE */
           <div className="mt-6 space-y-4">
             <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
-              {creditTransactions.length === 0 ? (
+              {photoTransactions.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-8">{t.noTransactionsYet}</p>
               ) : (
-                creditTransactions.map((tx) => (
+                photoTransactions.map((tx) => (
                   <div
                     key={tx.id}
                     className="flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/5 p-3 text-xs"
@@ -316,7 +213,6 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                         {new Date(tx.createdAt).toLocaleString()}
                       </div>
                     </div>
-
                     <div className="text-right">
                       <span
                         className={`font-bold tabular-nums text-sm ${
@@ -326,7 +222,7 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
                         {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
                       </span>
                       <span className="text-[10px] text-slate-500 block">
-                        Sold: {tx.balanceAfter}
+                        {tx.balanceAfter}
                       </span>
                     </div>
                   </div>
@@ -338,7 +234,7 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
               onClick={() => setShowHistory(false)}
               className="w-full rounded-xl bg-white/5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10"
             >
-              Înapoi la Pachete
+              ←
             </button>
           </div>
         )}
@@ -346,3 +242,5 @@ export const CreditPurchaseModal: React.FC<CreditPurchaseModalProps> = ({
     </div>
   );
 };
+
+export const PhotoPurchaseModal = CreditPurchaseModal;
