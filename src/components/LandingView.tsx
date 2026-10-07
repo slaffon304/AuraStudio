@@ -153,23 +153,20 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     }
   ];
 
-  // Final package prices (EUR base; MDL ≈ ×20, RON ≈ ×5)
-  type Money = { MDL: string; RON: string; EUR: string };
-  const money = (m: Money) => m[currency as keyof Money] || m.EUR;
-  const sym = currency === 'MDL' ? 'L' : currency === 'RON' ? 'lei' : '€';
+  // Prices always in EUR (independent of selected language/currency)
   const perPhotoLabel =
     language === 'ru' ? '/фото' : language === 'en' ? '/photo' : '/foto';
+  const perPackLabel =
+    language === 'ru' ? 'за пакет' : language === 'en' ? 'per pack' : 'per pachet';
+  const photosWord =
+    language === 'ru' ? 'фото' : language === 'en' ? 'photos' : 'foto';
 
   const packages = [
     {
       id: 'pack5',
       title: t.landingPkg1Title,
-      priceMain: money({ EUR: '0.58', MDL: '12', RON: '2.90' }),
-      priceNote: money({
-        EUR: '2.90€ за пакет · 5 фото',
-        MDL: '58 L за пакет · 5 фото',
-        RON: '14.50 lei за пакет · 5 foto'
-      }),
+      priceMain: '0.58',
+      priceNote: `2.90€ ${perPackLabel} · 5 ${photosWord}`,
       description: t.landingPkg1Desc,
       isPopular: false,
       photos: 5
@@ -177,12 +174,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     {
       id: 'pack10',
       title: t.landingPkg2Title,
-      priceMain: money({ EUR: '0.49', MDL: '10', RON: '2.45' }),
-      priceNote: money({
-        EUR: '4.90€ за пакет · 10 фото',
-        MDL: '98 L за пакет · 10 фото',
-        RON: '24.50 lei за пакет · 10 foto'
-      }),
+      priceMain: '0.49',
+      priceNote: `4.90€ ${perPackLabel} · 10 ${photosWord}`,
       description: t.landingPkg2Desc,
       isPopular: true,
       photos: 10
@@ -190,12 +183,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
     {
       id: 'pack40',
       title: t.landingPkg3Title,
-      priceMain: money({ EUR: '0.29', MDL: '6', RON: '1.45' }),
-      priceNote: money({
-        EUR: '11.60€ за пакет · 40 фото',
-        MDL: '232 L за пакет · 40 фото',
-        RON: '58 lei за пакет · 40 foto'
-      }),
+      priceMain: '0.29',
+      priceNote: `11.60€ ${perPackLabel} · 40 ${photosWord}`,
       description: t.landingPkg3Desc,
       isPopular: false,
       photos: 40
@@ -361,27 +350,12 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#10152b]/70 via-transparent to-[#10152b]/5" />
 
-                {/* Бейдж: ПРИМЕР СТИЛЯ */}
-                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4d5875] shadow-xs backdrop-blur-md sm:left-4 sm:top-4 sm:px-3 sm:text-[10px]">
-                  <Sparkles className="h-3.5 w-3.5 text-[#586df2]" />
-                  <span>{t.landingHeroExample}</span>
-                </span>
-
                 {/* Бейдж: сделано ИИ */}
                 <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/90 px-2.5 py-1.5 text-[9px] font-bold text-[#4d5875] shadow-xs backdrop-blur-md sm:right-4 sm:top-4 sm:px-3 sm:text-[10px]">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span>{language === 'ru' ? 'сделано ИИ' : language === 'ro' ? 'generat de AI' : 'made by AI'}</span>
                 </span>
 
-                {/* Нижняя подпись стиля */}
-                <div className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-14 text-white sm:px-6 sm:pb-6">
-                  <p className="text-[10px] font-medium text-white/70">
-                    {language === 'ru' ? 'High Fashion & Editorial' : 'High Fashion & Editorial'}
-                  </p>
-                  <p className="mt-1 text-sm font-bold sm:text-lg">
-                    {language === 'ru' ? 'Студийный портрет Vogue' : 'Portret de Studio Vogue'}
-                  </p>
-                </div>
               </div>
 
               {/* МАЛЕНЬКОЕ ФОТО В УГЛУ: ТОЛЬКО ЛИЦО С ПОМЕТКОЙ "ДО" (референс) */}
@@ -389,7 +363,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                 <img
                   src={refWoman2FaceImg}
                   alt="До (референс)"
-                  className="h-full w-full rounded-[14px] object-cover sm:rounded-[18px]"
+                  className="h-full w-full rounded-[14px] object-cover object-top sm:rounded-[18px]"
                 />
                 {/* Бейдж "до" */}
                 <div className="absolute bottom-1.5 left-1.5 z-30">
@@ -400,7 +374,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
               </div>
 
               {/* Пилл внизу справа: Выбери подходящий образ */}
-              <div className="absolute bottom-[1%] right-[1%] z-20 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white px-3 py-2 text-[9px] font-semibold text-[#525d78] shadow-[0_8px_26px_rgba(32,39,75,0.16)] sm:bottom-[3%] sm:px-4 sm:py-2.5 sm:text-[10px] dark:border-white/10 dark:bg-[#171b2d] dark:text-slate-200">
+              <div className="absolute bottom-[6%] right-[2%] z-20 -rotate-6 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white px-3 py-2 text-[9px] font-semibold text-[#525d78] shadow-[0_8px_26px_rgba(32,39,75,0.16)] sm:bottom-[8%] sm:right-[3%] sm:px-4 sm:py-2.5 sm:text-[10px] dark:border-white/10 dark:bg-[#171b2d] dark:text-slate-200">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#edf0ff] text-[#5269ef] dark:bg-indigo-400/10 dark:text-indigo-300">
                   <Star className="h-3.5 w-3.5 fill-current" />
                 </span>
@@ -508,8 +482,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
                         {pkg.priceMain}
                       </span>
                       <span className="mb-1 text-[16px] font-bold text-[#1a2035]">
-                        {currency === 'EUR' ? '€' : ` ${sym}`}
-                        {perPhotoLabel}
+                        €{perPhotoLabel}
                       </span>
                     </div>
                     <p className="mt-2 text-[14px] font-medium text-[#8b93a7]">
