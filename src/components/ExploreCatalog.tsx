@@ -18,17 +18,12 @@ const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
 const TELEGRAM_URL = 'https://t.me/aurastudio_help_bot';
 
 /** Pink flame — tongue of fire, not a drop */
-function FlameIcon({ size = 11 }: { size?: number }) {
+function FlameIcon({ size = 9 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width={size} height={size} viewBox="6 2 12 20" fill="none" aria-hidden="true" className="block">
       <path
         fill="#ff2d8b"
         d="M12.1 2.1c.15 2.4-.55 3.9-1.55 5.2-.95 1.25-1.95 2.45-1.95 4.35 0 2.55 1.95 4.55 4.4 4.55s4.4-2 4.4-4.55c0-1.7-.7-2.95-1.65-4.25C14.65 5.8 13.7 4.3 12.1 2.1z"
-      />
-      <path
-        fill="#ff2d8b"
-        fillOpacity="0.45"
-        d="M12 12.6c-1.15 0-2 .85-2 1.95 0 1.15.9 1.95 2 1.95s2-.8 2-1.95c0-1.1-.85-1.95-2-1.95z"
       />
     </svg>
   );
@@ -192,7 +187,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
   return (
     <div className="bg-[#f3f5fa] dark:bg-[#090a0f] min-h-[60vh] pb-28">
       {/* Content column — never full-bleed stretch on desktop */}
-      <div className="mx-auto w-full max-w-[480px] px-4 pt-3 sm:max-w-[520px] sm:px-5 lg:max-w-[560px]">
+      <div className="mx-auto w-full max-w-[720px] px-4 pt-3 sm:px-5">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -345,7 +340,13 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                     key={tmpl.id}
                     type="button"
                     onClick={() => onPreview(tmpl)}
-                    className="relative h-[196px] w-[142px] shrink-0 text-left"
+                    className="relative shrink-0 text-left"
+                    style={{
+                      /* 4 full cards: (row - 3 gaps) / 4 ; gap = 10px */
+                      width: 'calc((100vw - 2rem - 30px) / 4)',
+                      maxWidth: 'calc((720px - 2rem - 30px) / 4)',
+                      aspectRatio: '3 / 4'
+                    }}
                   >
                     {/* Photo only — overflow hidden */}
                     <span className="absolute inset-0 overflow-hidden rounded-[16px] bg-slate-200 dark:bg-slate-800">
@@ -367,19 +368,20 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                     <span
                       className="absolute z-20 inline-flex items-center gap-[3px] whitespace-nowrap rounded-full bg-white shadow-md"
                       style={{
-                        top: '-6px',
-                        left: '6px',
-                        padding: '3px 7px',
-                        transform: `rotate(${tilt}deg)`
+                        top: '-7px',
+                        left: '50%',
+                        padding: '2px 6px 2px 4px',
+                        transform: `translateX(-50%) rotate(${tilt}deg)`,
+                        gap: '2px'
                       }}
                     >
-                      <FlameIcon size={10} />
+                      <FlameIcon size={9} />
                       <span
                         style={{
                           color: '#ff2d8b',
-                          fontSize: '8.5px',
+                          fontSize: '8px',
                           fontWeight: 800,
-                          letterSpacing: '-0.01em',
+                          letterSpacing: '-0.02em',
                           textTransform: 'uppercase',
                           lineHeight: 1
                         }}
