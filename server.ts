@@ -101,18 +101,18 @@ app.get('/api/templates', async (req, res) => {
   }
 });
 
-// Credit packages (public)
-app.get('/api/credit-packages', async (req, res) => {
+// Photo packages (public)
+app.get('/api/photo-packages', async (req, res) => {
   if (!isServerSupabaseConfigured()) {
     return res.json([]);
   }
 
   try {
     const { data, error } = await supabaseAdmin
-      .from('credit_packages')
+      .from('photo_packages')
       .select('*')
       .eq('is_active', true)
-      .order('credits', { ascending: true });
+      .order('photos', { ascending: true });
 
     if (error) throw error;
     res.json(data);
@@ -295,7 +295,7 @@ async function urlToGenerativePart(url: string) {
 }
 
 // ====================================================================
-// GENERATION JOBS PIPELINE (Real AI + Atomic Credit Ledger)
+// GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
 // ====================================================================
 
 // Create and trigger AI generation job
@@ -338,13 +338,16 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       name_ro: 'Referință Pinterest Personalizată',
       name_ru: 'Кастомный референс из Pinterest',
       name_en: 'Custom Pinterest Reference',
-      credit_cost: 2,
+      photo_cost: 1,
       aspect_ratio: aspectRatio || '3:4',
       prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
     };
   }
 
-  const effectiveCreditCost = isPack ? Math.max(3, template.credit_cost + 2) : template.credit_cost;
+  const quality4k = Boolean(req.body.quality4k);
+  const baseCost = Number(template.photo_cost ?? template.credit_cost ?? 1) || 1;
+  // 1 photo standard; 2 photos for 4K upgrade (video = 8 later)
+  const effectivePhotoCost = quality4k ? 2 : baseCost;
 
   // Check if AI provider is configured
   if (!process.env.GEMINI_API_KEY || !aiClient) {
@@ -364,9 +367,9 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         template_id: template.id,
         status: 'queued',
         progress: 10,
-        current_step_message: 'Verificare credite și autorizare...',
+        current_step_message: 'Verificare foto și autorizare...',
         provider_id: 'gemini-genai',
-        credit_cost: effectiveCreditCost,
+        photo_cost: effectivePhotoCost,
         aspect_ratio: aspectRatio || template.aspect_ratio || '3:4'
       })
       .select('id')
@@ -378,11 +381,11 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
     jobId = jobRecord.id;
 
-    // 3. ATOMICALLY DEDUCT CREDITS using PostgreSQL stored procedure
+    // 3. ATOMICALLY DEDUCT PHOTOS using PostgreSQL stored procedure
     const { data: newBalance, error: deductError } = await supabaseAdmin
-      .rpc('deduct_credits_for_generation', {
+      .rpc('deduct_photos_for_generation', {
         p_user_id: userId,
-        p_amount: effectiveCreditCost,
+        p_amount: effectivePhotoCost,
         p_template_id: template.id,
         p_template_name: template.name_ro || 'Photo Shoot',
         p_job_id: jobId
@@ -393,13 +396,13 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         .from('generation_jobs')
         .update({
           status: 'failed',
-          error_message: 'Credite insuficiente pentru această generare.'
+          error_message: 'Foto insuficiente pentru această generare.'
         })
         .eq('id', jobId);
 
       return res.status(402).json({
-        error: 'Credite insuficiente. Încarcă-ți contul pentru a genera această fotografie.',
-        required: effectiveCreditCost
+        error: 'Foto insuficiente. Cumpără un pachet pentru a genera această fotografie.',
+        required: effectivePhotoCost
       });
     }
 
@@ -527,10 +530,10 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
   } catch (genErr: any) {
     console.error('Generation error:', genErr);
 
-    // 10. ATOMIC REFUND ON FAILURE (Refunds credits exactly once!)
+    // 10. ATOMIC REFUND ON FAILURE (Refunds photos exactly once!)
     if (jobId) {
       try {
-        await supabaseAdmin.rpc('refund_credits_for_failed_job', {
+        await supabaseAdmin.rpc('refund_photos_for_failed_job', {
           p_job_id: jobId,
           p_error_message: genErr?.message || 'Eroare necunoscută la generare.'
         });
@@ -540,7 +543,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     }
 
     return res.status(500).json({
-      error: 'Generarea a eșuat. Creditele au fost restituite automat pe contul tău: ' + (genErr?.message || '')
+      error: 'Generarea a eșuat. Foto au fost restituite automat pe contul tău: ' + (genErr?.message || '')
     });
   }
 });
@@ -582,7 +585,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           resultImageUrl,
           errorMessage: job.error_message,
           providerId: job.provider_id,
-          creditCost: job.credit_cost,
+          photoCost: job.photo_cost,
           aspectRatio: job.aspect_ratio,
           createdAt: job.created_at,
           completedAt: job.completed_at
@@ -617,11 +620,11 @@ app.post('/api/generations/:id/retry', requireAuth, async (req: AuthRequest, res
   }
 });
 
-// User Credit Transactions Ledger
-app.get('/api/credit-transactions', requireAuth, async (req: AuthRequest, res) => {
+// User Photo Transactions Ledger
+app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('credit_transactions')
+      .from('photo_transactions')
       .select('*')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
@@ -643,7 +646,7 @@ app.post('/api/payments/checkout', requireAuth, async (req: AuthRequest, res) =>
   if (!paymentGateway.isConfigured()) {
     return res.status(400).json({
       isConfigured: false,
-      message: 'Modulul de plată online este în curs de configurare. Pentru creditare de test, folosește panoul de administrare.'
+      message: 'Modulul de plată online este în curs de configurare. Pentru adăugare foto de test, folosește panoul de administrare.'
     });
   }
 
@@ -679,8 +682,8 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req: AuthRequest, 
   }
 });
 
-// Admin adjust credits
-app.post('/api/admin/credits/adjust', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+// Admin adjust photos
+app.post('/api/admin/photos/adjust', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   const { targetUserId, amount, reason } = req.body;
 
   if (!targetUserId || typeof amount !== 'number') {
@@ -688,7 +691,7 @@ app.post('/api/admin/credits/adjust', requireAuth, requireAdmin, async (req: Aut
   }
 
   try {
-    const { data: newBalance, error } = await supabaseAdmin.rpc('admin_adjust_credits', {
+    const { data: newBalance, error } = await supabaseAdmin.rpc('admin_adjust_photos', {
       p_admin_id: req.user!.id,
       p_target_user_id: targetUserId,
       p_amount: amount,
@@ -750,7 +753,7 @@ app.get('/api/admin/jobs', requireAuth, requireAdmin, async (req: AuthRequest, r
 app.get('/api/admin/transactions', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('credit_transactions')
+      .from('photo_transactions')
       .select('*, profiles(email, name)')
       .order('created_at', { ascending: false })
       .limit(100);
