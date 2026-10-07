@@ -6,6 +6,7 @@ export type AppView =
   | 'library'
   | 'admin'
   | 'profile'
+  | 'history'
   | 'privacy'
   | 'terms'
   | 'offer';
@@ -19,6 +20,8 @@ export function viewToPath(view: AppView): string {
       return '/app';
     case 'profile':
       return '/app/profile';
+    case 'history':
+      return '/app/history';
     case 'privacy':
       return '/privacy';
     case 'terms':
@@ -39,6 +42,7 @@ export function viewToPath(view: AppView): string {
 export function pathToView(pathname: string): AppView {
   const p = pathname.replace(/\/$/, '') || '/';
   if (p === '/app/profile') return 'profile';
+  if (p === '/app/history') return 'history';
   if (p === '/privacy') return 'privacy';
   if (p === '/terms') return 'terms';
   if (p === '/offer') return 'offer';
@@ -50,6 +54,7 @@ export function pathToView(pathname: string): AppView {
 }
 
 const REDIRECT_KEY = 'aurastudio_after_auth';
+const FROM_PROFILE_KEY = 'aurastudio_from_profile';
 
 export function setAfterAuthRedirect(view: AppView | null) {
   if (view) sessionStorage.setItem(REDIRECT_KEY, view);
@@ -60,4 +65,29 @@ export function consumeAfterAuthRedirect(): AppView | null {
   const v = sessionStorage.getItem(REDIRECT_KEY) as AppView | null;
   sessionStorage.removeItem(REDIRECT_KEY);
   return v;
+}
+
+/** Mark navigation that started from profile — subpages show ← back to profile */
+export function markFromProfile() {
+  try {
+    sessionStorage.setItem(FROM_PROFILE_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearFromProfile() {
+  try {
+    sessionStorage.removeItem(FROM_PROFILE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isFromProfile(): boolean {
+  try {
+    return sessionStorage.getItem(FROM_PROFILE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
