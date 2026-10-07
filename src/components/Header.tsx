@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Sparkles, User, Globe, ChevronDown, LogOut, LogIn, Sun, Moon, Shield } from 'lucide-react';
+import { Sparkles, User, Globe, ChevronDown, LogOut, Sun, Moon, Shield, Menu, X } from 'lucide-react';
 import { Language, Currency } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
@@ -23,6 +23,7 @@ export const Header: React.FC = () => {
 
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isBurgerOpen, setIsBurgerOpen] = useState(false);
 
   const languages: { code: Language; label: string }[] = [
     { code: 'ro', label: 'Română' },
@@ -81,7 +82,7 @@ export const Header: React.FC = () => {
           />
         </button>
 
-        {/* Right cluster: Tariffs · Photo pill · Profile (+ lang on sm+) */}
+        {/* Right cluster */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button
             type="button"
@@ -103,7 +104,7 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          {/* Language — desktop */}
+          {/* Language — desktop only */}
           <div className="relative hidden sm:block">
             <button
               onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
@@ -172,8 +173,8 @@ export const Header: React.FC = () => {
             )}
           </div>
 
-          {/* Profile icon — always visible */}
-          <div className="relative">
+          {/* Profile icon — desktop only */}
+          <div className="relative hidden sm:block">
             <button
               type="button"
               onClick={() => {
@@ -244,6 +245,124 @@ export const Header: React.FC = () => {
                     <span>{t.logout}</span>
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Burger — mobile only */}
+          <div className="relative sm:hidden">
+            <button
+              type="button"
+              onClick={() => setIsBurgerOpen(!isBurgerOpen)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              aria-label="Menu"
+            >
+              {isBurgerOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+
+            {isBurgerOpen && (
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50">
+                {/* Language */}
+                <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  {t.language}
+                </div>
+                {languages.map((l) => (
+                  <button
+                    key={l.code}
+                    onClick={() => {
+                      setLanguage(l.code);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors ${
+                      language === l.code
+                        ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{l.label}</span>
+                    <span className="uppercase text-[10px] font-bold text-slate-400">{l.code}</span>
+                  </button>
+                ))}
+
+                <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
+
+                {/* Theme */}
+                <button
+                  onClick={() => {
+                    toggleTheme();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                >
+                  {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5 text-amber-400" />}
+                  <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+                </button>
+
+                <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
+
+                {/* Profile */}
+                <button
+                  onClick={() => {
+                    setIsBurgerOpen(false);
+                    if (!currentUser) {
+                      setIsAuthModalOpen(true);
+                    } else {
+                      goProfile();
+                    }
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                >
+                  <User className="h-3.5 w-3.5" />
+                  <span>
+                    {currentUser
+                      ? language === 'ru'
+                        ? 'Профиль'
+                        : language === 'en'
+                          ? 'Profile'
+                          : 'Profil'
+                      : language === 'ru'
+                        ? 'Вход'
+                        : language === 'en'
+                          ? 'Login'
+                          : 'Autentificare'}
+                  </span>
+                </button>
+
+                {currentUser && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setIsBurgerOpen(false);
+                        navigate('gallery');
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                    >
+                      <span>{t.myGallery}</span>
+                    </button>
+                    {currentUser.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          setIsBurgerOpen(false);
+                          setCurrentView('admin');
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-medium"
+                      >
+                        <Shield className="h-3.5 w-3.5" />
+                        <span>{t.adminPanel}</span>
+                      </button>
+                    )}
+                    <div className="border-t border-slate-100 dark:border-white/5 pt-1">
+                      <button
+                        onClick={() => {
+                          setIsBurgerOpen(false);
+                          signOut();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                      >
+                        <LogOut className="h-3.5 w-3.5" />
+                        <span>{t.logout}</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
