@@ -4,18 +4,18 @@ import {
   UserPhoto,
   PhotoTemplate,
   GenerationJob,
-  CreditTransaction,
+  PhotoTransaction,
   Language,
   Currency,
   TemplateCategory,
-  CreditPackage,
+  PhotoPackage,
   StudioMode,
   GenderCategory,
   AspectRatio,
   Theme
 } from '../types';
 import { INITIAL_TEMPLATES } from '../data/initialTemplates';
-import { CREDIT_PACKAGES } from '../data/creditPackages';
+import { PHOTO_PACKAGES } from '../data/photoPackages';
 import { TRANSLATIONS, TranslationSchema } from '../i18n/translations';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -88,17 +88,17 @@ interface AppContextType {
   openCustomPinterest: () => void;
   openCoupleStudio: () => void;
 
-  // Credits & Transactions
-  creditPackages: CreditPackage[];
-  creditTransactions: CreditTransaction[];
-  purchaseCredits: (packageId: string, paymentMethod: string) => Promise<{ success: boolean; message?: string }>;
-  adjustCredits: (userId: string, amount: number, reason: string) => Promise<void>;
+  // Photos & Transactions
+  photoPackages: PhotoPackage[];
+  photoTransactions: PhotoTransaction[];
+  purchasePhotos: (packageId: string, paymentMethod: string) => Promise<{ success: boolean; message?: string }>;
+  adjustPhotos: (userId: string, amount: number, reason: string) => Promise<void>;
 
   // Modals state
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
-  isCreditModalOpen: boolean;
-  setIsCreditModalOpen: (open: boolean) => void;
+  isPhotoModalOpen: boolean;
+  setIsPhotoModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   quickSelectTemplate: (template: PhotoTemplate) => void;
@@ -183,13 +183,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
 
-  // Credits & Packages
-  const [creditPackages, setCreditPackages] = useState<CreditPackage[]>(CREDIT_PACKAGES);
-  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
+  // Photos & Packages
+  const [photoPackages, setPhotoPackages] = useState<PhotoPackage[]>(PHOTO_PACKAGES);
+  const [photoTransactions, setPhotoTransactions] = useState<PhotoTransaction[]>([]);
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const authToken = session?.access_token || null;
@@ -222,7 +222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             prompt: item.prompt,
             negativePrompt: item.negative_prompt,
             aspectRatio: item.aspect_ratio,
-            creditCost: item.credit_cost,
+            photoCost: item.photo_cost,
             requiredInputType: item.required_input_type,
             providerHint: item.provider_hint,
             tags: item.tags || [],
@@ -254,7 +254,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             email: profile.email,
             avatar: profile.avatar_url || '',
             role: profile.role,
-            creditBalance: profile.credit_balance,
+            photoBalance: profile.photo_balance,
             preferredLanguage,
             preferredCurrency,
             country: profile.country || 'Moldova',
@@ -314,15 +314,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Fetch Transactions
   const fetchTransactions = useCallback(async () => {
     if (!authToken) {
-      setCreditTransactions([]);
+      setPhotoTransactions([]);
       return;
     }
     try {
-      const res = await authFetch('/api/credit-transactions');
+      const res = await authFetch('/api/photo-transactions');
       if (res.ok) {
         const txs = await res.json();
         if (Array.isArray(txs)) {
-          setCreditTransactions(
+          setPhotoTransactions(
             txs.map((t: any) => ({
               id: t.id,
               userId: t.user_id,
@@ -337,7 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (err) {
-      console.warn('Notice: Could not fetch credit transactions:', err);
+      console.warn('Notice: Could not fetch photo transactions:', err);
     }
   }, [authToken, authFetch]);
 
@@ -356,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               email: u.email,
               avatar: u.avatar_url || '',
               role: u.role,
-              creditBalance: u.credit_balance,
+              photoBalance: u.photo_balance,
               preferredLanguage: u.preferred_language,
               preferredCurrency: u.preferred_currency,
               country: u.country,
@@ -390,7 +390,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser(null);
         setUserPhotos([]);
         setJobs([]);
-        setCreditTransactions([]);
+        setPhotoTransactions([]);
       }
     });
 
@@ -500,7 +500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setUserPhotos([]);
     setJobs([]);
-    setCreditTransactions([]);
+    setPhotoTransactions([]);
     setCurrentView('explore');
   };
 
@@ -582,15 +582,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: templateId || 'custom-pinterest',
       name: { ro: 'Stil Personalizat', ru: 'Свой стиль', en: 'Custom Style' },
       previewImage: options?.customReferenceUrl || userPhotoUrl,
-      creditCost: 2,
+      photoCost: 1,
       aspectRatio: options?.aspectRatio || '3:4'
     };
 
-    const cost = options?.isPack ? Math.max(3, template.creditCost + 2) : template.creditCost;
+    const cost = options?.isPack ? Math.max(3, template.photoCost + 2) : template.photoCost;
 
-    if (currentUser.creditBalance < cost) {
-      setIsCreditModalOpen(true);
-      throw new Error(t.insufficientCredits);
+    if (currentUser.photoBalance < cost) {
+      setIsPhotoModalOpen(true);
+      throw new Error(t.insufficientPhotos || t.insufficientCredits || 'Foto insuficiente');
     }
 
     // Call secure backend endpoint
@@ -638,7 +638,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resultImageUrl: data.resultImageUrl,
       providerId: 'gemini-genai',
       providerName: 'Google Gemini Image',
-      creditCost: cost,
+      photoCost: cost,
       aspectRatio: (options?.aspectRatio || template.aspectRatio) as AspectRatio,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString()
@@ -655,7 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Real purchase initiation (No fake payment success!)
-  const purchaseCredits = async (
+  const purchasePhotos = async (
     packageId: string,
     _paymentMethod: string
   ): Promise<{ success: boolean; message?: string }> => {
@@ -678,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           success: false,
           message:
             data.message ||
-            'Gateway-ul de plată online este în curs de configurare. Pentru creditare de test, folosește Panoul de Administrare.'
+            'Gateway-ul de plată online este în curs de configurare. Pentru adăugare foto de test, folosește Panoul de Administrare.'
         };
       }
 
@@ -695,11 +695,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Admin adjust credits
-  const adjustCredits = async (userId: string, amount: number, reason: string) => {
+  // Admin adjust photos
+  const adjustPhotos = async (userId: string, amount: number, reason: string) => {
     if (!session || currentUser?.role !== 'admin') return;
 
-    const res = await authFetch('/api/admin/credits/adjust', {
+    const res = await authFetch('/api/admin/photos/adjust', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetUserId: userId, amount, reason })
@@ -730,7 +730,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prompt: newTmplData.prompt,
         negative_prompt: newTmplData.negativePrompt || '',
         aspect_ratio: newTmplData.aspectRatio,
-        credit_cost: newTmplData.creditCost,
+        photo_cost: newTmplData.photoCost,
         required_input_type: newTmplData.requiredInputType,
         provider_hint: newTmplData.providerHint || 'gemini-genai',
         tags: newTmplData.tags || [],
@@ -762,7 +762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prompt: updated.prompt,
         negative_prompt: updated.negativePrompt || '',
         aspect_ratio: updated.aspectRatio,
-        credit_cost: updated.creditCost,
+        photo_cost: updated.photoCost,
         required_input_type: updated.requiredInputType,
         is_active: updated.isActive,
         display_order: updated.displayOrder
@@ -832,14 +832,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGenderFilter,
         openCustomPinterest,
         openCoupleStudio,
-        creditPackages,
-        creditTransactions,
-        purchaseCredits,
-        adjustCredits,
+        photoPackages,
+        photoTransactions,
+        purchasePhotos,
+        adjustPhotos,
         isCreateModalOpen,
         setIsCreateModalOpen,
-        isCreditModalOpen,
-        setIsCreditModalOpen,
+        isPhotoModalOpen,
+        setIsPhotoModalOpen,
         isAuthModalOpen,
         setIsAuthModalOpen,
         quickSelectTemplate,
