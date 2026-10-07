@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, markFromProfile } from '../lib/navigation';
+import { LEVELS, levelForSpent, nextLevel, progressToNext, LevelId } from '../lib/levels';
 
 export const ProfileView: React.FC = () => {
   const {
@@ -37,19 +38,25 @@ export const ProfileView: React.FC = () => {
   const [level, setLevel] = useState(1);
   const [completedGens, setCompletedGens] = useState(0);
   const [referralCode, setReferralCode] = useState('');
+  const [totalSpent, setTotalSpent] = useState(0);
 
   useEffect(() => {
     const token = session?.access_token;
     if (!token) return;
-    fetch('/api/me/referral', { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setInvited(data.invited || 0);
-        setRefEarned(data.photosEarned || 0);
-        setLevel(data.level || 1);
-        setCompletedGens(data.completedGenerations || 0);
-        if (data.referralCode) setReferralCode(data.referralCode);
+    Promise.all([
+      fetch('/api/me/referral', { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/me/levels', { headers: { Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null))
+    ])
+      .then(([ref, lvl]) => {
+        if (ref) {
+          setInvited(ref.invited || 0);
+          setRefEarned(ref.photosEarned || 0);
+          if (ref.referralCode) setReferralCode(ref.referralCode);
+        }
+        if (lvl) {
+          setLevel(lvl.level || 1);
+          setTotalSpent(Number(lvl.totalSpentEur) || 0);
+        }
       })
       .catch(() => {});
   }, [session?.access_token]);
@@ -327,30 +334,51 @@ export const ProfileView: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <Trophy className="h-5 w-5 text-[#4f63f0] shrink-0" />
             <p className="text-lg font-bold text-slate-900 dark:text-white truncate">
-              {level <= 1 ? L.levelName : level === 2 ? (language === 'ru' ? 'Начинающий фотограф' : language === 'en' ? 'Beginner photographer' : 'Fotograf începător') : level === 3 ? 'Studio' : 'Pro'}
+              {(LEVELS.find((x) => x.id === level) || LEVELS[0]).name[language] || L.levelName}
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/10 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
             {language === 'ru' ? `Ур. ${level}` : language === 'en' ? `Lv. ${level}` : `Niv. ${level}`}
           </span>
         </div>
-        <p className="mt-3 text-[12px] text-slate-500">
-          {L.levelNext} · {completedGens} / {level < 2 ? 1 : level < 3 ? 10 : level < 4 ? 40 : completedGens}
-        </p>
-        <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[#4f63f0] transition-all"
-            style={{
-              width: `${Math.min(100, level < 2 ? completedGens * 100 : level < 3 ? (completedGens / 10) * 100 : level < 4 ? (completedGens / 40) * 100 : 100)}%`
-            }}
-          />
-        </div>
+        {(() => {
+          const nxt = nextLevel(level as LevelId);
+          const prog = progressToNext(totalSpent, level as LevelId);
+          return (
+            <>
+              <p className="mt-3 text-[12px] text-slate-500">
+                {nxt
+                  ? `${language === 'ru' ? 'до' : language === 'en' ? 'to' : 'până la'} «${nxt.name[language]}» · ${totalSpent.toFixed(0)} / ${nxt.minSpentEur} €`
+                  : language === 'ru'
+                  ? 'Максимальный уровень'
+                  : language === 'en'
+                  ? 'Max level'
+                  : 'Nivel maxim'}
+              </p>
+              <div className="mt-2 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#4f63f0] transition-all"
+                  style={{ width: `${prog.pct}%` }}
+                />
+              </div>
+            </>
+          );
+        })()}
         <div className="mt-4 rounded-2xl bg-[#f4f6ff] dark:bg-blue-500/10 p-3 text-[13px] text-slate-600 dark:text-slate-300">
           <p className="font-medium mb-2">{L.levelReward}</p>
           <p>🎁 {L.levelR1}</p>
           <p className="mt-1">✨ {L.levelR2}</p>
         </div>
-        <button type="button" className="mt-3 text-sm font-semibold text-[#4f63f0]">
+        <button
+          type="button"
+          onClick={() => {
+            markFromProfile();
+            setCurrentView('levels' as any);
+            window.history.pushState({}, '', viewToPath('levels' as any));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="mt-3 text-sm font-semibold text-[#4f63f0]"
+        >
           {L.levelMore}
         </button>
       </section>
