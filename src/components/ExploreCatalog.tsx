@@ -343,17 +343,28 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                     </span>
                   </span>
 
-                  {/* Badge — sticker on TOP EDGE, partially outside card */}
+                  {/* Badge — pink text+flame, compact, sticker on top edge */}
                   <span
-                    className="absolute z-20 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-wide text-[#12152a] shadow-md"
+                    className="absolute z-20 inline-flex items-center gap-[3px] whitespace-nowrap rounded-full bg-white px-[7px] py-[2px] shadow-md"
                     style={{
                       top: '-6px',
                       left: '8px',
                       transform: `rotate(${tilt}deg)`
                     }}
                   >
-                    <span aria-hidden="true">🔥</span>
-                    {count.toLocaleString('ru-RU')} {todayWord}
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="h-[9px] w-[9px] shrink-0"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="#ff2d8b"
+                        d="M8 1.2c.2 1.6-.6 2.6-1.4 3.5-.9 1-1.8 2-1.8 3.6 0 2 1.6 3.5 3.5 3.5S12 10.3 12 8.3c0-1.3-.5-2.2-1.2-3.2C9.8 3.8 9.2 2.6 8 1.2z"
+                      />
+                    </svg>
+                    <span className="text-[9px] font-extrabold uppercase leading-none tracking-tight text-[#ff2d8b]">
+                      {count.toLocaleString('ru-RU')} {todayWord}
+                    </span>
                   </span>
                 </button>
               );
