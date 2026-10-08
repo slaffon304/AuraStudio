@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { PhotoTemplate, StudioMode, AspectRatio } from '../types';
+import { PhotoTemplate, AspectRatio } from '../types';
 import {
   X,
   Upload,
   Sparkles,
-  Coins,
   CheckCircle,
   AlertCircle,
   RefreshCw,
@@ -13,12 +12,11 @@ import {
   FolderHeart,
   ArrowRight,
   LogIn,
-  Layers,
-  Users,
   Image as ImageIcon,
-  Wand2,
-  Check,
-  ShieldCheck
+  ShieldCheck,
+  Camera,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface CreatePhotoModalProps {
@@ -26,6 +24,13 @@ interface CreatePhotoModalProps {
   onClose: () => void;
   initialTemplate?: PhotoTemplate | null;
 }
+
+const ASPECT_OPTIONS: { value: AspectRatio; labelRo: string; labelRu: string; labelEn: string }[] = [
+  { value: '1:1', labelRo: 'pătrat', labelRu: 'квадрат', labelEn: 'square' },
+  { value: '9:16', labelRo: 'vertical', labelRu: 'вертикаль', labelEn: 'vertical' },
+  { value: '3:4', labelRo: 'portret', labelRu: 'портрет', labelEn: 'portrait' },
+  { value: '4:3', labelRo: 'orizontal', labelRu: 'горизонталь', labelEn: 'landscape' }
+];
 
 export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   isOpen,
@@ -40,36 +45,30 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     uploadPhoto,
     currentUser,
     createGenerationJob,
-    setIsCreditModalOpen,
+    setIsPhotoModalOpen,
     setIsAuthModalOpen,
     setCurrentView,
     studioMode,
     setStudioMode
   } = useApp();
 
-  const [selectedTemplate, setSelectedTemplate] = useState<PhotoTemplate | null>(() => {
-    return initialTemplate || templates[0] || null;
-  });
+  const [selectedTemplate, setSelectedTemplate] = useState<PhotoTemplate | null>(
+    () => initialTemplate || templates[0] || null
+  );
 
-  // Primary user selfie
-  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string>(() => {
-    return userPhotos[0]?.url || '';
-  });
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string>(() => {
-    return userPhotos[0]?.id || '';
-  });
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string>(() => userPhotos[0]?.url || '');
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string>(() => userPhotos[0]?.id || '');
 
-  // Secondary inputs for PifPaf features
   const [customReferenceUrl, setCustomReferenceUrl] = useState<string>('');
   const [partnerPhotoUrl, setPartnerPhotoUrl] = useState<string>('');
   const [partnerPhotoId, setPartnerPhotoId] = useState<string>('');
 
-  // Generation pack & aspect ratio
   const [isPhotoPack, setIsPhotoPack] = useState(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
   const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
+  /** Template demo: false = before, true = after */
+  const [showAfterDemo, setShowAfterDemo] = useState(true);
 
-  // Loading & Step states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<'selfie' | 'pinterest' | 'partner'>('selfie');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,17 +78,19 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync initial template when opened
   useEffect(() => {
     if (initialTemplate) {
       setSelectedTemplate(initialTemplate);
+      setSelectedAspectRatio(initialTemplate.aspectRatio || '3:4');
+      setShowAfterDemo(true);
       if (initialTemplate.category === 'Couple' || initialTemplate.gender === 'couple') {
         setStudioMode('couple');
+      } else {
+        setStudioMode('template');
       }
     }
   }, [initialTemplate, setStudioMode]);
 
-  // Sync userPhotos when available
   useEffect(() => {
     if (!selectedPhotoUrl && userPhotos.length > 0) {
       setSelectedPhotoUrl(userPhotos[0].url);
@@ -100,66 +101,118 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   if (!isOpen) return null;
 
   const currentTemplate = selectedTemplate || templates[0];
-  const baseCost = studioMode === 'pinterest' ? 2 : (currentTemplate?.creditCost || 2);
+  const baseCost =
+    studioMode === 'pinterest' ? 2 : currentTemplate?.photoCost ?? 1;
   const totalCost = isPhotoPack ? Math.max(3, baseCost + 2) : baseCost;
-  const hasEnoughCredits = (currentUser?.creditBalance || 0) >= totalCost;
+  const photoBalance = currentUser?.photoBalance ?? 0;
+  const hasEnoughPhotos = photoBalance >= totalCost;
 
-  // Localized copy
-  const labels = {
+  const name =
+    currentTemplate?.name?.[language] ||
+    currentTemplate?.name?.ro ||
+    currentTemplate?.name?.en ||
+    '';
+  const description =
+    currentTemplate?.description?.[language] ||
+    currentTemplate?.description?.ro ||
+    '';
+
+  const beforeUrl = currentTemplate?.beforeImage || '';
+  const afterUrl = currentTemplate?.previewImage || '';
+
+  const copy = {
     ro: {
-      studioTab: 'Șabloane Studio',
-      pinterestTab: 'Referință Pinterest',
-      coupleTab: 'Ședință de Cuplu',
+      disclaimer:
+        'Rezultatul poate diferi ușor de referință. Încarcă un selfie clar pentru cel mai bun rezultat.',
+      tipTitle: 'Cum obții fotografia ideală?',
+      tipBody: 'Apasă aici — de fotografiile de start depinde rezultatul',
+      uploadLabel: 'Fotografia ta',
+      uploadBtn: 'Încarcă foto',
+      uploadHint: 'Cel puțin 1 foto, ideal 2–3 din unghiuri diferite · JPEG, PNG, WEBP, HEIC până la 10MB',
+      ratio: 'Format foto',
+      balance: 'Disponibil',
+      photos: (n: number) => (n === 1 ? '1 foto' : `${n} foto`),
+      topUp: 'Completează balanța',
+      generate: (n: number) => `Generează (${n === 1 ? '1 foto' : n + ' foto'})`,
+      needPhoto: 'Mai întâi încarcă o fotografie',
+      welcome: 'Fiecare utilizator nou primește 1 foto cadou la înregistrare.',
+      loginTitle: 'Autentifică-te pentru a crea fotografii',
+      support:
+        'Ceva nu a mers? Scrie în Telegram @aurastudio_help_bot — echipa AuraStudio te ajută.',
+      tryMore: 'Încearcă și',
+      before: 'Înainte',
+      after: 'După',
       packSingle: '1 Fotografie (HD)',
-      packSet: 'Photo Pack (4 Poze)',
-      packDiscount: 'Economisești 25%',
-      selectSavedFace: 'Fața ta salvată:',
-      uploadSelfie: 'Încarcă un selfie clar',
-      uploadPinterest: 'Încarcă poza din Pinterest / Instagram',
+      packSet: 'Photo Pack (4 poze)',
+      selectSaved: 'Fața ta salvată:',
       uploadPartner: 'Încarcă poza partenerului/ei',
-      partnerFace: 'Partener:',
-      ratio: 'Format imagine:',
-      generateBtn: isPhotoPack ? `Generează Photo Pack (${totalCost} credite)` : `Generează Fotografia (${totalCost} credite)`,
-      watermarkPreview: 'Comută filigran',
-      downloadClean: 'Descarcă Ultra-HD (Fără filigran)'
+      uploadPin: 'Încarcă referința Pinterest / Instagram'
     },
     ru: {
-      studioTab: 'Каталог студии',
-      pinterestTab: 'Свой Pinterest референс',
-      coupleTab: 'Парная фотосессия',
+      disclaimer:
+        'Обратите внимание: итог может немного отличаться от референса. Загрузи чёткое селфи для лучшего результата.',
+      tipTitle: 'Как получить идеальное фото?',
+      tipBody: 'Нажми сюда — от исходных фото зависит результат',
+      uploadLabel: 'Твоё фото',
+      uploadBtn: 'Загрузить фото',
+      uploadHint: 'Хотя бы 1 фото, лучше 2–3 с разных ракурсов · JPEG, PNG, WEBP, HEIC до 10MB',
+      ratio: 'Формат фото',
+      balance: 'Доступно',
+      photos: (n: number) => {
+        const m10 = n % 10;
+        const m100 = n % 100;
+        if (m10 === 1 && m100 !== 11) return `${n} фото`;
+        if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} фото`;
+        return `${n} фото`;
+      },
+      topUp: 'Пополнить баланс',
+      generate: (n: number) => `Сгенерировать (${n} фото)`,
+      needPhoto: 'Сначала загрузи фото',
+      welcome: 'Каждый новый пользователь получает 1 фото в подарок при регистрации.',
+      loginTitle: 'Войдите, чтобы создавать фотосессии',
+      support:
+        'Что-то сломалось или вышло не так? Пиши в Telegram @aurastudio_help_bot — команда AuraStudio поможет.',
+      tryMore: 'Попробуй ещё',
+      before: 'До',
+      after: 'После',
       packSingle: '1 Фотография (HD)',
-      packSet: 'Фотопак (4 Фото)',
-      packDiscount: 'Выгода 25%',
-      selectSavedFace: 'Выбери сохранённое лицо:',
-      uploadSelfie: 'Загрузи чёткое селфи',
-      uploadPinterest: 'Загрузи фото из Pinterest / Instagram',
+      packSet: 'Фотопак (4 фото)',
+      selectSaved: 'Сохранённое лицо:',
       uploadPartner: 'Загрузи фото партнёра',
-      partnerFace: 'Партнёр:',
-      ratio: 'Формат фото:',
-      generateBtn: isPhotoPack ? `Сгенерировать Фотопак (${totalCost} кредита)` : `Сгенерировать Фото (${totalCost} кредита)`,
-      watermarkPreview: 'Показать водяной знак',
-      downloadClean: 'Скачать Ultra-HD (Без водяного знака)'
+      uploadPin: 'Загрузи референс из Pinterest / Instagram'
     },
     en: {
-      studioTab: 'Studio Styles',
-      pinterestTab: 'Pinterest Reference',
-      coupleTab: 'Couple Studio',
+      disclaimer:
+        'Result may differ slightly from the reference. Upload a clear selfie for the best outcome.',
+      tipTitle: 'How to get the ideal photo?',
+      tipBody: 'Tap here — source photos determine the result',
+      uploadLabel: 'Your photo',
+      uploadBtn: 'Upload photo',
+      uploadHint: 'At least 1 photo, ideally 2–3 angles · JPEG, PNG, WEBP, HEIC up to 10MB',
+      ratio: 'Photo format',
+      balance: 'Available',
+      photos: (n: number) => (n === 1 ? '1 photo' : `${n} photos`),
+      topUp: 'Top up balance',
+      generate: (n: number) => `Generate (${n === 1 ? '1 photo' : n + ' photos'})`,
+      needPhoto: 'Upload a photo first',
+      welcome: 'Every new user gets 1 free photo on signup.',
+      loginTitle: 'Sign in to create photoshoots',
+      support:
+        'Something went wrong? Message Telegram @aurastudio_help_bot — the AuraStudio team will help.',
+      tryMore: 'Try also',
+      before: 'Before',
+      after: 'After',
       packSingle: '1 Photo (HD)',
-      packSet: 'Photo Pack (4 Photos)',
-      packDiscount: 'Save 25%',
-      selectSavedFace: 'Select saved face:',
-      uploadSelfie: 'Upload clean selfie',
-      uploadPinterest: 'Upload Pinterest / Instagram reference',
+      packSet: 'Photo Pack (4 photos)',
+      selectSaved: 'Saved face:',
       uploadPartner: 'Upload partner photo',
-      partnerFace: 'Partner:',
-      ratio: 'Aspect ratio:',
-      generateBtn: isPhotoPack ? `Generate Photo Pack (${totalCost} credits)` : `Generate Photo (${totalCost} credits)`,
-      watermarkPreview: 'Toggle watermark',
-      downloadClean: 'Download Ultra-HD (Watermark-free)'
+      uploadPin: 'Upload Pinterest / Instagram reference'
     }
   }[language];
 
-  // File upload trigger
+  const ratioLabel = (opt: (typeof ASPECT_OPTIONS)[0]) =>
+    language === 'ru' ? opt.labelRu : language === 'en' ? opt.labelEn : opt.labelRo;
+
   const triggerUpload = (target: 'selfie' | 'pinterest' | 'partner') => {
     setUploadTarget(target);
     fileInputRef.current?.click();
@@ -168,6 +221,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     if (!currentUser) {
       setIsAuthModalOpen(true);
@@ -194,7 +248,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             setSelectedPhotoId(uploaded.id);
           }
         } catch (uploadErr: any) {
-          setErrorMessage(uploadErr.message || 'Eroare la încărcarea imaginii.');
+          setErrorMessage(uploadErr.message || 'Upload error');
         } finally {
           setIsUploading(false);
         }
@@ -206,32 +260,33 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     }
   };
 
-  // Start Generation
   const handleStartGeneration = async () => {
     if (!currentUser) {
       setIsAuthModalOpen(true);
       return;
     }
 
-    if (!hasEnoughCredits) {
-      setIsCreditModalOpen(true);
+    if (!selectedPhotoUrl) {
+      setErrorMessage(copy.needPhoto);
       return;
     }
 
-    if (!selectedPhotoUrl) {
-      setErrorMessage(language === 'ru' ? 'Загрузи или выбери своё селфи.' : 'Te rugăm să încarci un selfie clar.');
+    if (!hasEnoughPhotos) {
+      setIsPhotoModalOpen(true);
       return;
     }
 
     if (studioMode === 'pinterest' && !customReferenceUrl) {
-      setErrorMessage(language === 'ru' ? 'Загрузи картинку-референс из Pinterest.' : 'Încarcă imaginea de referință din Pinterest.');
+      setErrorMessage(copy.uploadPin);
       return;
     }
 
     if (studioMode === 'couple' && !partnerPhotoUrl) {
-      setErrorMessage(language === 'ru' ? 'Загрузи фото второго человека для пары.' : 'Încarcă fotografia partenerului/ei.');
+      setErrorMessage(copy.uploadPartner);
       return;
     }
+
+    if (!currentTemplate) return;
 
     setIsGenerating(true);
     setCurrentStepText(t.progressStepAnalyze);
@@ -243,8 +298,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       const step2 = setTimeout(() => {
         setCurrentStepText(
           language === 'ru'
-            ? 'Финальная цветокоррекция в стиле Pinterest Ultra-HD...'
-            : 'Colorizare și texturi fotorealiste Ultra-HD...'
+            ? 'Финальная цветокоррекция Ultra-HD...'
+            : language === 'en'
+              ? 'Final Ultra-HD color grading...'
+              : 'Colorizare și texturi fotorealiste Ultra-HD...'
         );
       }, 5000);
 
@@ -267,7 +324,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       setGeneratedResultUrl(job.resultImageUrl || null);
     } catch (err: any) {
       setIsGenerating(false);
-      setErrorMessage(err?.message || 'A apărut o problemă la generare. Creditele au fost restituite.');
+      setErrorMessage(
+        err?.message ||
+          (language === 'ru'
+            ? 'Ошибка генерации. Фото возвращены на баланс.'
+            : language === 'en'
+              ? 'Generation failed. Photos were refunded.'
+              : 'Eroare la generare. Foto au fost returnate.')
+      );
     }
   };
 
@@ -275,529 +339,378 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     if (!generatedResultUrl) return;
     const a = document.createElement('a');
     a.href = generatedResultUrl;
-    a.download = `AuraStudio_${studioMode}_${Date.now()}.jpg`;
+    a.download = `AuraStudio_${Date.now()}.jpg`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl my-auto overflow-hidden rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#10121a] shadow-2xl text-slate-900 dark:text-white">
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/[0.08] px-6 py-4 bg-slate-50 dark:bg-[#141724]">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
-                <span>{isGenerating ? t.generating : 'AuraStudio AI Creator'}</span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/20 dark:border-amber-500/30">
-                  {studioMode === 'pinterest' ? 'Pinterest AI' : studioMode === 'couple' ? 'Couple Studio' : 'Studio Shoot'}
-                </span>
-              </h2>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {t.heroSubhead}
-              </p>
-            </div>
-          </div>
+  const moreTemplates = templates
+    .filter((x) => x.id !== currentTemplate?.id && x.isActive !== false)
+    .slice(0, 6);
 
-          {!isGenerating && (
+  const demoSrc = showAfterDemo ? afterUrl : beforeUrl || afterUrl;
+  const canToggleDemo = Boolean(beforeUrl && afterUrl);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg sm:max-w-xl my-0 sm:my-auto overflow-hidden rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0c0e14] shadow-2xl text-slate-900 dark:text-white max-h-[96vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#12151e] shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-200"
+            aria-label="Back"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h2 className="text-sm font-bold font-display truncate px-2">
+            {isGenerating ? t.generating : name || 'AuraStudio'}
+          </h2>
+          {!isGenerating ? (
             <button
+              type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10"
             >
               <X className="h-5 w-5" />
             </button>
+          ) : (
+            <div className="w-9" />
           )}
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 sm:p-6 max-h-[80vh] overflow-y-auto">
+        <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-4">
           {!currentUser ? (
-            /* USER NOT LOGGED IN */
-            <div className="py-10 text-center space-y-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 mx-auto">
+            <div className="py-12 text-center space-y-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500 mx-auto">
                 <LogIn className="h-7 w-7" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white font-display">
-                {language === 'ru' ? 'Войдите для создания фотосессий' : 'Autentifică-te pentru a crea fotografii'}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                {language === 'ru'
-                  ? 'Каждый новый пользователь получает 15 бесплатных кредитов в подарок при регистрации.'
-                  : 'Fiecare utilizator nou primește 15 credite cadou de bun venit la înregistrare.'}
-              </p>
+              <h3 className="text-lg font-bold font-display">{copy.loginTitle}</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">{copy.welcome}</p>
               <button
+                type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 px-7 py-3 text-xs font-bold text-white dark:text-slate-950 shadow-lg active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-7 py-3 text-xs font-bold text-white shadow-lg"
               >
-                <span>{language === 'ru' ? 'Войти или Зарегистрироваться' : 'Conectează-te sau Înregistrează-te'}</span>
+                <span>{language === 'ru' ? 'Войти' : language === 'en' ? 'Sign in' : 'Conectează-te'}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           ) : isGenerating ? (
-            /* STATE: IN PROGRESS OR COMPLETED */
-            <div className="flex flex-col items-center justify-center py-6 text-center">
+            <div className="flex flex-col items-center py-4 text-center">
               {generatedResultUrl ? (
-                /* SUCCESS VIEW */
-                <div className="w-full space-y-5 animate-in zoom-in-95 duration-300">
+                <div className="w-full space-y-5">
                   <div className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-400">
                     <CheckCircle className="h-4 w-4" />
                     <span>{t.completed}</span>
                   </div>
-
-                  {/* Before / After Preview */}
                   <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
-                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-slate-900 shadow-md">
-                      <img
-                        src={selectedPhotoUrl}
-                        alt="Original"
-                        className="h-full w-full object-cover"
-                      />
-                      <span className="absolute bottom-2 left-2 text-[10px] font-medium bg-black/70 px-2 py-0.5 rounded-md text-slate-300 backdrop-blur-sm">
-                        {t.showOriginal}
+                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-slate-900">
+                      <img src={selectedPhotoUrl} alt="Original" className="h-full w-full object-cover" />
+                      <span className="absolute bottom-2 left-2 text-[10px] font-medium bg-black/70 px-2 py-0.5 rounded-md text-slate-300">
+                        {copy.before}
                       </span>
                     </div>
-
-                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-amber-400/80 bg-slate-900 shadow-xl shadow-amber-500/20">
-                      <img
-                        src={generatedResultUrl}
-                        alt="AI Result"
-                        className="h-full w-full object-cover"
-                      />
+                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-violet-400/80 bg-slate-900 shadow-xl shadow-violet-500/20">
+                      <img src={generatedResultUrl} alt="Result" className="h-full w-full object-cover" />
                       {showWatermarkPreview && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <span className="text-white/40 font-extrabold text-lg tracking-widest uppercase rotate-[-25deg] border border-white/20 px-3 py-1 bg-black/30 backdrop-blur-xs">
+                          <span className="text-white/40 font-extrabold text-lg tracking-widest uppercase rotate-[-25deg] border border-white/20 px-3 py-1 bg-black/30">
                             AuraStudio
                           </span>
                         </div>
                       )}
-                      <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-md shadow-md">
-                        {t.showResult}
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-violet-500 text-white px-2 py-0.5 rounded-md">
+                        {copy.after}
                       </span>
                     </div>
                   </div>
-
-                  {/* Watermark toggle */}
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
+                  <button
+                    type="button"
+                    onClick={() => setShowWatermarkPreview(!showWatermarkPreview)}
+                    className="text-[11px] text-slate-400 underline"
+                  >
+                    {language === 'ru' ? 'Водяной знак' : language === 'en' ? 'Watermark' : 'Filigran'}
+                  </button>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button
-                      onClick={() => setShowWatermarkPreview(!showWatermarkPreview)}
-                      className="hover:text-amber-300 transition-colors text-[11px] underline underline-offset-2"
-                    >
-                      {labels.watermarkPreview}
-                    </button>
-                    <span>•</span>
-                    <span className="text-amber-400 font-medium flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {labels.downloadClean}
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                    <button
+                      type="button"
                       onClick={handleDownload}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 px-6 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-95"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-xs font-bold text-white"
                     >
                       <Download className="h-4 w-4" />
-                      <span>{t.downloadPhoto}</span>
+                      {t.downloadPhoto}
                     </button>
-
                     <button
+                      type="button"
                       onClick={() => {
                         setIsGenerating(false);
                         setGeneratedResultUrl(null);
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold"
                     >
                       <RefreshCw className="h-4 w-4" />
-                      <span>{language === 'ru' ? 'Создать ещё' : language === 'en' ? 'Create another' : 'Generează din nou'}</span>
+                      {language === 'ru' ? 'Ещё раз' : language === 'en' ? 'Again' : 'Din nou'}
                     </button>
-
                     <button
+                      type="button"
                       onClick={() => {
                         onClose();
                         setCurrentView('gallery');
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold text-white hover:bg-white/10"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold"
                     >
                       <FolderHeart className="h-4 w-4" />
-                      <span>{t.myGallery}</span>
+                      {t.myGallery}
                     </button>
                   </div>
                 </div>
               ) : (
-                /* LOADING ANIMATION */
-                <div className="py-12 space-y-6 max-w-sm">
-                  <div className="relative mx-auto h-20 w-20">
-                    <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
-                    <div className="absolute inset-2 rounded-full border-4 border-orange-500/10 border-b-orange-400 animate-spin [animation-duration:1.5s]" />
-                    <div className="absolute inset-0 flex items-center justify-center text-amber-400">
-                      <Sparkles className="h-7 w-7 animate-pulse" />
-                    </div>
+                <div className="py-16 space-y-6 max-w-sm">
+                  <div className="relative mx-auto h-16 w-16">
+                    <div className="absolute inset-0 rounded-full border-2 border-violet-500/30 border-t-violet-500 animate-spin" />
+                    <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-400" />
                   </div>
-
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-bold text-white font-display">
-                      {currentStepText || t.progressStepAnalyze}
-                    </h4>
-                    <p className="text-[11px] text-slate-400">
-                      {language === 'ru'
-                        ? 'Модель Gemini синтезирует фотосессию в разрешении 4K (~10 секунд)...'
-                        : 'Sinteză neuronală foto în rezoluție 4K (~10 secunde)...'}
-                    </p>
-                  </div>
-
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div className="h-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-300 animate-pulse w-3/4 rounded-full" />
-                  </div>
+                  <p className="text-sm font-medium text-slate-300">{currentStepText}</p>
                 </div>
               )}
             </div>
           ) : (
-            /* CONFIGURATION VIEW (PIFPAF STYLE) */
-            <div className="space-y-6">
-              {/* 1. Mode Selector Tabs */}
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setStudioMode('template')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                    studioMode === 'template'
-                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  <Wand2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">{labels.studioTab}</span>
-                  <span className="sm:hidden">Studio</span>
-                </button>
+            <>
+              {/* Demo before / after split */}
+              {studioMode === 'template' && afterUrl && (
+                <div className="relative w-full aspect-[3/4] max-h-[42vh] rounded-2xl overflow-hidden bg-slate-900 border border-white/10">
+                  <img
+                    src={demoSrc}
+                    alt={showAfterDemo ? copy.after : copy.before}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover"
+                  />
+                  <span className="absolute bottom-3 left-3 text-[10px] font-bold uppercase tracking-wide bg-black/60 backdrop-blur px-2.5 py-1 rounded-full text-white">
+                    {showAfterDemo ? copy.after : copy.before}
+                  </span>
+                  {canToggleDemo && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAfterDemo((v) => !v)}
+                      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-xl border border-white/80"
+                      aria-label="Toggle before/after"
+                    >
+                      <span className="flex items-center text-xs font-bold">
+                        <ChevronLeft className="h-4 w-4 -mr-0.5" />
+                        <ChevronRight className="h-4 w-4 -ml-0.5" />
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => setStudioMode('pinterest')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                    studioMode === 'pinterest'
-                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{labels.pinterestTab}</span>
-                  <span className="sm:hidden">Pinterest</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setStudioMode('couple')}
-                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                    studioMode === 'couple'
-                      ? 'bg-slate-900 text-white dark:bg-amber-500 dark:text-slate-950 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:inline">{labels.coupleTab}</span>
-                  <span className="sm:hidden">Cuplu</span>
-                </button>
-              </div>
-
-              {/* 2. Mode-Specific Target Settings */}
+              {/* Title + description */}
               {studioMode === 'template' && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
-                    <span>{language === 'ru' ? 'Выбранный стиль фотосессии:' : 'Stilul ales:'}</span>
-                    <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">{currentTemplate.name[language]}</span>
-                  </label>
-                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-                    {templates.map((tmpl) => {
-                      const isSelected = tmpl.id === currentTemplate.id;
-                      return (
-                        <button
-                          key={tmpl.id}
-                          type="button"
-                          onClick={() => setSelectedTemplate(tmpl)}
-                          className={`relative flex-shrink-0 w-24 rounded-xl overflow-hidden border-2 transition-all ${
-                            isSelected
-                              ? 'border-slate-900 dark:border-amber-400 ring-2 ring-slate-900/20 dark:ring-amber-400/30 scale-102'
-                              : 'border-slate-200 dark:border-white/10 opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          <div className="aspect-[3/4]">
-                            <img src={tmpl.previewImage} alt={tmpl.name[language]} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="p-1 text-[10px] font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-900/90 truncate text-center">
-                            {tmpl.name[language]}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <h3 className="text-xl font-bold font-display text-slate-900 dark:text-white">{name}</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {copy.disclaimer}
+                  </p>
+                  {description && (
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {description}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {studioMode === 'pinterest' && (
-                <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                    <ImageIcon className="w-4 h-4" />
-                    <span>{language === 'ru' ? 'Референс вдохновения из Pinterest / Instagram' : 'Imagine de referință din Pinterest'}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {language === 'ru'
-                      ? 'Загрузи любое фото лука, позы или локации. ИИ скопирует атмосферу, одежду и свет, вставив твоё лицо.'
-                      : 'Încarcă orice poză de ținută, unghi sau fundal. AI va prelua compoziția și va transfera fața ta.'}
-                  </p>
-
-                  <div className="flex items-center gap-4">
-                    {customReferenceUrl ? (
-                      <div className="relative w-28 aspect-[3/4] rounded-xl overflow-hidden border-2 border-amber-400 shadow-md">
-                        <img src={customReferenceUrl} alt="Pinterest Reference" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setCustomReferenceUrl('')}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white hover:bg-red-500"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => triggerUpload('pinterest')}
-                        className="w-full py-6 rounded-xl border-2 border-dashed border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 text-amber-300 flex flex-col items-center justify-center gap-1.5 transition-all"
-                      >
-                        <Upload className="w-5 h-5 text-amber-400" />
-                        <span className="text-xs font-semibold">{labels.uploadPinterest}</span>
-                      </button>
-                    )}
-                  </div>
+              {/* Tip banner */}
+              <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/80 dark:border-amber-500/20 px-4 py-3 flex gap-3 items-start">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <Camera className="h-4 w-4" />
                 </div>
-              )}
-
-              {studioMode === 'couple' && (
-                <div className="p-4 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-rose-300">
-                    <Users className="w-4 h-4" />
-                    <span>{language === 'ru' ? 'Парная фотосессия для двоих' : 'Fotografie pentru Cuplu'}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300">
-                    {language === 'ru'
-                      ? 'Загрузите селфи первого человека (слева) и второго человека (справа).'
-                      : 'Încarcă selfie-ul pentru prima persoană (stânga) și a doua persoană (dreapta).'}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Face 1 */}
-                    <div>
-                      <div className="text-[11px] font-semibold text-slate-300 mb-1">
-                        {language === 'ru' ? 'Лицо 1 (Ты)' : 'Persoana 1 (Tu)'}
-                      </div>
-                      <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/10 bg-slate-900">
-                        {selectedPhotoUrl ? (
-                          <img src={selectedPhotoUrl} alt="Person 1" className="w-full h-full object-cover" />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => triggerUpload('selfie')}
-                            className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-white"
-                          >
-                            <Upload className="w-5 h-5" />
-                            <span className="text-[10px]">Încarcă</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Face 2 (Partner) */}
-                    <div>
-                      <div className="text-[11px] font-semibold text-slate-300 mb-1">
-                        {language === 'ru' ? 'Лицо 2 (Партнёр)' : 'Persoana 2 (Partener)'}
-                      </div>
-                      <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-rose-500/40 bg-slate-900">
-                        {partnerPhotoUrl ? (
-                          <>
-                            <img src={partnerPhotoUrl} alt="Person 2" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setPartnerPhotoUrl('')}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white hover:bg-red-500"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => triggerUpload('partner')}
-                            className="w-full h-full flex flex-col items-center justify-center gap-1 text-rose-300 hover:text-white"
-                          >
-                            <Upload className="w-5 h-5" />
-                            <span className="text-[10px]">{labels.uploadPartner}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{copy.tipTitle}</p>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-200/70 mt-0.5">{copy.tipBody}</p>
                 </div>
-              )}
-
-              {/* 3. Primary User Selfie / Saved Faces Selector */}
-              {studioMode !== 'couple' && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <span>{labels.selectSavedFace}</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => triggerUpload('selfie')}
-                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{labels.uploadSelfie}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-thin">
-                    {/* Upload new box */}
-                    <button
-                      type="button"
-                      onClick={() => triggerUpload('selfie')}
-                      className="flex-shrink-0 w-16 h-16 rounded-2xl border-2 border-dashed border-slate-700 hover:border-amber-400 bg-slate-900 flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-amber-300 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span className="text-[9px] font-bold">New</span>
-                    </button>
-
-                    {/* Saved faces list */}
-                    {userPhotos.map((photo) => {
-                      const isSelected = photo.url === selectedPhotoUrl;
-                      return (
-                        <button
-                          key={photo.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPhotoUrl(photo.url);
-                            setSelectedPhotoId(photo.id);
-                          }}
-                          className={`relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden border-2 transition-all ${
-                            isSelected
-                              ? 'border-amber-400 ring-2 ring-amber-400/30 scale-105'
-                              : 'border-white/10 opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          <img src={photo.url} alt="Saved Face" className="w-full h-full object-cover" />
-                          {isSelected && (
-                            <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-white drop-shadow-md stroke-[3]" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 4. Generation Options: Single vs Photo Pack (PifPaf Feature) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsPhotoPack(false)}
-                  className={`p-3.5 rounded-2xl border text-left transition-all ${
-                    !isPhotoPack
-                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
-                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white">{labels.packSingle}</span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      {baseCost} credite
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {language === 'ru' ? '1 идеальный портрет в максимальном качестве' : '1 portret editorial în calitate maximă'}
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsPhotoPack(true)}
-                  className={`p-3.5 rounded-2xl border text-left transition-all relative ${
-                    isPhotoPack
-                      ? 'border-slate-900 bg-slate-50 dark:border-amber-400 dark:bg-amber-500/10 ring-1 ring-slate-900 dark:ring-amber-400/30'
-                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:hover:bg-slate-900'
-                  }`}
-                >
-                  <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-slate-950 shadow-md">
-                    {labels.packDiscount}
-                  </span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-amber-500" />
-                      {labels.packSet}
-                    </span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      {Math.max(3, baseCost + 2)} credite
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {language === 'ru' ? 'Сет из 4 ракурсов в едином стиле' : 'Set complet din 4 cadre din diverse unghiuri'}
-                  </p>
-                </button>
               </div>
 
-              {/* 5. Aspect Ratio Selector */}
+              {/* Upload zone */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                  {labels.ratio}
-                </label>
-                <div className="grid grid-cols-5 gap-2">
-                  {(['3:4', '1:1', '9:16', '4:3', '16:9'] as AspectRatio[]).map((ratio) => (
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                  {copy.uploadLabel}
+                </p>
+                {selectedPhotoUrl ? (
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-24 w-24 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10">
+                      <img src={selectedPhotoUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
                     <button
-                      key={ratio}
                       type="button"
-                      onClick={() => setSelectedAspectRatio(ratio)}
-                      className={`py-2 rounded-xl text-xs font-semibold border transition-all ${
-                        selectedAspectRatio === ratio
-                          ? 'border-slate-900 bg-slate-900 text-white dark:border-amber-400 dark:bg-amber-500/20 dark:text-amber-300 shadow-2xs font-bold'
-                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:text-white'
+                      onClick={() => triggerUpload('selfie')}
+                      disabled={isUploading}
+                      className="text-sm font-semibold text-violet-600 dark:text-violet-400"
+                    >
+                      {isUploading ? '…' : language === 'ru' ? 'Заменить' : language === 'en' ? 'Replace' : 'Înlocuiește'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => triggerUpload('selfie')}
+                    disabled={isUploading}
+                    className="w-full aspect-square max-h-40 rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-white/[0.03] flex flex-col items-center justify-center gap-2 text-slate-500 hover:border-violet-400 hover:text-violet-500 transition-colors"
+                  >
+                    <Upload className="h-7 w-7" />
+                    <span className="text-sm font-semibold">{copy.uploadBtn}</span>
+                  </button>
+                )}
+                <p className="mt-2 text-[11px] text-slate-400">{copy.uploadHint}</p>
+              </div>
+
+              {/* Saved faces */}
+              {userPhotos.length > 1 && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">{copy.selectSaved}</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {userPhotos.slice(0, 8).map((ph) => (
+                      <button
+                        key={ph.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPhotoUrl(ph.url);
+                          setSelectedPhotoId(ph.id);
+                        }}
+                        className={`h-14 w-14 shrink-0 rounded-xl overflow-hidden border-2 ${
+                          selectedPhotoId === ph.id
+                            ? 'border-violet-500'
+                            : 'border-transparent opacity-80'
+                        }`}
+                      >
+                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Couple partner */}
+              {studioMode === 'couple' && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                    {copy.uploadPartner}
+                  </p>
+                  {partnerPhotoUrl ? (
+                    <div className="h-24 w-24 rounded-2xl overflow-hidden">
+                      <img src={partnerPhotoUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => triggerUpload('partner')}
+                      className="w-full h-24 rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/15 flex items-center justify-center gap-2 text-sm text-slate-500"
+                    >
+                      <ImageIcon className="h-5 w-5" />
+                      {copy.uploadPartner}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Pinterest ref */}
+              {studioMode === 'pinterest' && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                    {copy.uploadPin}
+                  </p>
+                  {customReferenceUrl ? (
+                    <div className="h-24 w-24 rounded-2xl overflow-hidden">
+                      <img src={customReferenceUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => triggerUpload('pinterest')}
+                      className="w-full h-24 rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/15 flex items-center justify-center gap-2 text-sm text-slate-500"
+                    >
+                      <Upload className="h-5 w-5" />
+                      {copy.uploadPin}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Aspect ratio */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                  {copy.ratio}
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {ASPECT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSelectedAspectRatio(opt.value)}
+                      className={`rounded-xl py-2.5 px-1 text-center border transition-colors ${
+                        selectedAspectRatio === opt.value
+                          ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                          : 'border-slate-200 dark:border-white/10 text-slate-500'
                       }`}
                     >
-                      {ratio}
+                      <div className="text-sm font-bold">{opt.value}</div>
+                      <div className="text-[10px] opacity-80">{ratioLabel(opt)}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Error Alert */}
+              {/* Pack toggle */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoPack(false)}
+                  className={`flex-1 rounded-xl py-2.5 text-xs font-semibold border ${
+                    !isPhotoPack
+                      ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                      : 'border-slate-200 dark:border-white/10 text-slate-500'
+                  }`}
+                >
+                  {copy.packSingle}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoPack(true)}
+                  className={`flex-1 rounded-xl py-2.5 text-xs font-semibold border ${
+                    isPhotoPack
+                      ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                      : 'border-slate-200 dark:border-white/10 text-slate-500'
+                  }`}
+                >
+                  {copy.packSet}
+                </button>
+              </div>
+
               {errorMessage && (
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Footer CTA */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-white/[0.08]">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-500 dark:text-slate-400">Sold:</span>
-                  <span className="font-bold text-slate-900 dark:text-amber-400 flex items-center gap-1">
-                    <Coins className="w-3.5 h-3.5 text-amber-500" />
-                    {currentUser.creditBalance} credite
+              {/* Balance + CTA */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    {copy.balance}:{' '}
+                    <strong className="text-slate-900 dark:text-violet-300">
+                      {copy.photos(photoBalance)}
+                    </strong>
                   </span>
-                  {!hasEnoughCredits && (
+                  {!hasEnoughPhotos && (
                     <button
                       type="button"
-                      onClick={() => setIsCreditModalOpen(true)}
-                      className="text-xs text-amber-600 dark:text-amber-300 underline font-semibold ml-2 hover:text-amber-700 dark:hover:text-white"
+                      onClick={() => setIsPhotoModalOpen(true)}
+                      className="text-violet-600 dark:text-violet-400 font-semibold underline"
                     >
-                      Încarcă contul
+                      {copy.topUp}
                     </button>
                   )}
                 </div>
@@ -805,22 +718,76 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 <button
                   type="button"
                   onClick={handleStartGeneration}
-                  disabled={isUploading}
-                  className="w-full sm:w-auto px-8 py-3 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-black dark:bg-gradient-to-r dark:from-amber-400 dark:via-amber-500 dark:to-amber-600 dark:text-slate-950 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={isUploading || !selectedPhotoUrl}
+                  className="w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-45 disabled:cursor-not-allowed shadow-lg shadow-violet-600/25 flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="w-4 h-4 text-amber-400 dark:text-slate-950" />
-                  <span>{labels.generateBtn}</span>
+                  <Sparkles className="h-4 w-4" />
+                  {!selectedPhotoUrl ? copy.needPhoto : copy.generate(totalCost)}
                 </button>
               </div>
-            </div>
+
+              {/* Support */}
+              <div className="rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/5 p-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {copy.support}
+                <a
+                  href="https://t.me/aurastudio_help_bot"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-violet-600 text-white font-semibold py-2.5"
+                >
+                  Telegram
+                </a>
+              </div>
+
+              {/* Try more */}
+              {moreTemplates.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                    {copy.tryMore}
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {moreTemplates.map((tmpl) => (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTemplate(tmpl);
+                          setSelectedAspectRatio(tmpl.aspectRatio || '3:4');
+                          setShowAfterDemo(true);
+                          if (tmpl.category === 'Couple' || tmpl.gender === 'couple') {
+                            setStudioMode('couple');
+                          } else {
+                            setStudioMode('template');
+                          }
+                        }}
+                        className="shrink-0 w-16"
+                      >
+                        <div className="h-16 w-16 rounded-xl overflow-hidden border border-white/10">
+                          <img
+                            src={tmpl.previewImage}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-center text-[10px] text-slate-400 flex items-center justify-center gap-1 pb-2">
+                <ShieldCheck className="h-3 w-3" />
+                {t.privacyNote}
+              </p>
+            </>
           )}
         </div>
 
-        {/* Hidden File Input */}
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
           className="hidden"
           onChange={handleFileUpload}
         />
