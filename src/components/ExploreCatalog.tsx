@@ -48,8 +48,14 @@ function tabLabel(id: TabId, language: string) {
 function filterByTab(templates: PhotoTemplate[], tab: TabId): PhotoTemplate[] {
   const active = templates.filter((t) => t.isActive);
   switch (tab) {
-    case 'forYou':
-      return active;
+    case 'forYou': {
+  const list = [...active];
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
     case 'video':
       return active.filter(
         (t) =>
