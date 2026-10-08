@@ -228,6 +228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: { ro: item.name_ro, ru: item.name_ru, en: item.name_en },
             description: { ro: item.description_ro, ru: item.description_ru, en: item.description_en },
             previewImage: item.preview_image_url,
+            beforeImage: item.before_image_url || undefined,
             prompt: item.prompt,
             negativePrompt: item.negative_prompt,
             aspectRatio: item.aspect_ratio,
