@@ -548,11 +548,35 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           )}
         </div>
 
-        <div className="mt-6 space-y-3">
-          <div className="rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/5 p-4 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-            {copy.support}
+        <div className="mt-6 space-y-3 pb-2">
+          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/5 px-4 py-3.5 text-sm text-slate-600 dark:text-slate-400 leading-relaxed shadow-sm">
+            {language === 'ru' ? (
+              <>
+                Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>
+                {' '}— команда AuraStudio поможет тебе.
+              </>
+            ) : language === 'en' ? (
+              <>
+                Something went wrong? Message Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>
+                {' '}— the AuraStudio team will help.
+              </>
+            ) : (
+              <>
+                Ceva nu a mers cum trebuia? Scrie în Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>
+                {' '}— echipa AuraStudio te ajută.
+              </>
+            )}
           </div>
-          <div className="rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/5 p-4 text-sm text-slate-600 dark:text-slate-400">
+          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/5 px-4 py-3.5 text-sm text-slate-600 dark:text-slate-400 shadow-sm">
             {copy.honest} ❤️
           </div>
           <a
