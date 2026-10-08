@@ -78,6 +78,7 @@ interface AppContextType {
       partnerPhotoUrl?: string;
       isPack?: boolean;
       aspectRatio?: AspectRatio;
+      age?: number;
     }
   ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
@@ -669,6 +670,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       partnerPhotoUrl?: string;
       isPack?: boolean;
       aspectRatio?: AspectRatio;
+      age?: number;
     }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
@@ -708,7 +710,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         mode: options?.mode || studioMode || 'template',
         customReferenceUrl: options?.customReferenceUrl,
         partnerPhotoUrl: options?.partnerPhotoUrl,
-        isPack: options?.isPack
+        isPack: options?.isPack,
+        age: options?.age
       })
     });
 
