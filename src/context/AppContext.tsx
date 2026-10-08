@@ -79,6 +79,9 @@ interface AppContextType {
       isPack?: boolean;
       aspectRatio?: AspectRatio;
       age?: number;
+      age2?: number;
+      extraPhotoUrls?: string[];
+      partnerExtraPhotoUrls?: string[];
     }
   ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
@@ -671,6 +674,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isPack?: boolean;
       aspectRatio?: AspectRatio;
       age?: number;
+      age2?: number;
+      extraPhotoUrls?: string[];
+      partnerExtraPhotoUrls?: string[];
     }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
@@ -711,7 +717,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customReferenceUrl: options?.customReferenceUrl,
         partnerPhotoUrl: options?.partnerPhotoUrl,
         isPack: options?.isPack,
-        age: options?.age
+        age: options?.age,
+        age2: options?.age2,
+        extraPhotoUrls: options?.extraPhotoUrls,
+        partnerExtraPhotoUrls: options?.partnerExtraPhotoUrls
       })
     });
 
