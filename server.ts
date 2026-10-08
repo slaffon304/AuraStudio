@@ -307,7 +307,8 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     mode = 'template',
     customReferenceUrl,
     partnerPhotoUrl,
-    isPack = false
+    isPack = false,
+    age
   } = req.body;
   const userId = req.user!.id;
 
@@ -428,6 +429,11 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       promptContext = `Create a breathtaking romantic couple photoshoot featuring both individuals from the provided photos. Person 1 is on the left and Person 2 is on the right, embracing warmly in a luxurious romantic setting: ${template.prompt}. Pristine facial resemblance for both persons, cinematic golden hour lighting, 85mm lens.`;
     } else {
       promptContext = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
+    }
+
+    const ageNum = Number(age);
+    if (Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120) {
+      promptContext = `${promptContext} The person is approximately ${Math.round(ageNum)} years old.`;
     }
 
     const contentsParts: any[] = [{ text: promptContext }];
