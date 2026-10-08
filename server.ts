@@ -308,7 +308,10 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     customReferenceUrl,
     partnerPhotoUrl,
     isPack = false,
-    age
+    age,
+    age2,
+    extraPhotoUrls,
+    partnerExtraPhotoUrls
   } = req.body;
   const userId = req.user!.id;
 
@@ -433,15 +436,25 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
     const ageNum = Number(age);
     if (Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120) {
-      promptContext = `${promptContext} The person is approximately ${Math.round(ageNum)} years old.`;
+      promptContext = `${promptContext} Person 1 is approximately ${Math.round(ageNum)} years old.`;
+    }
+    const age2Num = Number(age2);
+    if (Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120) {
+      promptContext = `${promptContext} Person 2 is approximately ${Math.round(age2Num)} years old.`;
     }
 
     const contentsParts: any[] = [{ text: promptContext }];
 
-    // Primary user selfie
+    // Primary user selfie (+ extra angles)
     const primaryPart = await urlToGenerativePart(userPhotoUrl);
     if (primaryPart) {
       contentsParts.push(primaryPart);
+    }
+    if (Array.isArray(extraPhotoUrls)) {
+      for (const u of extraPhotoUrls.slice(0, 4)) {
+        const part = await urlToGenerativePart(u);
+        if (part) contentsParts.push(part);
+      }
     }
 
     // Secondary reference (Pinterest image or Couple partner photo)
@@ -454,6 +467,12 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       const partnerPart = await urlToGenerativePart(partnerPhotoUrl);
       if (partnerPart) {
         contentsParts.push(partnerPart);
+      }
+      if (Array.isArray(partnerExtraPhotoUrls)) {
+        for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
+          const part = await urlToGenerativePart(u);
+          if (part) contentsParts.push(part);
+        }
       }
     }
 
