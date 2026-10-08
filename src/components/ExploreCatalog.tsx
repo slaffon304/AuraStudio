@@ -143,11 +143,14 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
   }, [baseList, searchQuery, lang]);
 
   const trending = useMemo(() => {
-    return [...templates]
-      .filter((t) => t.isActive)
-      .sort((a, b) => todayCount(b.id) - todayCount(a.id))
-      .slice(0, 24);
-  }, [templates]);
+  return [...templates]
+    .filter((t) => t.isActive && (
+      t.category === 'Trending' ||
+      (t.tags || []).includes('trending')
+    ))
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .slice(0, 24);
+}, [templates]);
 
   const searchPh =
     language === 'ru'
