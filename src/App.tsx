@@ -30,6 +30,7 @@ const MainAppContent: React.FC = () => {
     isAuthModalOpen,
     setIsAuthModalOpen,
     quickSelectTemplate,
+    selectedTemplate,
     openCustomPinterest,
     openCoupleStudio,
     isBackendConnected
@@ -129,7 +130,7 @@ const MainAppContent: React.FC = () => {
       <CreatePhotoModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        initialTemplate={previewTemplate}
+        initialTemplate={previewTemplate || selectedTemplate}
       />
 
       <TemplateDetailModal
