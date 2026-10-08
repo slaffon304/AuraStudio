@@ -370,7 +370,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   <button
                     key={tmpl.id}
                     type="button"
-                    onClick={() => onPreview(tmpl)}
+                    onClick={() => onSelect(tmpl)}
                     className={[
                       'relative shrink-0 text-left',
                       /* mobile: ~2.75 visible */
@@ -444,7 +444,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   <button
                     key={tmpl.id}
                     type="button"
-                    onClick={() => onPreview(tmpl)}
+                    onClick={() => onSelect(tmpl)}
                     className="relative aspect-[3/4] overflow-hidden rounded-[16px] bg-slate-200 text-left dark:bg-slate-800"
                   >
                     {tmpl.previewImage ? (
