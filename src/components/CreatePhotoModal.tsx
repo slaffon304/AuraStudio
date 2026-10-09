@@ -669,31 +669,22 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               <div>
                 <p className="text-xs font-semibold text-emerald-600 mb-1.5">✓ {copy.better}</p>
                 <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-1.5 grid grid-cols-2 gap-1.5">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-square rounded-lg bg-slate-200 flex items-center justify-center text-[9px] text-slate-400">
-                      {language === 'ru' ? 'ок' : 'ok'}
-                    </div>
-                  ))}
+                                    <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
                 </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-rose-500 mb-1.5">✕ {copy.worse}</p>
                 <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 p-1.5 grid grid-cols-2 gap-1.5">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-square rounded-lg bg-slate-200 flex items-center justify-center text-[9px] text-slate-400">
-                      {language === 'ru' ? 'нет' : 'no'}
-                    </div>
-                  ))}
+                                    <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-[11px] text-slate-400 text-center">
-              {language === 'ru'
-                ? 'Подставь свои примеры «лучше/хуже» в assets позже'
-                : language === 'en'
-                  ? 'Replace placeholder grids with real tip images later'
-                  : 'Înlocuiește placeholder-ele cu imagini reale mai târziu'}
-            </p>
             <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">
               {copy.continue}
             </button>
