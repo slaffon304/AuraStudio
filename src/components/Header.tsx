@@ -134,12 +134,12 @@ export const Header: React.FC = () => {
       : 'Temă deschisă';
 
   const menuPanel =
-    'absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-50';
+    'absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-[110]';
 
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-white/[0.07] bg-white/95 dark:bg-[#090a0f]/95 backdrop-blur-xl transition-colors"
+      className="sticky top-0 z-[100] w-full border-b border-slate-200/80 dark:border-white/[0.07] bg-white/95 dark:bg-[#090a0f]/95 backdrop-blur-xl transition-colors"
     >
       <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
         {/* Logo — same asset & size as landing */}
