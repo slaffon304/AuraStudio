@@ -437,7 +437,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   // —— RESULT ——
   if (isGenerating && resultUrl) {
     return (
-      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-transparent">
+      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-transparent">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
             <ChevronLeft className="h-5 w-5" />
@@ -473,7 +473,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   if (isGenerating) {
     return (
-      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-transparent flex flex-col items-center justify-center gap-6 px-6">
+      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-transparent flex flex-col items-center justify-center gap-6 px-6">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
           <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
@@ -536,8 +536,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/40">
-        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-black/40">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
             <button
               type="button"
@@ -666,7 +666,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
 
         {showPinHelp && (
-          <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex justify-between items-start gap-3 mb-2">
                 <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-2">
@@ -736,7 +736,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         )}
 {showTipModal && (
-          <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
             <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-end mb-2">
                 <button type="button" onClick={() => setShowTipModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
@@ -772,7 +772,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         )}
         {showUploadSheet && (
-          <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/50">
+          <div className="fixed inset-0 z-[260] flex items-end justify-center bg-black/50">
             <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
               <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
               <div className="mt-4 grid grid-cols-3 gap-2">
@@ -822,8 +822,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/40">
-        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-black/40">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
           <div className="mb-5 flex items-center gap-3">
             <button
               type="button"
@@ -925,7 +925,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </p>
         </div>
         {showUploadSheet && (
-          <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/50">
+          <div className="fixed inset-0 z-[260] flex items-end justify-center bg-black/50">
             <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
               <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
               <div className="mt-4 grid grid-cols-3 gap-2">
@@ -951,8 +951,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }
 
   return (
-    <div className="aura-modal-backdrop fixed inset-0 z-[120] overflow-y-auto overscroll-contain">
-      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] shadow-2xl">
+    <div className="aura-modal-backdrop fixed inset-0 z-[250] overflow-y-auto overscroll-contain">
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] shadow-2xl">
       {/* HERO */}
       <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
         {afterUrl && (
@@ -1161,7 +1161,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
       {/* TIP MODAL */}
       {showTipModal && (
-        <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+        <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
           <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-3">
               <div className="mx-auto sm:mx-0 h-1 w-10 rounded-full bg-slate-200 sm:hidden absolute left-1/2 -translate-x-1/2 top-2" />
@@ -1200,7 +1200,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
       {/* MULTI-UPLOAD SHEET */}
       {showUploadSheet && (
-        <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-start">
               <h2 className="text-xl font-extrabold text-slate-900 pr-8">
