@@ -229,7 +229,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   type="button"
                   onClick={() => setTab(t.id)}
                   className={`relative whitespace-nowrap pb-2.5 text-[17px] font-extrabold tracking-tight transition-colors md:text-[18px] ${
-                    active ? 'text-[#12152a] dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
+                    active ? 'text-slate-900 dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
                   }`}
                 >
                   {tabLabel(t.id, language)}
@@ -287,12 +287,12 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             className="relative z-10 flex aspect-square w-[31%] max-w-[120px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-md transition-transform active:scale-[0.98] dark:bg-[#1a1d2a] md:rounded-[22px] md:px-3 md:py-3"
           >
             <span className="flex items-center justify-between">
-              <span className="text-[18px] font-black tracking-tight text-[#12152a] dark:text-white md:text-[19px]">
+              <span className="text-[18px] font-black tracking-tight text-slate-900 dark:text-white md:text-[19px]">
                 4K
               </span>
               <ChevronRight className="h-4 w-4 -rotate-45 text-slate-300" />
             </span>
-            <span className="text-[12px] font-bold leading-[1.15] text-[#12152a] dark:text-white md:text-[13px]">
+            <span className="text-[12px] font-bold leading-[1.15] text-slate-900 dark:text-white md:text-[13px]">
               {language === 'ru' ? (
                 <>
                   Улучшить
@@ -366,7 +366,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
               (720 - 40 padding - 30 gaps) / 4 ≈ 162.5px
         */}
         <section className="mt-7">
-          <h2 className="text-[22px] font-extrabold tracking-tight text-[#12152a] dark:text-white">
+          <h2 className="text-[22px] font-extrabold tracking-tight text-slate-900 dark:text-white">
             {language === 'ru' ? 'в тренде' : language === 'en' ? 'trending' : 'în trend'}
           </h2>
 
@@ -433,7 +433,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
 
 {/* ===== RESULTS / СТОИТ ПОПРОБОВАТЬ ===== */}
         <section className="mt-8">
-          <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
+          <h2 className="text-[20px] font-extrabold text-slate-900 dark:text-white">
             {isSearching
               ? language === 'ru'
                 ? 'Результаты поиска'
@@ -449,7 +449,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
 
           {filtered.length === 0 ? (
             <div className="mt-6 rounded-2xl bg-white/90 dark:bg-white/5 px-5 py-10 text-center shadow-sm">
-              <p className="text-[16px] font-bold text-[#12152a] dark:text-white">
+              <p className="text-[16px] font-bold text-slate-900 dark:text-white">
                 {isSearching
                   ? language === 'ru'
                     ? `Ничего не нашлось по запросу «${searchQuery.trim()}».`
