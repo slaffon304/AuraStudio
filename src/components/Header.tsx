@@ -116,8 +116,11 @@ export const Header: React.FC = () => {
 
   const onInstallClick = () => {
     setIsBurgerOpen(false);
-    if (!canNativeInstall()) return;
-    promptInstall();
+    if (canNativeInstall()) {
+      promptInstall();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('aurastudio-show-install-help'));
   };
 
   const photoLabel = language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
@@ -148,9 +151,6 @@ export const Header: React.FC = () => {
       : language === 'en'
       ? 'Light mode'
       : 'Temă deschisă';
-
-  const menuPanel =
-    'absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-[110]';
 
   return (
     <header
@@ -191,11 +191,11 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          <div className="relative">
+          <div className="relative z-[110]">
             <button
               type="button"
               onClick={() => setIsBurgerOpen((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10 transition-colors backdrop-blur-sm"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#12141c] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
               aria-label="Menu"
               aria-expanded={isBurgerOpen}
             >
@@ -203,7 +203,7 @@ export const Header: React.FC = () => {
             </button>
 
             {isBurgerOpen && (
-              <div className={menuPanel}>
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-[120]">
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   {t.language}
                 </div>
