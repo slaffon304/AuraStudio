@@ -10,6 +10,7 @@ import { PhotoLibraryView } from './components/PhotoLibraryView';
 import { CreditPurchaseModal } from './components/CreditPurchaseModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
+import { PwaInstallBanner } from './components/PwaInstallBanner';
 import { EmailConfirmBanner } from './components/EmailConfirmBanner';
 import { ProfileView } from './components/ProfileView';
 import { HistoryView } from './components/HistoryView';
@@ -149,6 +150,7 @@ const MainAppContent: React.FC = () => {
       <CreditPurchaseModal isOpen={isPhotoModalOpen} onClose={() => setIsPhotoModalOpen(false)} />
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <PwaInstallBanner />
     </div>
   );
 };
