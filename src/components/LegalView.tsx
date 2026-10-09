@@ -26,12 +26,12 @@ export const LegalView: React.FC<LegalViewProps> = ({ page }) => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 flex flex-col relative z-10">
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 flex flex-col relative z-10">
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 pb-8 pt-6 sm:px-6">
         <button
           type="button"
           onClick={goBack}
-          className="mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-slate-900 shadow-sm border border-slate-200 hover:bg-white dark:bg-white/10 dark:text-white dark:border-white/15 dark:hover:bg-white/15"
+          className="mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200 dark:bg-white/10 dark:text-white dark:border-white/15 dark:hover:bg-white/15"
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -54,13 +54,13 @@ export const LegalView: React.FC<LegalViewProps> = ({ page }) => {
         </div>
       </div>
 
-      <footer className="border-t border-slate-200/80 bg-white/70 px-4 pb-10 pt-8 backdrop-blur-sm dark:border-white/10 dark:bg-black/40">
+      <footer className="border-t border-slate-200 bg-slate-50 px-4 pb-10 pt-8 dark:border-white/10 dark:bg-[#0c0e14]">
         <div className="mx-auto flex max-w-[900px] flex-col items-center gap-5 text-center">
           <a
             href="https://t.me/aurastudio_help_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-[#e2e4ec] bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
@@ -85,24 +85,24 @@ export const LegalView: React.FC<LegalViewProps> = ({ page }) => {
             >
               {t.landingPackagesTitle}
             </button>
-            <span className="text-[#d0d4de]">·</span>
+            <span>·</span>
             <button type="button" onClick={() => goToLegal('privacy')} className="hover:text-[#4f63f0] transition-colors">
               {t.landingPrivacy}
             </button>
-            <span className="text-[#d0d4de]">·</span>
+            <span>·</span>
             <button type="button" onClick={() => goToLegal('terms')} className="hover:text-[#4f63f0] transition-colors">
               {t.landingTerms}
             </button>
-            <span className="text-[#d0d4de]">·</span>
+            <span>·</span>
             <button type="button" onClick={() => goToLegal('offer')} className="hover:text-[#4f63f0] transition-colors">
               {t.landingOffer}
             </button>
           </nav>
 
-          <p className="max-w-[520px] text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">
+          <p className="max-w-[520px] text-[11px] leading-relaxed text-slate-500">
             {t.landingFooterLegal}
           </p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          <p className="text-[11px] text-slate-400">
             © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
           </p>
         </div>
