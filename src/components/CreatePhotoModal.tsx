@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import { PhotoTemplate, AspectRatio } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
@@ -94,7 +95,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
-  // Lock page scroll while modal is open (prevents scroll-through to catalog)
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  // Lock page scroll while modal is open + always open at TOP (not bottom of previous scroll)
   useEffect(() => {
     if (!isOpen) return;
     const prevOverflow = document.body.style.overflow;
@@ -102,6 +105,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     const sbw = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = 'hidden';
     if (sbw > 0) document.body.style.paddingRight = `${sbw}px`;
+    // Reset scroll position of the modal shell
+    requestAnimationFrame(() => {
+      if (modalScrollRef.current) modalScrollRef.current.scrollTop = 0;
+      window.scrollTo(0, 0);
+    });
     return () => {
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPadding;
@@ -172,6 +180,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }, [onPointerMove]);
 
   if (!isOpen) return null;
+
+  const portal = (node: React.ReactNode) =>
+    typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 
   const slots = slotCount(template?.requiredInputType);
   const photoCost = template?.photoCost ?? 1;
@@ -436,8 +447,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   // —— RESULT ——
   if (isGenerating && resultUrl) {
-    return (
-      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-transparent">
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14]">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
             <ChevronLeft className="h-5 w-5" />
@@ -472,8 +483,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }
 
   if (isGenerating) {
-    return (
-      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-transparent flex flex-col items-center justify-center gap-6 px-6">
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center gap-6 px-6">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
           <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
@@ -535,8 +546,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         setIsUploading(false);
       }
     };
-    return (
-      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-black/40">
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-[#f4f5f9] dark:bg-[#0c0e14]">
         <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
             <button
@@ -821,8 +832,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         setErrorMessage(err?.message || 'Error');
       }
     };
-    return (
-      <div className="fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-black/40">
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-[#f4f5f9] dark:bg-[#0c0e14]">
         <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
           <div className="mb-5 flex items-center gap-3">
             <button
@@ -950,8 +961,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     );
   }
 
-  return (
-    <div className="aura-modal-backdrop fixed inset-0 z-[250] overflow-y-auto overscroll-contain">
+  return portal(
+    <div ref={modalScrollRef} className="aura-modal-backdrop aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain">
       <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] shadow-2xl">
       {/* HERO */}
       <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
