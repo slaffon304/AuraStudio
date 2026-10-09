@@ -27,6 +27,11 @@ export function isStandalone(): boolean {
   return mq || ios;
 }
 
+export function isIos(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 export function hasSeenInstallPrompt(): boolean {
   try {
     return localStorage.getItem(DISMISS_KEY) === '1';
