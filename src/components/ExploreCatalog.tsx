@@ -194,7 +194,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         ];
 
   return (
-    <div className="min-h-[60vh] bg-[#f3f5fa] pb-28 dark:bg-[#090a0f]">
+    <div className="min-h-[60vh] bg-transparent pb-28">
       {/*
         Mobile: full width + px-4 (reference phone layout).
         Desktop (md+): centered column max-w-[720px] — not full 1920, not a 480 stub.
