@@ -648,61 +648,61 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
         {showPinHelp && (
           <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-xl font-extrabold text-slate-900 pr-6 leading-snug">
+            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto">
+              <div className="flex justify-between items-start gap-3 mb-2">
+                <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-2">
                   {language === 'ru'
                     ? 'Как сохранить картинку из Pinterest'
                     : language === 'en'
                       ? 'How to save an image from Pinterest'
                       : 'Cum salvezi o imagine din Pinterest'}
                 </h2>
-                <button type="button" onClick={() => setShowPinHelp(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                <button type="button" onClick={() => setShowPinHelp(false)} className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <p className="text-sm text-slate-500 leading-relaxed">
                 {language === 'ru'
-                  ? 'Скачай картинку на телефон, затем загрузи её в слот «Референс» на этом экране.'
+                  ? 'Два шага в приложении Pinterest — картинка сохранится в галерею телефона.'
                   : language === 'en'
-                    ? 'Save the image to your phone, then upload it into the Reference slot on this screen.'
-                    : 'Salvează imaginea pe telefon, apoi încarc-o în slotul Referință de pe acest ecran.'}
+                    ? 'Two steps in the Pinterest app — the image is saved to your phone gallery.'
+                    : 'Doi pași în aplicația Pinterest — imaginea se salvează în galeria telefonului.'}
               </p>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 mb-1.5">1</p>
-                  <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">1</p>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-[9/16]">
                     <img
-                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.png" referrerPolicy="no-referrer"
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.png"
                       alt=""
-                      className="h-full w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain"
                     />
                   </div>
-                  <p className="mt-2 text-xs text-slate-500 leading-snug">
+                  <p className="mt-2 text-xs text-slate-600 leading-snug font-medium">
                     {language === 'ru'
-                      ? 'Открой пин → нажми «…» или «Поделиться» → «Скачать изображение»'
+                      ? 'Открой пин и нажми «⋯» внизу экрана'
                       : language === 'en'
-                        ? 'Open the pin → Share / … → Download image'
-                        : 'Deschide pinul → Share / … → Download image'}
+                        ? 'Open the pin and tap “⋯” at the bottom'
+                        : 'Deschide pinul și apasă „⋯” jos pe ecran'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 mb-1.5">2</p>
-                  <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">2</p>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-[9/16]">
                     <img
-                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.png" referrerPolicy="no-referrer"
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.png"
                       alt=""
-                      className="h-full w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain"
                     />
                   </div>
-                  <p className="mt-2 text-xs text-slate-500 leading-snug">
+                  <p className="mt-2 text-xs text-slate-600 leading-snug font-medium">
                     {language === 'ru'
-                      ? 'Вернись сюда и загрузи скачанный файл в «Референс»'
+                      ? 'Выбери «Download image» / «Скачать изображение»'
                       : language === 'en'
-                        ? 'Come back here and upload the file into Reference'
-                        : 'Revino aici și încarcă fișierul în Referință'}
+                        ? 'Tap “Download image”'
+                        : 'Alege „Download image” / „Descarcă imaginea”'}
                   </p>
                 </div>
               </div>
@@ -716,7 +716,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </div>
           </div>
         )}
-        {showTipModal && (
+{showTipModal && (
           <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
             <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-end mb-2">
