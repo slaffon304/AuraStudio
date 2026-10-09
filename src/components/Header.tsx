@@ -16,9 +16,9 @@ import { Language } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
 import {
-  canPromptInstall,
-  isStandalone,
+  canNativeInstall,
   promptInstall,
+  shouldShowInstallEntry,
   subscribePwaInstall
 } from '../lib/pwaInstall';
 
@@ -65,7 +65,7 @@ export const Header: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const sync = () => setCanInstall(canPromptInstall() && !isStandalone());
+    const sync = () => setCanInstall(shouldShowInstallEntry());
     sync();
     return subscribePwaInstall(sync);
   }, []);
@@ -112,6 +112,28 @@ export const Header: React.FC = () => {
     } else {
       goApp();
     }
+  };
+
+  const onInstallClick = async () => {
+    setIsBurgerOpen(false);
+    if (canNativeInstall()) {
+      await promptInstall();
+      return;
+    }
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const msg =
+      language === 'ru'
+        ? isIos
+          ? 'На iPhone: кнопка «Поделиться» → «На экран «Домой»».'
+          : 'В Chrome: меню ⋮ → «Установить приложение» / «Добавить на главный экран».'
+        : language === 'en'
+        ? isIos
+          ? 'On iPhone: Share → Add to Home Screen.'
+          : 'In Chrome: menu ⋮ → Install app / Add to Home screen.'
+        : isIos
+        ? 'Pe iPhone: Partajează → Pe ecranul principal.'
+        : 'În Chrome: meniu ⋮ → Instalează aplicația.';
+    window.alert(msg);
   };
 
   const photoLabel = language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
@@ -237,10 +259,7 @@ export const Header: React.FC = () => {
                     <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
                     <button
                       type="button"
-                      onClick={async () => {
-                        setIsBurgerOpen(false);
-                        await promptInstall();
-                      }}
+                      onClick={onInstallClick}
                       className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 font-semibold"
                     >
                       <Download className="h-3.5 w-3.5" />
