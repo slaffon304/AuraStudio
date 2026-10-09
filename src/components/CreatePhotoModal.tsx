@@ -643,7 +643,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               </>
             )}
           </div>
-          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
+          <div className="rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
             {copy.honest} ❤️
           </div>
           <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600 text-white font-semibold py-3.5 text-sm shadow-lg shadow-blue-600/20">
