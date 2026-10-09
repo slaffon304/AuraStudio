@@ -242,7 +242,10 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           </div>
         </div>
 
-        {/* 3 action tiles */}
+                  </>
+        )}
+
+{/* 3 action tiles */}
         <div className="mt-4 grid grid-cols-3 gap-2.5">
           <button
             type="button"
@@ -281,7 +284,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <button
             type="button"
             onClick={onEnhance}
-            className="flex h-[112px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
+            className="flex h-[112px] flex-col justify-between rounded-[20px] bg-white/90 backdrop-blur-sm px-2.5 py-2.5 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
           >
             <span className="flex items-center justify-between">
               <span className="text-[18px] font-black tracking-tight text-[#12152a] dark:text-white md:text-[19px]">
@@ -355,6 +358,8 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           </button>
         </div>
 
+                        {!isSearching && (
+          <>
         {/* ===== В ТРЕНДЕ =====
             Mobile:  ~2.75 cards  → width ≈ 34.5vw
             Desktop (md+): exactly 4 full cards in the 720px column
@@ -423,10 +428,10 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <p className="mt-1.5 text-[13px] text-slate-400">{swipeHint}</p>
         </section>
 
-          </>
+                              </>
         )}
 
-        {/* ===== RESULTS / СТОИТ ПОПРОБОВАТЬ ===== */}
+{/* ===== RESULTS / СТОИТ ПОПРОБОВАТЬ ===== */}
         <section className="mt-8">
           <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
             {isSearching
