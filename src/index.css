@@ -78,10 +78,14 @@ html.dark .aura-ambient::after {
   );
 }
 
-/* Контент поверх фиксированного фона */
+/* Контент над фоном; header выше main */
 .aura-stage > :not(.aura-ambient) {
   position: relative;
   z-index: 1;
+}
+
+.aura-stage > header {
+  z-index: 100;
 }
 
 ::-webkit-scrollbar {
