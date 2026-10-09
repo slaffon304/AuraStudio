@@ -82,6 +82,7 @@ interface AppContextType {
       age2?: number;
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
+      quality4k?: boolean;
     }
   ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
@@ -93,6 +94,7 @@ interface AppContextType {
   setGenderFilter: (filter: GenderCategory) => void;
   openCustomPinterest: () => void;
   openCoupleStudio: () => void;
+  openEnhanceQuality: () => void;
 
   // Photos & Transactions
   photoPackages: PhotoPackage[];
@@ -662,6 +664,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCreateModalOpen(true);
   };
 
+  const openEnhanceQuality = () => {
+    setSelectedTemplate(null);
+    setStudioMode('enhance');
+    setIsCreateModalOpen(true);
+  };
+
   // REAL ASYNCHRONOUS GENERATION PIPELINE
   const createGenerationJob = async (
     templateId: string,
@@ -677,6 +685,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       age2?: number;
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
+      quality4k?: boolean;
     }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
@@ -697,7 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aspectRatio: options?.aspectRatio || '3:4'
     };
 
-    const cost = options?.isPack ? Math.max(3, template.photoCost + 2) : template.photoCost;
+    const cost = options?.quality4k ? 2 : options?.isPack ? Math.max(3, (template.photoCost || 1) + 2) : (template.photoCost || 1);
 
     if (currentUser.photoBalance < cost) {
       setIsPhotoModalOpen(true);
@@ -720,7 +729,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         age: options?.age,
         age2: options?.age2,
         extraPhotoUrls: options?.extraPhotoUrls,
-        partnerExtraPhotoUrls: options?.partnerExtraPhotoUrls
+        partnerExtraPhotoUrls: options?.partnerExtraPhotoUrls,
+        quality4k: options?.quality4k
       })
     });
 
@@ -948,6 +958,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGenderFilter,
         openCustomPinterest,
         openCoupleStudio,
+        openEnhanceQuality,
         photoPackages,
         photoTransactions,
         purchasePhotos,
