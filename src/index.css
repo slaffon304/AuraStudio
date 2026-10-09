@@ -66,19 +66,21 @@ html.dark .aura-ambient {
   position: absolute;
   inset: 0;
   background: radial-gradient(
-    ellipse 70% 65% at 50% 40%,
-    rgba(255, 255, 255, 0.28) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    transparent 78%
+    ellipse 80% 75% at 50% 40%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.45) 40%,
+    rgba(255, 255, 255, 0.15) 70%,
+    transparent 88%
   );
 }
 
 html.dark .aura-ambient::after {
   background: radial-gradient(
-    ellipse 70% 65% at 50% 40%,
-    rgba(7, 8, 12, 0.28) 0%,
-    rgba(7, 8, 12, 0.12) 50%,
-    transparent 78%
+    ellipse 80% 75% at 50% 40%,
+    rgba(7, 8, 12, 0.72) 0%,
+    rgba(7, 8, 12, 0.45) 40%,
+    rgba(7, 8, 12, 0.18) 70%,
+    transparent 88%
   );
 }
 
