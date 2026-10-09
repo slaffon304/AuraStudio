@@ -436,7 +436,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   // —— RESULT ——
   if (isGenerating && resultUrl) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white/85 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
+      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-transparent">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
             <ChevronLeft className="h-5 w-5" />
@@ -472,7 +472,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   if (isGenerating) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md flex flex-col items-center justify-center gap-6 px-6">
+      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-transparent flex flex-col items-center justify-center gap-6 px-6">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
           <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
@@ -535,8 +535,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
+      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
+        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-28">
           <div className="flex items-center gap-3 mb-4">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
               <ChevronLeft className="h-5 w-5" />
@@ -819,8 +819,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
-        <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
+      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
+        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-28">
           <div className="flex items-center gap-3 mb-5">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
               <ChevronLeft className="h-5 w-5" />
@@ -943,8 +943,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-transparent">
-      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white/85 dark:bg-[#0c0e14]/90 backdrop-blur-md shadow-2xl">
+    <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white/92 dark:bg-[#0c0e14]/94 backdrop-blur-md shadow-2xl">
       {/* HERO */}
       <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
         {afterUrl && (
@@ -1012,7 +1012,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         </button>
 
         {/* Upload slots (preview of first face only) */}
-        <div className={`mt-6 grid gap-4 ${slots === 2 ? 'grid-cols-2' : 'grid-cols-1 max-w-xs'}`}>
+        <div className={`mt-6 grid gap-4 ${slots === 2 ? 'grid-cols-2' : 'grid-cols-1 max-w-xs mx-auto'}`}>
           <FaceSlot
             label={copy.photoYou}
             photos={photos1}
@@ -1034,18 +1034,24 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         {slots === 2 ? (
           <div className="mt-5 grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{copy.ageYou}</p>
-              <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-full rounded-2xl bg-slate-100 border-0 px-4 py-3.5 text-base font-medium outline-none focus:ring-2 focus:ring-violet-400" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.ageYou}</p>
+              <div className="flex justify-center">
+                <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{copy.agePartner}</p>
-              <input type="number" min={1} max={120} value={age2} onChange={(e) => setAge2(Number(e.target.value) || 0)} className="w-full rounded-2xl bg-slate-100 border-0 px-4 py-3.5 text-base font-medium outline-none focus:ring-2 focus:ring-violet-400" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.agePartner}</p>
+              <div className="flex justify-center">
+                <input type="number" min={1} max={120} value={age2} onChange={(e) => setAge2(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              </div>
             </div>
           </div>
         ) : (
           <div className="mt-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{copy.age}</p>
-            <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-full rounded-2xl bg-slate-100 border-0 px-4 py-3.5 text-base font-medium outline-none focus:ring-2 focus:ring-violet-400" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.age}</p>
+            <div className="flex justify-center">
+              <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
           </div>
         )}
 
@@ -1108,7 +1114,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         </div>
 
         <div className="mt-6 space-y-3 pb-2">
-          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 leading-relaxed shadow-sm">
+          <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 leading-relaxed shadow-sm">
             {language === 'ru' ? (
               <>
                 Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram{' '}
@@ -1135,7 +1141,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               </>
             )}
           </div>
-          <div className="rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
+          <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
             {copy.honest} ❤️
           </div>
           <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600 text-white font-semibold py-3.5 text-sm shadow-lg shadow-blue-600/20">
