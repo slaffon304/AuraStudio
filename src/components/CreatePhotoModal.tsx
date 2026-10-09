@@ -673,7 +673,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   <p className="text-xs font-semibold text-slate-600 mb-1.5">1</p>
                   <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
                     <img
-                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.jpeg"
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.png" referrerPolicy="no-referrer"
                       alt=""
                       className="h-full w-full object-cover"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -691,7 +691,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   <p className="text-xs font-semibold text-slate-600 mb-1.5">2</p>
                   <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
                     <img
-                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.jpeg"
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.png" referrerPolicy="no-referrer"
                       alt=""
                       className="h-full w-full object-cover"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -717,12 +717,38 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         )}
         {showTipModal && (
-          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-0">
-            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
-              <div className="flex justify-end"><button type="button" onClick={() => setShowTipModal(false)}><X className="h-5 w-5 text-slate-400" /></button></div>
-              <h2 className="text-xl font-extrabold">{copy.tipModalTitle}</h2>
-              <p className="mt-3 text-sm text-slate-500">{copy.tipModalBody}</p>
-              <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-end mb-2">
+                <button type="button" onClick={() => setShowTipModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-2">{copy.tipModalTitle}</h2>
+              <p className="mt-3 text-sm text-slate-500 leading-relaxed">{copy.tipModalBody}</p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-600 mb-1.5">✓ {copy.better}</p>
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-rose-500 mb-1.5">✕ {copy.worse}</p>
+                  <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  </div>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">
+                {copy.continue}
+              </button>
             </div>
           </div>
         )}
@@ -1118,19 +1144,19 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               <div>
                 <p className="text-xs font-semibold text-emerald-600 mb-1.5">✓ {copy.better}</p>
                 <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-1.5 grid grid-cols-2 gap-1.5">
-                                    <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                                    <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
                 </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-rose-500 mb-1.5">✕ {copy.worse}</p>
                 <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 p-1.5 grid grid-cols-2 gap-1.5">
-                                    <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
-                  <img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" className="aspect-square rounded-lg object-cover w-full h-full" loading="lazy" />
+                                    <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
                 </div>
               </div>
             </div>
