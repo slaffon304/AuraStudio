@@ -120,13 +120,14 @@ interface ExploreCatalogProps {
   onPreview: (t: PhotoTemplate) => void;
   onSelect: (t: PhotoTemplate) => void;
   onPinterest: () => void;
-  onCouple: () => void;
+  onEnhance: () => void;
 }
 
 export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
   onPreview,
   onSelect,
-  onPinterest
+  onPinterest,
+  onEnhance
 }) => {
   const { language, templates } = useApp();
   const [tab, setTab] = useState<TabId>('forYou');
@@ -273,9 +274,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              if (filtered[0]) onSelect(filtered[0]);
-            }}
+            onClick={onEnhance}
             className="flex h-[112px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-sm transition-transform active:scale-[0.98] dark:bg-[#161924] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
           >
             <span className="flex items-center justify-between">
