@@ -1,6 +1,12 @@
 /* AuraStudio PWA service worker */
-const CACHE = 'aurastudio-shell-v1';
-const SHELL = ['/', '/app', '/manifest.webmanifest', '/pwa-192.png', '/pwa-512.png'];
+const CACHE = 'aurastudio-shell-v2';
+const SHELL = [
+  '/',
+  '/app',
+  '/manifest.webmanifest',
+  '/pwa-192.png',
+  '/pwa-512.png'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -23,34 +29,39 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  // Never cache API / auth
-  if (url.pathname.startsWith('/api/')) return;
 
-  // Navigation: network first, fallback to cache
+  if (url.pathname.startsWith('/api/')) return;
+  if (url.hostname.includes('supabase')) return;
+
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => undefined);
           return res;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match('/')))
+        .catch(() =>
+          caches.match(req).then((r) => r || caches.match('/app') || caches.match('/'))
+        )
     );
     return;
   }
 
-  // Static assets: cache first
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res.ok && (url.origin === self.location.origin)) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
-    })
-  );
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res && res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => undefined);
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || network;
+      })
+    );
+  }
 });
