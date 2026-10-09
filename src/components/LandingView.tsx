@@ -202,7 +202,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-[#18203b] dark:bg-[#090a0f] dark:text-slate-100">
+    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100">
       <main>
         {/* HERO SECTION */}
         <section className="relative overflow-hidden">
@@ -394,7 +394,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
               <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#737ee0] sm:text-[10px]">
                 {t.landingStepsEyebrow}
               </span>
-              <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.035em] text-[#1c2541] sm:text-3xl dark:text-white">
+              <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.035em] text-slate-900 sm:text-3xl dark:text-white">
                 {t.landingHowTitle}
               </h2>
               <p className="mt-2 text-[11px] leading-relaxed text-[#8991a3] sm:text-sm dark:text-slate-400">
@@ -507,7 +507,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
               ))}
             </div>
 
-            <p className="relative mt-8 text-center text-[12px] text-white/35 sm:text-[13px]">
+            <p className="relative mt-8 text-center text-[12px] text-slate-500 sm:text-[13px] dark:text-slate-400">
               {t.landingPackagesFooter}
             </p>
           </div>
@@ -583,7 +583,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-[#e9e9ed] bg-[#faf9f6] px-4 pb-10 pt-8 dark:border-white/10 dark:bg-[#090a0f]">
+      <footer className="border-t border-slate-200/80 bg-white/70 px-4 pb-10 pt-8 backdrop-blur-sm dark:border-white/10 dark:bg-black/40">
         <div className="mx-auto flex max-w-[900px] flex-col items-center gap-5 text-center">
           {/* Telegram support pill */}
           <a
