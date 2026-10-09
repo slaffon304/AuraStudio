@@ -535,8 +535,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
-        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-28">
+      <div className="aura-modal-backdrop fixed inset-0 z-[60] overflow-y-auto overscroll-contain">
+        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-10">
           <div className="flex items-center gap-3 mb-4">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
               <ChevronLeft className="h-5 w-5" />
@@ -819,8 +819,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
-        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-28">
+      <div className="aura-modal-backdrop fixed inset-0 z-[60] overflow-y-auto overscroll-contain">
+        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-10">
           <div className="flex items-center gap-3 mb-5">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
               <ChevronLeft className="h-5 w-5" />
@@ -943,8 +943,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-black/20">
-      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white/92 dark:bg-[#0c0e14]/94 backdrop-blur-md shadow-2xl">
+    <div className="aura-modal-backdrop fixed inset-0 z-[60] overflow-y-auto overscroll-contain">
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] shadow-2xl">
       {/* HERO */}
       <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
         {afterUrl && (
@@ -973,7 +973,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         )}
       </div>
 
-      <div className="relative -mt-4 rounded-t-3xl bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-28 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]">
+      <div className="relative -mt-4 rounded-t-3xl bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
 
         {moreTemplates.length > 0 && (
