@@ -137,3 +137,17 @@ html.dark ::-webkit-scrollbar-thumb {
 .hero-word-out {
   animation: 0.5s ease-out both aura-word-out;
 }
+
+
+/* Full-screen modal backdrop — same paint as ambient, covers catalog */
+.aura-modal-backdrop {
+  background-color: #f4f2f0;
+  background-image: url('./assets/images/bg-light.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+html.dark .aura-modal-backdrop {
+  background-color: #07080c;
+  background-image: url('./assets/images/bg-dark.jpg');
+}
