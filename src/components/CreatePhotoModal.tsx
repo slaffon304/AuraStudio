@@ -54,7 +54,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setIsPhotoModalOpen,
     setIsAuthModalOpen,
     setCurrentView,
-    selectedTemplate: ctxSelectedTemplate
+    selectedTemplate: ctxSelectedTemplate,
+    studioMode
   } = useApp();
 
   const [template, setTemplate] = useState<PhotoTemplate | null>(null);
@@ -62,6 +63,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [photos1, setPhotos1] = useState<FacePhoto[]>([]);
   /** Person 2 (couple) */
   const [photos2, setPhotos2] = useState<FacePhoto[]>([]);
+  /** Pinterest reference image (not a face pack) */
+  const [refUrl, setRefUrl] = useState('');
+  const [pinLink, setPinLink] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  /** enhance: '2k' | '4k' */
+  const [enhanceRes, setEnhanceRes] = useState<'2k' | '4k'>('4k');
   const [age1, setAge1] = useState(25);
   const [age2, setAge2] = useState(25);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
@@ -76,6 +84,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [uploadTarget, setUploadTarget] = useState<'p1' | 'p2'>('p1');
   const [showTipModal, setShowTipModal] = useState(false);
   const [showUploadSheet, setShowUploadSheet] = useState(false);
+  const [showPinHelp, setShowPinHelp] = useState(false);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [stepText, setStepText] = useState('');
@@ -98,8 +107,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     // Do NOT auto-fill previous uploads
     setPhotos1([]);
     setPhotos2([]);
+    setRefUrl('');
+    setPinLink('');
+    setHeightCm('');
+    setWeightKg('');
+    setEnhanceRes('4k');
     setShowTipModal(false);
     setShowUploadSheet(false);
+    setShowPinHelp(false);
   }, [isOpen, initialTemplate, ctxSelectedTemplate, templates]);
 
   useEffect(() => {
@@ -447,6 +462,440 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
         </div>
         <p className="text-sm font-medium text-slate-600 text-center">{stepText}</p>
+      </div>
+    );
+  }
+
+
+  // ─── PINTEREST MODE ───────────────────────────────────────────
+  if (studioMode === 'pinterest') {
+    const canGen = Boolean(refUrl && photos1[0]);
+    const cost = 1;
+    const handlePinGen = async () => {
+      if (!currentUser) { setIsAuthModalOpen(true); return; }
+      if (!refUrl) { setErrorMessage(language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first'); return; }
+      if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
+      if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
+      setIsGenerating(true);
+      setStepText(t.progressStepAnalyze);
+      setErrorMessage(null);
+      try {
+        let promptExtra = '';
+        if (heightCm) promptExtra += ` Height about ${heightCm} cm.`;
+        if (weightKg) promptExtra += ` Weight about ${weightKg} kg.`;
+        const job = await createGenerationJob('custom-pinterest', photos1[0].url, photos1[0].id, {
+          mode: 'pinterest',
+          customReferenceUrl: refUrl,
+          aspectRatio: selectedAspectRatio,
+          age: age1,
+          extraPhotoUrls: photos1.slice(1).map((x) => x.url)
+        } as any);
+        setResultUrl(job.resultImageUrl || null);
+        setStepText(t.completed);
+      } catch (err: any) {
+        setIsGenerating(false);
+        setErrorMessage(err?.message || 'Error');
+      }
+    };
+    const onRefFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !currentUser) { if (!currentUser) setIsAuthModalOpen(true); return; }
+      setIsUploading(true);
+      try {
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = () => rej(new Error('read'));
+          r.readAsDataURL(file);
+        });
+        // store as data URL / upload
+        const up = await uploadPhoto(dataUrl, `ref_${file.name}`);
+        setRefUrl(up.url);
+      } catch (err: any) {
+        setErrorMessage(err?.message || 'Upload error');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    return (
+      <div className="fixed inset-0 z-[60] bg-[#f4f5f9] dark:bg-[#0c0e14] overflow-y-auto">
+        <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
+          <div className="flex items-center gap-3 mb-4">
+            <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-lg font-extrabold tracking-tight text-slate-900">AuraStudio <span className="text-violet-500">AI</span></span>
+            <span className="ml-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold px-2.5 py-1">
+              {language === 'ru' ? 'повтор' : language === 'en' ? 'replay' : 'replay'}
+            </span>
+          </div>
+
+          <div className="rounded-3xl bg-gradient-to-br from-violet-500 to-blue-700 text-white p-5 shadow-lg">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
+              {language === 'ru' ? 'Повтор по референсу' : language === 'en' ? 'Reference replay' : 'Replay pe referință'}
+            </p>
+            <h1 className="mt-1 text-2xl font-extrabold leading-tight">
+              {language === 'ru' ? 'Повтори фото с Pinterest' : language === 'en' ? 'Replay a Pinterest photo' : 'Refă o foto din Pinterest'}
+            </h1>
+            <p className="mt-2 text-sm text-white/90 leading-relaxed">
+              {language === 'ru'
+                ? 'Понравилось фото? Сделаем тебя в нём — без билетов в Италию и нового гардероба.'
+                : language === 'en'
+                  ? 'Like a photo? We put you in it — no trip or new wardrobe needed.'
+                  : 'Ți-a plăcut o poză? Te punem în ea — fără bilet și garderoba nouă.'}
+            </p>
+          </div>
+
+          <button type="button" onClick={() => setShowTipModal(true)} className="mt-4 w-full text-left rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 flex gap-3 items-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Camera className="h-5 w-5" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-900">{copy.tipTitle}</p>
+              <p className="text-xs text-amber-800/80 mt-0.5">{copy.tipBody}</p>
+            </div>
+            <span className="text-amber-600">›</span>
+          </button>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                {language === 'ru' ? 'Референс' : language === 'en' ? 'Reference' : 'Referință'}{' '}
+                <span className="normal-case font-medium text-violet-500">{language === 'ru' ? 'откуда' : language === 'en' ? 'from' : 'de unde'}</span>
+              </p>
+              <label className="flex aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white cursor-pointer overflow-hidden">
+                {refUrl ? <img src={refUrl} alt="" className="h-full w-full object-cover" /> : (<><Plus className="h-6 w-6 text-slate-400" /><span className="text-sm font-semibold text-slate-500 mt-1">{language === 'ru' ? 'Загрузить' : 'Upload'}</span></>)}
+                <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
+              </label>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                {language === 'ru' ? 'Ты' : language === 'en' ? 'You' : 'Tu'}{' '}
+                <span className="normal-case font-medium text-violet-500">{language === 'ru' ? 'кого вставляем' : language === 'en' ? 'who we insert' : 'pe cine inserăm'}</span>
+              </p>
+              <button type="button" onClick={() => openUpload('p1')} className="flex w-full aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden">
+                {photos1[0] ? <img src={photos1[0].url} alt="" className="h-full w-full object-cover" /> : (<><Plus className="h-6 w-6 text-slate-400" /><span className="text-sm font-semibold text-slate-500 mt-1">{language === 'ru' ? 'Загрузить' : 'Upload'}</span></>)}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowPinHelp(true)}
+            className="mt-5 w-full text-left rounded-2xl bg-white border border-slate-200 px-4 py-3.5 flex gap-3 items-center shadow-sm"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e60023]/10 text-[#e60023] text-lg font-black">
+              P
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900">
+                {language === 'ru'
+                  ? 'Как сохранить картинку из Pinterest'
+                  : language === 'en'
+                    ? 'How to save an image from Pinterest'
+                    : 'Cum salvezi o imagine din Pinterest'}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {language === 'ru'
+                  ? 'Нажми сюда — два простых шага, затем загрузи файл в «Референс»'
+                  : language === 'en'
+                    ? 'Tap here — two simple steps, then upload the file as Reference'
+                    : 'Apasă aici — doi pași simpli, apoi încarcă fișierul la Referință'}
+              </p>
+            </div>
+            <span className="text-slate-400 text-lg">›</span>
+          </button>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Рост · опц.' : 'Height · opt.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3">
+                <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="165" />
+                <span className="text-xs text-slate-400 font-semibold">CM</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Вес · опц.' : 'Weight · opt.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3">
+                <input value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="48" />
+                <span className="text-xs text-slate-400 font-semibold">KG</span>
+              </div>
+            </div>
+          </div>
+
+          {errorMessage && (
+            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />{errorMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handlePinGen}
+            disabled={isUploading || isGenerating}
+            className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 disabled:bg-violet-300"
+          >
+            {!refUrl
+              ? (language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first')
+              : !photos1[0]
+                ? copy.needPhoto
+                : (language === 'ru' ? `Сгенерировать · ${cost} фото` : `Generate · ${cost} photo`)}
+          </button>
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            {language === 'ru' ? 'формат наследуется с референса · 1 фото с баланса' : 'format follows reference · 1 photo from balance'}
+          </p>
+        </div>
+
+
+        {showPinHelp && (
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-start mb-2">
+                <h2 className="text-xl font-extrabold text-slate-900 pr-6 leading-snug">
+                  {language === 'ru'
+                    ? 'Как сохранить картинку из Pinterest'
+                    : language === 'en'
+                      ? 'How to save an image from Pinterest'
+                      : 'Cum salvezi o imagine din Pinterest'}
+                </h2>
+                <button type="button" onClick={() => setShowPinHelp(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                {language === 'ru'
+                  ? 'Скачай картинку на телефон, затем загрузи её в слот «Референс» на этом экране.'
+                  : language === 'en'
+                    ? 'Save the image to your phone, then upload it into the Reference slot on this screen.'
+                    : 'Salvează imaginea pe telefon, apoi încarc-o în slotul Referință de pe acest ecran.'}
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-1.5">1</p>
+                  <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
+                    <img
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.jpeg"
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 leading-snug">
+                    {language === 'ru'
+                      ? 'Открой пин → нажми «…» или «Поделиться» → «Скачать изображение»'
+                      : language === 'en'
+                        ? 'Open the pin → Share / … → Download image'
+                        : 'Deschide pinul → Share / … → Download image'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-1.5">2</p>
+                  <div className="aspect-[3/4] rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center">
+                    <img
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.jpeg"
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 leading-snug">
+                    {language === 'ru'
+                      ? 'Вернись сюда и загрузи скачанный файл в «Референс»'
+                      : language === 'en'
+                        ? 'Come back here and upload the file into Reference'
+                        : 'Revino aici și încarcă fișierul în Referință'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPinHelp(false)}
+                className="mt-6 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white"
+              >
+                {copy.continue}
+              </button>
+            </div>
+          </div>
+        )}
+        {showTipModal && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-0">
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex justify-end"><button type="button" onClick={() => setShowTipModal(false)}><X className="h-5 w-5 text-slate-400" /></button></div>
+              <h2 className="text-xl font-extrabold">{copy.tipModalTitle}</h2>
+              <p className="mt-3 text-sm text-slate-500">{copy.tipModalBody}</p>
+              <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+            </div>
+          </div>
+        )}
+        {showUploadSheet && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {Array.from({ length: MAX_FACE_PHOTOS }).map((_, i) => {
+                  const ph = photos1[i];
+                  return ph ? (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button key={i} type="button" onClick={triggerFilePick} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-center text-xs text-slate-400">{copy.loaded(photos1.length)}</p>
+              <button type="button" onClick={() => setShowUploadSheet(false)} className="mt-3 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+      </div>
+    );
+  }
+
+  // ─── ENHANCE / 4K MODE ────────────────────────────────────────
+  if (studioMode === 'enhance') {
+    const cost = enhanceRes === '4k' ? 2 : 1;
+    const handleEnhance = async () => {
+      if (!currentUser) { setIsAuthModalOpen(true); return; }
+      if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
+      if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
+      setIsGenerating(true);
+      setStepText(t.progressStepAnalyze);
+      setErrorMessage(null);
+      try {
+        const job = await createGenerationJob('enhance-quality', photos1[0].url, photos1[0].id, {
+          mode: 'enhance' as any,
+          aspectRatio: selectedAspectRatio,
+          quality4k: enhanceRes === '4k'
+        } as any);
+        setResultUrl(job.resultImageUrl || null);
+        setStepText(t.completed);
+      } catch (err: any) {
+        setIsGenerating(false);
+        setErrorMessage(err?.message || 'Error');
+      }
+    };
+    return (
+      <div className="fixed inset-0 z-[60] bg-[#f4f5f9] dark:bg-[#0c0e14] overflow-y-auto">
+        <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
+          <div className="flex items-center gap-3 mb-5">
+            <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-lg font-extrabold text-slate-900">AuraStudio <span className="text-violet-500">AI</span></span>
+          </div>
+
+          <h1 className="text-2xl font-extrabold text-slate-900">
+            {language === 'ru' ? 'Улучшить качество' : language === 'en' ? 'Enhance quality' : 'Îmbunătățește calitatea'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+            {language === 'ru'
+              ? 'Загрузи фото и выбери разрешение — вернём резкий HD-кадр за пару минут.'
+              : language === 'en'
+                ? 'Upload a photo and pick resolution — get a sharp HD frame in a couple of minutes.'
+                : 'Încarcă o poză și alege rezoluția — primești un cadru HD clar în câteva minute.'}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => openUpload('p1')}
+            className="mt-6 w-full aspect-[4/5] max-h-[320px] rounded-3xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center gap-2 overflow-hidden"
+          >
+            {photos1[0] ? (
+              <img src={photos1[0].url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+                  <Plus className="h-7 w-7" />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">{language === 'ru' ? 'Загрузить фото' : 'Upload photo'}</span>
+                <span className="text-xs text-slate-400">jpg, png или webp</span>
+              </>
+            )}
+          </button>
+
+          <p className="mt-6 text-sm font-semibold text-slate-700">
+            {language === 'ru' ? 'Разрешение' : language === 'en' ? 'Resolution' : 'Rezoluție'}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setEnhanceRes('2k')}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${enhanceRes === '2k' ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-extrabold">2K</span>
+                <Sparkles className="h-4 w-4 text-slate-400" />
+              </div>
+              <p className="mt-1 text-xs text-slate-500 leading-snug">
+                {language === 'ru' ? 'Резче и крупнее — для сторис и печати.' : 'Sharper — for stories and print.'}
+              </p>
+              <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">✦ 1 {language === 'en' ? 'photo' : 'фото'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnhanceRes('4k')}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${enhanceRes === '4k' ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-extrabold">4K</span>
+                <Sparkles className="h-4 w-4 text-violet-500" />
+              </div>
+              <p className="mt-1 text-xs text-slate-500 leading-snug">
+                {language === 'ru' ? 'Максимум чёткости для большого экрана.' : 'Max clarity for large screens.'}
+              </p>
+              <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">✦ 2 {language === 'en' ? 'photos' : 'фото'}</span>
+            </button>
+          </div>
+
+          {errorMessage && (
+            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />{errorMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleEnhance}
+            disabled={isUploading || isGenerating}
+            className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 disabled:bg-violet-300 flex items-center justify-center gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            {!photos1[0]
+              ? copy.needPhoto
+              : language === 'ru'
+                ? `Улучшить за ${cost} фото`
+                : language === 'en'
+                  ? `Enhance for ${cost} photo${cost > 1 ? 's' : ''}`
+                  : `Îmbunătățește · ${cost} foto`}
+          </button>
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            {language === 'ru' ? '≈ 2 минуты · без водяного знака · вернём фото при сбое' : '≈ 2 min · no watermark · refund on failure'}
+          </p>
+        </div>
+        {showUploadSheet && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {Array.from({ length: MAX_FACE_PHOTOS }).map((_, i) => {
+                  const ph = photos1[i];
+                  return ph ? (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button key={i} type="button" onClick={triggerFilePick} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={() => setShowUploadSheet(false)} className="mt-4 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
       </div>
     );
   }
