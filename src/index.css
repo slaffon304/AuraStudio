@@ -78,15 +78,25 @@ html.dark .aura-ambient::after {
   );
 }
 
-/* Контент над фоном */
-.aura-stage > :not(.aura-ambient) {
+/* Контент над фоном — НЕ трогаем fixed-модалки (иначе position:relative
+   перебивает fixed и окно генерации уезжает вниз страницы). */
+.aura-stage > main,
+.aura-stage > header {
   position: relative;
   z-index: 1;
 }
 
+/* Full-screen generation / auth overlays above header & bottom nav */
+.aura-modal-backdrop,
+.aura-modal-root {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 250 !important;
+}
+
 /* Header и меню всегда выше страницы */
 .aura-stage > header {
-  z-index: 9990 !important;
+  z-index: 40 !important;
 }
 
 ::-webkit-scrollbar {
