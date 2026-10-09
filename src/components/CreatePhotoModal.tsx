@@ -535,16 +535,17 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="aura-modal-backdrop fixed inset-0 z-[120] overflow-y-auto overscroll-contain">
-        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
-              <ChevronLeft className="h-5 w-5" />
+      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/40">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+          <div className="mb-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900">AuraStudio <span className="text-violet-500">AI</span></span>
-            <span className="ml-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold px-2.5 py-1">
-              {language === 'ru' ? 'повтор' : language === 'en' ? 'replay' : 'replay'}
-            </span>
           </div>
 
           <div className="rounded-3xl bg-gradient-to-br from-violet-500 to-blue-700 text-white p-5 shadow-lg">
@@ -819,19 +820,23 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="aura-modal-backdrop fixed inset-0 z-[120] overflow-y-auto overscroll-contain">
-        <div className="max-w-lg mx-auto min-h-full px-4 pt-3 pb-10">
-          <div className="flex items-center gap-3 mb-5">
-            <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
-              <ChevronLeft className="h-5 w-5" />
+      <div className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/40">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+          <div className="mb-5 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
-            <span className="text-lg font-extrabold text-slate-900">AuraStudio <span className="text-violet-500">AI</span></span>
           </div>
 
-          <h1 className="text-2xl font-extrabold text-slate-900">
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
             {language === 'ru' ? 'Улучшить качество' : language === 'en' ? 'Enhance quality' : 'Îmbunătățește calitatea'}
           </h1>
-          <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             {language === 'ru'
               ? 'Загрузи фото и выбери разрешение — вернём резкий HD-кадр за пару минут.'
               : language === 'en'
@@ -963,8 +968,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </button>
           </div>
         )}
-        <button type="button" onClick={onClose} className="absolute top-14 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg ring-1 ring-black/10">
-          <ChevronLeft className="h-5 w-5" />
+        <button type="button" onClick={onClose} className="absolute top-14 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg ring-1 ring-black/10" aria-label="Back">
+          <ChevronLeft className="h-6 w-6 text-slate-900" strokeWidth={2.5} />
         </button>
         {hintVisible && beforeUrl && (
           <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
