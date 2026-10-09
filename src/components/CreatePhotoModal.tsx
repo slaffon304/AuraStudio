@@ -963,7 +963,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </button>
           </div>
         )}
-        <button type="button" onClick={onClose} className="absolute top-3 left-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow">
+        <button type="button" onClick={onClose} className="absolute top-3 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg ring-1 ring-black/10">
           <ChevronLeft className="h-5 w-5" />
         </button>
         {hintVisible && beforeUrl && (
@@ -1114,7 +1114,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         </div>
 
         <div className="mt-6 space-y-3 pb-2">
-          <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 leading-relaxed shadow-sm">
+          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 leading-relaxed shadow-sm">
             {language === 'ru' ? (
               <>
                 Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram{' '}
@@ -1141,10 +1141,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               </>
             )}
           </div>
-          <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
+          <div className="rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
             {copy.honest} ❤️
           </div>
-          <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600 text-white font-semibold py-3.5 text-sm shadow-lg shadow-blue-600/20">
+          <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="mt-5 flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600 text-white font-semibold py-3.5 text-sm shadow-lg shadow-blue-600/20">
             <Send className="h-4 w-4" />
             {copy.tgBtn}
           </a>
