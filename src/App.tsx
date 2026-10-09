@@ -32,7 +32,7 @@ const MainAppContent: React.FC = () => {
     quickSelectTemplate,
     selectedTemplate,
     openCustomPinterest,
-    openCoupleStudio,
+    openEnhanceQuality,
     isBackendConnected
   } = useApp();
 
@@ -77,7 +77,7 @@ const MainAppContent: React.FC = () => {
             onPreview={(tmpl) => setPreviewTemplate(tmpl)}
             onSelect={(tmpl) => quickSelectTemplate(tmpl)}
             onPinterest={() => openCustomPinterest()}
-            onCouple={() => openCoupleStudio()}
+            onEnhance={() => openEnhanceQuality()}
           />
         )}
 
