@@ -30,7 +30,7 @@ export interface LocalizedString {
   en: string;
 }
 
-export type StudioMode = 'template' | 'pinterest' | 'couple';
+export type StudioMode = 'template' | 'pinterest' | 'couple' | 'enhance';
 export type GenderCategory = 'all' | 'women' | 'men' | 'couples';
 
 export interface PhotoTemplate {
