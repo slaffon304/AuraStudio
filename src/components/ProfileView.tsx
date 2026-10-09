@@ -225,7 +225,7 @@ export const ProfileView: React.FC = () => {
       </div>
 
       {/* Account card */}
-      <section className="rounded-[24px] bg-white p-5 shadow-[0_8px_30px_rgba(30,40,80,0.06)] dark:bg-[#12141c] dark:shadow-none border border-slate-100/80 dark:border-white/5">
+      <section className="rounded-[24px] bg-white/95 backdrop-blur-sm p-5 shadow-[0_8px_30px_rgba(30,40,80,0.12)] dark:bg-[#12141c]/95 dark:shadow-none border border-slate-200 dark:border-white/10">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{L.account}</p>
         <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white break-all">{email}</p>
 
@@ -258,7 +258,7 @@ export const ProfileView: React.FC = () => {
             setCurrentView('gallery');
             window.history.pushState({}, '', viewToPath('gallery'));
           }}
-          className="rounded-[20px] bg-white p-4 text-left shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5"
+          className="rounded-[20px] bg-white/95 backdrop-blur-sm p-4 text-left shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
             <ImageIcon className="h-4 w-4 text-[#4f63f0]" />
@@ -270,7 +270,7 @@ export const ProfileView: React.FC = () => {
         </button>
         <button
           type="button"
-          className="rounded-[20px] bg-white p-4 text-left shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5 opacity-80"
+          className="rounded-[20px] bg-white/95 backdrop-blur-sm p-4 text-left shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10 opacity-80"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
             <Play className="h-4 w-4 text-[#4f63f0]" />
@@ -289,7 +289,7 @@ export const ProfileView: React.FC = () => {
           setCurrentView('library');
           window.history.pushState({}, '', viewToPath('library'));
         }}
-        className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white p-4 shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5 text-left"
+        className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white/95 backdrop-blur-sm p-4 shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10 text-left"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
           <FolderHeart className="h-4 w-4 text-[#4f63f0]" />
@@ -312,7 +312,7 @@ export const ProfileView: React.FC = () => {
           window.history.pushState({}, '', viewToPath('history' as any));
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white p-4 shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5 text-left"
+        className="mt-3 flex w-full items-center gap-3 rounded-[20px] bg-white/95 backdrop-blur-sm p-4 shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10 text-left"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
           <ArrowUpDown className="h-4 w-4 text-[#4f63f0]" />
@@ -328,7 +328,7 @@ export const ProfileView: React.FC = () => {
       </button>
 
       {/* Level (UI structure; rewards later) */}
-      <section className="mt-4 rounded-[24px] bg-white p-5 shadow-sm border border-slate-100 dark:bg-[#12141c] dark:border-white/5">
+      <section className="mt-4 rounded-[24px] bg-white/95 backdrop-blur-sm p-5 shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{L.levelTitle}</p>
         <div className="mt-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
