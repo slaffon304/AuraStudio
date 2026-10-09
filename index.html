@@ -2,9 +2,18 @@
 <html lang="ro" class="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>AuraStudio — AI Photo Shoot Studio</title>
     <meta name="description" content="Creează ședințe foto editoriale și avatare de studio din selfie-urile tale în 10 secunde cu inteligență artificială." />
+    <meta name="theme-color" content="#4f63f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#07080c" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AuraStudio" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/pwa-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192.png" />
     <meta property="og:title" content="AuraStudio — AI Photo Shoot Studio" />
     <meta property="og:description" content="Creează ședințe foto editoriale și avatare de studio din selfie-urile tale în 10 secunde cu inteligență artificială." />
     <meta property="og:type" content="website" />
@@ -16,6 +25,12 @@
   <body class="bg-[#f8fafc] text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 antialiased selection:bg-amber-500/20 selection:text-amber-800 dark:selection:text-amber-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>
-
