@@ -315,7 +315,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
   } = req.body;
   const userId = req.user!.id;
 
-  if (!templateId && !customReferenceUrl) {
+  if (!templateId && !customReferenceUrl && mode !== 'enhance' && mode !== 'pinterest') {
     return res.status(400).json({ error: 'Parametrul templateId sau customReferenceUrl este obligatoriu.' });
   }
 
@@ -426,7 +426,9 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     let mimeType = 'image/jpeg';
 
     let promptContext = template.prompt;
-    if (mode === 'pinterest' || customReferenceUrl) {
+    if (mode === 'enhance') {
+      promptContext = `Enhance and upscale this photograph to ultra-sharp high resolution. Preserve the exact identity, face, skin texture, clothing and composition. Reduce noise, improve clarity and micro-contrast, natural colors, no beauty filters, no identity change. Photorealistic HD result.`;
+    } else if (mode === 'pinterest' || customReferenceUrl) {
       promptContext = `Transfer the exact identity, facial structure, eyes, and skin details of the person in the user's selfie into the aesthetic style, outfit, lighting, pose, and background mood of the reference image. Maintain 100% facial resemblance while achieving pristine European editorial fashion photography, cinematic 85mm lens, 4k ultra-hd.`;
     } else if (mode === 'couple' && partnerPhotoUrl) {
       promptContext = `Create a breathtaking romantic couple photoshoot featuring both individuals from the provided photos. Person 1 is on the left and Person 2 is on the right, embracing warmly in a luxurious romantic setting: ${template.prompt}. Pristine facial resemblance for both persons, cinematic golden hour lighting, 85mm lens.`;
