@@ -64,7 +64,7 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
 
-      <main className="relative z-10 flex-1">
+      <main className="relative z-[1] flex-1">
         {currentView === 'landing' && (
           <LandingView
             onGoToApp={() => {
