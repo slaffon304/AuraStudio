@@ -246,7 +246,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
         )}
 
         {/* 3 action tiles — square, not stretched full width */}
-        <div className="relative z-10 mt-4 flex gap-2.5">
+        <div className="relative z-10 mt-4 flex justify-center gap-2.5">
           <button
             type="button"
             onClick={onPinterest}
