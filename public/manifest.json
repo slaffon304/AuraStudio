@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "AuraStudio — AI Photo Shoot Studio",
+  "short_name": "AuraStudio",
+  "description": "Creează ședințe foto editoriale și avatare de studio din selfie-urile tale în 10 secunde cu inteligență artificială.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07080c",
+  "theme_color": "#4f63f0",
+  "lang": "ro",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
