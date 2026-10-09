@@ -48,7 +48,10 @@ const MainAppContent: React.FC = () => {
   }, [setCurrentView]);
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-white text-slate-900 dark:bg-[#090a0f] dark:text-slate-100 flex flex-col transition-colors">
+    <div className="aura-stage min-h-screen w-full overflow-x-hidden text-slate-900 dark:text-slate-100 flex flex-col transition-colors">
+      {/* Fixed ambient: geometry + ember/teal — light & dark via CSS */}
+      <div className="aura-ambient" aria-hidden="true" />
+
       <Header />
       <EmailConfirmBanner />
 
@@ -94,19 +97,19 @@ const MainAppContent: React.FC = () => {
         )}
 
         {currentView === ('profile' as any) && (
-          <div className="pb-20 md:pb-10 bg-[#f4f5f9] dark:bg-[#090a0f] min-h-[70vh]">
+          <div className="pb-20 md:pb-10 min-h-[70vh]">
             <ProfileView />
           </div>
         )}
 
         {currentView === ('history' as any) && (
-          <div className="pb-20 md:pb-10 bg-[#f4f5f9] dark:bg-[#090a0f] min-h-[70vh]">
+          <div className="pb-20 md:pb-10 min-h-[70vh]">
             <HistoryView />
           </div>
         )}
 
         {currentView === ('levels' as any) && (
-          <div className="pb-20 md:pb-10 bg-[#f4f5f9] dark:bg-[#090a0f] min-h-[70vh]">
+          <div className="pb-20 md:pb-10 min-h-[70vh]">
             <LevelsView />
           </div>
         )}
