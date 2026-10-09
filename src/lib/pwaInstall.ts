@@ -17,7 +17,8 @@ function notify() {
 }
 
 function getDeferred(): BeforeInstallPromptEvent | null {
-  return (typeof window !== 'undefined' && window.__pwaDeferred) || null;
+  if (typeof window === 'undefined') return null;
+  return window.__pwaDeferred || null;
 }
 
 export function isStandalone(): boolean {
@@ -56,19 +57,22 @@ export function shouldShowInstallEntry(): boolean {
   return !isStandalone();
 }
 
-export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
+/** Только из обработчика клика — сразу, без await перед prompt */
+export function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
   const evt = getDeferred();
-  if (!evt) return 'unavailable';
-  try {
-    await evt.prompt();
-    const { outcome } = await evt.userChoice;
-    window.__pwaDeferred = null;
-    if (outcome !== 'accepted') markInstallPromptSeen();
-    notify();
-    return outcome;
-  } catch {
-    return 'unavailable';
-  }
+  if (!evt) return Promise.resolve('unavailable');
+
+  // prompt() сразу, в том же тике что и клик
+  const p = evt.prompt();
+  return p
+    .then(() => evt.userChoice)
+    .then(({ outcome }) => {
+      window.__pwaDeferred = null;
+      if (outcome !== 'accepted') markInstallPromptSeen();
+      notify();
+      return outcome;
+    })
+    .catch(() => 'unavailable' as const);
 }
 
 export function subscribePwaInstall(cb: () => void): () => void {
@@ -79,7 +83,6 @@ export function subscribePwaInstall(cb: () => void): () => void {
 export function initPwaInstallListeners() {
   if (typeof window === 'undefined') return;
 
-  // если событие уже поймал inline-скрипт в index.html
   if (window.__pwaDeferred) notify();
 
   window.addEventListener('pwa-deferred-ready', () => notify());
