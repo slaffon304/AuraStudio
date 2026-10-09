@@ -245,12 +245,12 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   </>
         )}
 
-{/* 3 action tiles — always visible, solid colors */}
-        <div className="relative z-10 mt-4 grid grid-cols-3 gap-2.5">
+        {/* 3 action tiles — square, not stretched full width */}
+        <div className="relative z-10 mt-4 flex gap-2.5">
           <button
             type="button"
             onClick={onPinterest}
-            className="relative z-10 flex h-[112px] flex-col justify-between rounded-[20px] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3" style={{ backgroundColor: "#e60023" }}
+            className="relative z-10 flex aspect-square w-[31%] max-w-[120px] flex-col justify-between rounded-[20px] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:rounded-[22px] md:px-3 md:py-3" style={{ backgroundColor: "#e60023" }}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 md:h-9 md:w-9">
               <PinterestMark />
@@ -284,7 +284,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <button
             type="button"
             onClick={onEnhance}
-            className="relative z-10 flex h-[112px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-md transition-transform active:scale-[0.98] dark:bg-[#1a1d2a] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3"
+            className="relative z-10 flex aspect-square w-[31%] max-w-[120px] flex-col justify-between rounded-[20px] bg-white px-2.5 py-2.5 text-left shadow-md transition-transform active:scale-[0.98] dark:bg-[#1a1d2a] md:rounded-[22px] md:px-3 md:py-3"
           >
             <span className="flex items-center justify-between">
               <span className="text-[18px] font-black tracking-tight text-[#12152a] dark:text-white md:text-[19px]">
@@ -321,7 +321,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <button
             type="button"
             onClick={() => setTgOpen(true)}
-            className="relative z-10 flex h-[112px] flex-col justify-between rounded-[20px] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:h-[120px] md:rounded-[22px] md:px-3 md:py-3" style={{ backgroundColor: "#3b9eff" }}
+            className="relative z-10 flex aspect-square w-[31%] max-w-[120px] flex-col justify-between rounded-[20px] px-2.5 py-2.5 text-left text-white transition-transform active:scale-[0.98] md:rounded-[22px] md:px-3 md:py-3" style={{ backgroundColor: "#3b9eff" }}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 md:h-9 md:w-9">
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
