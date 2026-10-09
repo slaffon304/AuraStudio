@@ -32,7 +32,7 @@
 
 /* =========================================================
    AuraStudio ambient — photo backgrounds (light / dark)
-   Fixed, cover, no tile. Paths relative to this file (src/).
+   Veil is light so paint stays visible.
    ========================================================= */
 
 .aura-stage {
@@ -60,25 +60,25 @@ html.dark .aura-ambient {
   background-image: url('./assets/images/bg-dark.jpg');
 }
 
-/* Soft center veil — keeps search / titles readable */
+/* Lighter veil — background more visible (was ~0.55 center) */
 .aura-ambient::after {
   content: '';
   position: absolute;
   inset: 0;
   background: radial-gradient(
-    ellipse 75% 70% at 50% 40%,
-    rgba(255, 255, 255, 0.55) 0%,
-    rgba(255, 255, 255, 0.2) 45%,
-    transparent 75%
+    ellipse 70% 65% at 50% 40%,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 78%
   );
 }
 
 html.dark .aura-ambient::after {
   background: radial-gradient(
-    ellipse 75% 70% at 50% 40%,
-    rgba(7, 8, 12, 0.5) 0%,
-    rgba(7, 8, 12, 0.25) 45%,
-    transparent 75%
+    ellipse 70% 65% at 50% 40%,
+    rgba(7, 8, 12, 0.28) 0%,
+    rgba(7, 8, 12, 0.12) 50%,
+    transparent 78%
   );
 }
 
