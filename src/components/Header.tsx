@@ -9,11 +9,18 @@ import {
   Shield,
   Menu,
   X,
-  Images
+  Images,
+  Download
 } from 'lucide-react';
 import { Language } from '../types';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, setAfterAuthRedirect } from '../lib/navigation';
+import {
+  canPromptInstall,
+  isStandalone,
+  promptInstall,
+  subscribePwaInstall
+} from '../lib/pwaInstall';
 
 export const Header: React.FC = () => {
   const {
@@ -32,6 +39,7 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
 
   const languages: { code: Language; label: string }[] = [
@@ -54,6 +62,12 @@ export const Header: React.FC = () => {
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setCanInstall(canPromptInstall() && !isStandalone());
+    sync();
+    return subscribePwaInstall(sync);
   }, []);
 
   const navigate = (
@@ -110,6 +124,12 @@ export const Header: React.FC = () => {
   const tariffsLabel = language === 'ru' ? 'Тарифы' : language === 'en' ? 'Pricing' : 'Tarife';
   const profileLabel = language === 'ru' ? 'Профиль' : language === 'en' ? 'Profile' : 'Profil';
   const loginLabel = language === 'ru' ? 'Вход' : language === 'en' ? 'Log in' : 'Autentificare';
+  const installLabel =
+    language === 'ru'
+      ? 'Установить приложение'
+      : language === 'en'
+      ? 'Install app'
+      : 'Instalează aplicația';
   const themeLabel =
     theme === 'light'
       ? language === 'ru'
@@ -165,7 +185,6 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          {/* Burger — same on mobile and desktop */}
           <div className="relative">
             <button
               type="button"
@@ -212,6 +231,23 @@ export const Header: React.FC = () => {
                   )}
                   <span>{themeLabel}</span>
                 </button>
+
+                {canInstall && (
+                  <>
+                    <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsBurgerOpen(false);
+                        await promptInstall();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 font-semibold"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>{installLabel}</span>
+                    </button>
+                  </>
+                )}
 
                 <div className="my-1.5 border-t border-slate-100 dark:border-white/5" />
 
