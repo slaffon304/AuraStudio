@@ -114,26 +114,10 @@ export const Header: React.FC = () => {
     }
   };
 
-  const onInstallClick = async () => {
+  const onInstallClick = () => {
     setIsBurgerOpen(false);
-    if (canNativeInstall()) {
-      await promptInstall();
-      return;
-    }
-    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const msg =
-      language === 'ru'
-        ? isIos
-          ? 'На iPhone: кнопка «Поделиться» → «На экран «Домой»».'
-          : 'В Chrome: меню ⋮ → «Установить приложение» / «Добавить на главный экран».'
-        : language === 'en'
-        ? isIos
-          ? 'On iPhone: Share → Add to Home Screen.'
-          : 'In Chrome: menu ⋮ → Install app / Add to Home screen.'
-        : isIos
-        ? 'Pe iPhone: Partajează → Pe ecranul principal.'
-        : 'În Chrome: meniu ⋮ → Instalează aplicația.';
-    window.alert(msg);
+    if (!canNativeInstall()) return;
+    promptInstall();
   };
 
   const photoLabel = language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto';
@@ -148,10 +132,10 @@ export const Header: React.FC = () => {
   const loginLabel = language === 'ru' ? 'Вход' : language === 'en' ? 'Log in' : 'Autentificare';
   const installLabel =
     language === 'ru'
-      ? 'Установить приложение'
+      ? 'На главный экран'
       : language === 'en'
-      ? 'Install app'
-      : 'Instalează aplicația';
+      ? 'Add to Home screen'
+      : 'Pe ecranul principal';
   const themeLabel =
     theme === 'light'
       ? language === 'ru'
