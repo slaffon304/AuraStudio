@@ -191,11 +191,11 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          <div className="relative z-[110]">
+          <div className="relative">
             <button
               type="button"
               onClick={() => setIsBurgerOpen((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#12141c] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
               aria-label="Menu"
               aria-expanded={isBurgerOpen}
             >
@@ -203,7 +203,13 @@ export const Header: React.FC = () => {
             </button>
 
             {isBurgerOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-2 shadow-2xl z-[120]">
+              <>
+                <div
+                  className="fixed inset-0 z-[9998]"
+                  aria-hidden="true"
+                  onClick={() => setIsBurgerOpen(false)}
+                />
+                <div className="fixed top-[3.5rem] right-3 sm:right-6 lg:right-8 z-[9999] w-56 rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#12141c] p-2 shadow-2xl">
                 <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   {t.language}
                 </div>
@@ -299,6 +305,7 @@ export const Header: React.FC = () => {
                   </>
                 )}
               </div>
+              </>
             )}
           </div>
         </div>
