@@ -11,8 +11,7 @@
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    /* Warm paper — not pure white */
-    background-color: #f3f1ec;
+    background-color: #ebe8e2;
     color: #0f172a;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
@@ -32,10 +31,8 @@
 }
 
 /* =========================================================
-   AuraStudio ambient stage
-   Light: soft ember + teal facets on warm paper
-   Dark: deep slate, ember glow, cyan edge — same geometry language
-   Fixed, non-interactive, under all UI
+   AuraStudio ambient — ONLY the fixed layer, never touch
+   position of Header / modals / main children
    ========================================================= */
 
 .aura-stage {
@@ -53,57 +50,49 @@
   overflow: hidden;
 }
 
-/* Soft color fields */
+/* Soft color fields — stronger on light so pattern is visible */
 .aura-ambient::before {
   content: '';
   position: absolute;
   inset: -20%;
   background:
-    /* warm ember — top right */
-    radial-gradient(ellipse 55% 45% at 88% 8%, rgba(255, 120, 40, 0.18), transparent 60%),
-    /* cool teal — bottom left */
-    radial-gradient(ellipse 50% 50% at 6% 92%, rgba(30, 110, 140, 0.14), transparent 58%),
-    /* soft violet mid */
-    radial-gradient(ellipse 40% 35% at 50% 40%, rgba(99, 90, 200, 0.07), transparent 70%),
-    /* secondary ember wash */
-    radial-gradient(ellipse 35% 30% at 20% 20%, rgba(255, 160, 80, 0.08), transparent 65%);
-  filter: blur(8px);
+    radial-gradient(ellipse 55% 45% at 88% 8%, rgba(255, 110, 30, 0.32), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 6% 92%, rgba(30, 120, 150, 0.26), transparent 58%),
+    radial-gradient(ellipse 40% 35% at 50% 40%, rgba(99, 90, 200, 0.14), transparent 70%),
+    radial-gradient(ellipse 35% 30% at 20% 20%, rgba(255, 150, 70, 0.16), transparent 65%);
+  filter: blur(6px);
   transform: translateZ(0);
 }
 
 html.dark .aura-ambient::before {
   background:
-    radial-gradient(ellipse 55% 45% at 90% 5%, rgba(255, 110, 30, 0.16), transparent 58%),
-    radial-gradient(ellipse 50% 50% at 4% 95%, rgba(40, 160, 190, 0.12), transparent 55%),
-    radial-gradient(ellipse 40% 35% at 45% 45%, rgba(80, 70, 180, 0.1), transparent 70%),
-    radial-gradient(ellipse 30% 28% at 70% 70%, rgba(255, 80, 40, 0.07), transparent 60%);
-  filter: blur(12px);
+    radial-gradient(ellipse 55% 45% at 90% 5%, rgba(255, 110, 30, 0.22), transparent 58%),
+    radial-gradient(ellipse 50% 50% at 4% 95%, rgba(40, 170, 200, 0.18), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 45% 45%, rgba(80, 70, 180, 0.14), transparent 70%),
+    radial-gradient(ellipse 30% 28% at 70% 70%, rgba(255, 80, 40, 0.1), transparent 60%);
+  filter: blur(10px);
 }
 
-/* Faceted geometry + ink splatter language (inspired by reference, not a photo) */
 .aura-ambient::after {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.45;
+  opacity: 0.7;
   background-image:
-    /* diagonal split energy */
     linear-gradient(
       125deg,
       transparent 0%,
       transparent 42%,
-      rgba(20, 40, 55, 0.04) 42.5%,
-      rgba(255, 100, 30, 0.05) 58%,
+      rgba(20, 40, 55, 0.07) 42.5%,
+      rgba(255, 100, 30, 0.09) 58%,
       transparent 58.5%,
       transparent 100%
     ),
-    /* soft hex lattice */
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cpath fill='none' stroke='%231e293b' stroke-opacity='0.06' stroke-width='1' d='M30 2 L90 2 L120 52 L90 102 L30 102 L0 52 Z M60 2 L60 102 M30 2 L90 102 M90 2 L30 102'/%3E%3C/svg%3E"),
-    /* micro ink dots */
-    radial-gradient(circle at 18% 30%, rgba(15, 23, 42, 0.06) 0 1px, transparent 2px),
-    radial-gradient(circle at 72% 58%, rgba(15, 23, 42, 0.05) 0 1.5px, transparent 3px),
-    radial-gradient(circle at 40% 78%, rgba(15, 23, 42, 0.04) 0 1px, transparent 2px),
-    radial-gradient(circle at 85% 22%, rgba(255, 90, 20, 0.07) 0 1px, transparent 2px);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cpath fill='none' stroke='%231e293b' stroke-opacity='0.1' stroke-width='1' d='M30 2 L90 2 L120 52 L90 102 L30 102 L0 52 Z M60 2 L60 102 M30 2 L90 102 M90 2 L30 102'/%3E%3C/svg%3E"),
+    radial-gradient(circle at 18% 30%, rgba(15, 23, 42, 0.08) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 58%, rgba(15, 23, 42, 0.07) 0 1.5px, transparent 3px),
+    radial-gradient(circle at 40% 78%, rgba(15, 23, 42, 0.06) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 22%, rgba(255, 90, 20, 0.1) 0 1px, transparent 2px);
   background-size:
     auto,
     120px 104px,
@@ -116,32 +105,28 @@ html.dark .aura-ambient::before {
 }
 
 html.dark .aura-ambient::after {
-  opacity: 0.55;
+  opacity: 0.65;
   mix-blend-mode: screen;
   background-image:
     linear-gradient(
       125deg,
       transparent 0%,
       transparent 40%,
-      rgba(40, 180, 210, 0.04) 42%,
-      rgba(255, 100, 30, 0.06) 58%,
+      rgba(40, 180, 210, 0.06) 42%,
+      rgba(255, 100, 30, 0.09) 58%,
       transparent 60%,
       transparent 100%
     ),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-opacity='0.09' stroke-width='1' d='M30 2 L90 2 L120 52 L90 102 L30 102 L0 52 Z M60 2 L60 102 M30 2 L90 102 M90 2 L30 102'/%3E%3C/svg%3E"),
-    radial-gradient(circle at 18% 30%, rgba(255, 255, 255, 0.04) 0 1px, transparent 2px),
-    radial-gradient(circle at 72% 58%, rgba(255, 140, 60, 0.08) 0 1.5px, transparent 3px),
-    radial-gradient(circle at 40% 78%, rgba(80, 200, 220, 0.06) 0 1px, transparent 2px),
-    radial-gradient(circle at 85% 22%, rgba(255, 90, 20, 0.1) 0 1px, transparent 2px);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-opacity='0.12' stroke-width='1' d='M30 2 L90 2 L120 52 L90 102 L30 102 L0 52 Z M60 2 L60 102 M30 2 L90 102 M90 2 L30 102'/%3E%3C/svg%3E"),
+    radial-gradient(circle at 18% 30%, rgba(255, 255, 255, 0.05) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 58%, rgba(255, 140, 60, 0.1) 0 1.5px, transparent 3px),
+    radial-gradient(circle at 40% 78%, rgba(80, 200, 220, 0.08) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 22%, rgba(255, 90, 20, 0.12) 0 1px, transparent 2px);
 }
 
-/* Content sits above ambient */
-.aura-stage > *:not(.aura-ambient) {
-  position: relative;
-  z-index: 1;
-}
+/* DO NOT set position/z-index on .aura-stage children —
+   that broke fixed modals and dropdown stacking. */
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
