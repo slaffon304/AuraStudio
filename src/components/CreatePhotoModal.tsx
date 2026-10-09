@@ -92,6 +92,22 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+
+  // Lock page scroll while modal is open (prevents scroll-through to catalog)
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = document.body.style.paddingRight;
+    const sbw = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    if (sbw > 0) document.body.style.paddingRight = `${sbw}px`;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPadding;
+    };
+  }, [isOpen]);
+
+
   useEffect(() => {
     if (!isOpen) return;
     const tmpl = initialTemplate || ctxSelectedTemplate || templates[0] || null;
@@ -420,7 +436,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   // —— RESULT ——
   if (isGenerating && resultUrl) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white dark:bg-[#0c0e14] overflow-y-auto">
+      <div className="fixed inset-0 z-[60] bg-white/85 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
             <ChevronLeft className="h-5 w-5" />
@@ -456,7 +472,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   if (isGenerating) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center gap-6 px-6">
+      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md flex flex-col items-center justify-center gap-6 px-6">
         <div className="relative h-16 w-16">
           <div className="absolute inset-0 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
           <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
@@ -519,7 +535,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] bg-[#f4f5f9] dark:bg-[#0c0e14] overflow-y-auto">
+      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
           <div className="flex items-center gap-3 mb-4">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
@@ -803,7 +819,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-[60] bg-[#f4f5f9] dark:bg-[#0c0e14] overflow-y-auto">
+      <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-[#0c0e14]/90 backdrop-blur-md overflow-y-auto">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-28">
           <div className="flex items-center gap-3 mb-5">
             <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
@@ -927,9 +943,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-white dark:bg-[#0c0e14] overflow-y-auto">
+    <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-transparent">
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col bg-white/85 dark:bg-[#0c0e14]/90 backdrop-blur-md shadow-2xl">
       {/* HERO */}
-      <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden">
+      <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
         {afterUrl && (
           <img src={afterUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover pointer-events-none" draggable={false} />
         )}
@@ -1237,6 +1254,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         className="hidden"
         onChange={handleFiles}
       />
+      </div>
     </div>
   );
 };
