@@ -138,16 +138,20 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
 
   const baseList = useMemo(() => filterByTab(templates, tab), [templates, tab]);
 
+  const isSearching = searchQuery.trim().length > 0;
+
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return baseList;
-    const q = searchQuery.toLowerCase();
-    return baseList.filter((t) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return baseList;
+    // Search across ALL active templates, not only current tab
+    const pool = templates.filter((t) => t.isActive);
+    return pool.filter((t) => {
       const name = (t.name[lang] || t.name.ro || '').toLowerCase();
       const desc = (t.description[lang] || t.description.ro || '').toLowerCase();
       const tags = (t.tags || []).join(' ').toLowerCase();
       return name.includes(q) || desc.includes(q) || tags.includes(q);
     });
-  }, [baseList, searchQuery, lang]);
+  }, [baseList, searchQuery, lang, templates]);
 
   const trending = useMemo(() => {
   return [...templates]
@@ -212,6 +216,8 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           />
         </div>
 
+        {!isSearching && (
+          <>
         {/* Tabs */}
         <div className="-mx-4 mt-5 overflow-x-auto px-4 no-scrollbar">
           <div className="flex min-w-max items-end gap-5 pb-1">
@@ -417,10 +423,19 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <p className="mt-1.5 text-[13px] text-slate-400">{swipeHint}</p>
         </section>
 
-        {/* ===== СТОИТ ПОПРОБОВАТЬ — всегда 2 колонки ===== */}
+          </>
+        )}
+
+        {/* ===== RESULTS / СТОИТ ПОПРОБОВАТЬ ===== */}
         <section className="mt-8">
           <h2 className="text-[20px] font-extrabold text-[#12152a] dark:text-white">
-            {language === 'ru'
+            {isSearching
+              ? language === 'ru'
+                ? 'Результаты поиска'
+                : language === 'en'
+                ? 'Search results'
+                : 'Rezultatele căutării'
+              : language === 'ru'
               ? 'стоит попробовать'
               : language === 'en'
               ? 'worth trying'
@@ -428,13 +443,43 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           </h2>
 
           {filtered.length === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-400">
-              {language === 'ru'
-                ? 'Пока нет шаблонов в этой категории'
-                : language === 'en'
-                ? 'No templates in this category yet'
-                : 'Încă nu sunt șabloane în această categorie'}
-            </p>
+            <div className="mt-6 rounded-2xl bg-white/90 dark:bg-white/5 px-5 py-10 text-center shadow-sm">
+              <p className="text-[16px] font-bold text-[#12152a] dark:text-white">
+                {isSearching
+                  ? language === 'ru'
+                    ? `Ничего не нашлось по запросу «${searchQuery.trim()}».`
+                    : language === 'en'
+                    ? `Nothing found for “${searchQuery.trim()}”.`
+                    : `Nimic găsit pentru «${searchQuery.trim()}».`
+                  : language === 'ru'
+                  ? 'Пока нет шаблонов в этой категории'
+                  : language === 'en'
+                  ? 'No templates in this category yet'
+                  : 'Încă nu sunt șabloane în această categorie'}
+              </p>
+              {isSearching && (
+                <p className="mt-2 text-[13px] text-slate-500">
+                  {language === 'ru'
+                    ? 'Проверь слово или посмотри все шаблоны.'
+                    : language === 'en'
+                    ? 'Check the word or browse all templates.'
+                    : 'Verifică cuvântul sau vezi toate șabloanele.'}
+                </p>
+              )}
+              {isSearching && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-[#3b82f6] px-5 text-[14px] font-bold text-white"
+                >
+                  {language === 'ru'
+                    ? 'Показать все шаблоны'
+                    : language === 'en'
+                    ? 'Show all templates'
+                    : 'Arată toate șabloanele'}
+                </button>
+              )}
+            </div>
           ) : (
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               {filtered.map((tmpl) => {
