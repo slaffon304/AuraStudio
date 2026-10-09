@@ -30,11 +30,6 @@
   }
 }
 
-/* =========================================================
-   AuraStudio ambient — photo backgrounds (light / dark)
-   Veil is light so paint stays visible.
-   ========================================================= */
-
 .aura-stage {
   position: relative;
   isolation: isolate;
@@ -60,7 +55,6 @@ html.dark .aura-ambient {
   background-image: url('./assets/images/bg-dark.jpg');
 }
 
-/* Lighter veil — background more visible (was ~0.55 center) */
 .aura-ambient::after {
   content: '';
   position: absolute;
@@ -82,6 +76,12 @@ html.dark .aura-ambient::after {
     rgba(7, 8, 12, 0.18) 70%,
     transparent 88%
   );
+}
+
+/* Контент поверх фиксированного фона */
+.aura-stage > :not(.aura-ambient) {
+  position: relative;
+  z-index: 1;
 }
 
 ::-webkit-scrollbar {
@@ -140,8 +140,6 @@ html.dark ::-webkit-scrollbar-thumb {
   animation: 0.5s ease-out both aura-word-out;
 }
 
-
-/* Full-screen modal backdrop — same paint as ambient, covers catalog */
 .aura-modal-backdrop {
   background-color: #f4f2f0;
   background-image: url('./assets/images/bg-light.jpg');
