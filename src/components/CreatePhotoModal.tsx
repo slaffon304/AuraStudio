@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { PhotoTemplate, AspectRatio } from '../types';
+import logoImg from '../assets/images/aurastudio-logo.png';
 import {
   Upload,
   Sparkles,
@@ -546,6 +547,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             >
               <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
+            <img src={logoImg} alt="AuraStudio" className="h-7 object-contain dark:brightness-110" />
           </div>
 
           <div className="rounded-3xl bg-gradient-to-br from-violet-500 to-blue-700 text-white p-5 shadow-lg">
@@ -831,6 +833,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             >
               <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
+            <img src={logoImg} alt="AuraStudio" className="h-7 object-contain dark:brightness-110" />
           </div>
 
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
