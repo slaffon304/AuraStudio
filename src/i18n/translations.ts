@@ -145,6 +145,7 @@ export const TRANSLATIONS = {
 
     // Footer & Misc
     footerTagline: 'AuraStudio · Ședințe foto de studio și avatare de revistă în 10 secunde.',
+    companyByline: 'by Lab Upgrade AI',
     rightsReserved: 'Toate drepturile rezervate.',
 
     // Landing Page
@@ -374,6 +375,7 @@ export const TRANSLATIONS = {
 
     // Footer & Misc
     footerTagline: 'AuraStudio · Студийные фотосессии и аватарки журнального качества за 10 секунд.',
+    companyByline: 'by Lab Upgrade AI',
     rightsReserved: 'Все права защищены.',
 
     // Landing Page
@@ -603,6 +605,7 @@ export const TRANSLATIONS = {
 
     // Footer & Misc
     footerTagline: 'AuraStudio · Studio-grade photoshoots and magazine avatars in 10 seconds.',
+    companyByline: 'by Lab Upgrade AI',
     rightsReserved: 'All rights reserved.',
 
     // Landing Page
