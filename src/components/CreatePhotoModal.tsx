@@ -508,14 +508,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       setStepText(t.progressStepAnalyze);
       setErrorMessage(null);
       try {
-        let promptExtra = '';
-        if (heightCm) promptExtra += ` Height about ${heightCm} cm.`;
-        if (weightKg) promptExtra += ` Weight about ${weightKg} kg.`;
         const job = await createGenerationJob('custom-pinterest', photos1[0].url, photos1[0].id, {
           mode: 'pinterest',
           customReferenceUrl: refUrl,
           aspectRatio: selectedAspectRatio,
           age: age1,
+          heightCm: heightCm || undefined,
+          weightKg: weightKg || undefined,
           extraPhotoUrls: photos1.slice(1).map((x) => x.url)
         } as any);
         setResultUrl(job.resultImageUrl || null);
