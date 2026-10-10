@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Download, LogIn, X } from 'lucide-react';
+import { ArrowLeft, Download, LogIn, X } from 'lucide-react';
 import { viewToPath } from '../lib/navigation';
 
 type Tab = 'photos' | 'videos';
@@ -52,6 +52,14 @@ export const GalleryView: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      goHome();
+    }
+  };
+
   const handleDownload = (url: string) => {
     const a = document.createElement('a');
     a.href = url;
@@ -84,11 +92,19 @@ export const GalleryView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={goBack}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-slate-100 dark:bg-white/5 dark:border-white/10"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+        </button>
+        <h1 className="flex-1 text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
           {copy.title}
         </h1>
-        <span className="text-sm font-semibold text-slate-400">{count}</span>
+        <span className="text-sm font-semibold text-slate-400 tabular-nums">{count}</span>
       </div>
 
       <div className="mt-4 flex gap-2">
