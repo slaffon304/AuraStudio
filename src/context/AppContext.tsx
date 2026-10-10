@@ -541,7 +541,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email,
         password,
         options: {
-          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : 'https://studio.labupgrade.ai/',
+          emailRedirectTo: typeof window !== 'undefined'
+  ? `${window.location.origin}/?email_confirmed=1`
+  : 'https://studio.labupgrade.ai/?email_confirmed=1',
           data: {
             name,
             country,
