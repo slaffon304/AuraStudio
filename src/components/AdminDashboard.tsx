@@ -154,7 +154,7 @@ export const AdminDashboard: React.FC = () => {
 
   if (currentUser?.role !== 'admin') {
     return (
-      <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center">
+      <div className="relative z-10 w-full min-h-[50vh] bg-[#0c0e14] max-w-4xl mx-auto px-4 py-20 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 mx-auto mb-4">
           <Shield className="h-8 w-8" />
         </div>
@@ -171,7 +171,8 @@ export const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="relative z-10 w-full min-h-[70vh] bg-[#0c0e14] text-slate-100">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
         <div>
