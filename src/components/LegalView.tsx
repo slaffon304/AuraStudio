@@ -103,7 +103,7 @@ export const LegalView: React.FC<LegalViewProps> = ({ page }) => {
             {t.landingFooterLegal}
           </p>
           <p className="text-[11px] text-slate-400">
-            © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
+            © {new Date().getFullYear()} AuraStudio · {(t as any).companyByline || 'by Lab Upgrade AI'}. {t.rightsReserved}
           </p>
         </div>
       </footer>
