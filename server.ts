@@ -310,6 +310,8 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     isPack = false,
     age,
     age2,
+    heightCm,
+    weightKg,
     extraPhotoUrls,
     partnerExtraPhotoUrls
   } = req.body;
@@ -425,50 +427,131 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     let imageBase64Data: string | null = null;
     let mimeType = 'image/jpeg';
 
-    let promptContext = template.prompt;
-    if (mode === 'enhance') {
-      promptContext = `Enhance and upscale this photograph to ultra-sharp high resolution. Preserve the exact identity, face, skin texture, clothing and composition. Reduce noise, improve clarity and micro-contrast, natural colors, no beauty filters, no identity change. Photorealistic HD result.`;
-    } else if (mode === 'pinterest' || customReferenceUrl) {
-      promptContext = `Transfer the exact identity, facial structure, eyes, and skin details of the person in the user's selfie into the aesthetic style, outfit, lighting, pose, and background mood of the reference image. Maintain 100% facial resemblance while achieving pristine European editorial fashion photography, cinematic 85mm lens, 4k ultra-hd.`;
-    } else if (mode === 'couple' && partnerPhotoUrl) {
-      promptContext = `Create a breathtaking romantic couple photoshoot featuring both individuals from the provided photos. Person 1 is on the left and Person 2 is on the right, embracing warmly in a luxurious romantic setting: ${template.prompt}. Pristine facial resemblance for both persons, cinematic golden hour lighting, 85mm lens.`;
-    } else {
-      promptContext = `${template.prompt}. High-end professional portrait, pristine European aesthetic, cinematic 85mm lens, natural facial details, 4k ultra-hd photography.`;
-    }
+    // ── Prompt + image parts (mode-specific contract) ─────────────────
+    // Style/scene comes from images (template preview / Pinterest ref).
+    // templates.prompt is NOT sent when a style image is attached.
+    const DEFAULT_AVOID =
+      'Avoid distorted anatomy, extra fingers, unnatural hands, plastic over-smoothed skin, watermarks, logos, and random text overlays.';
+    const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
+    const avoidLine = negFromDb
+      ? `Avoid: ${negFromDb}. ${DEFAULT_AVOID}`
+      : DEFAULT_AVOID;
 
     const ageNum = Number(age);
-    if (Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120) {
-      promptContext = `${promptContext} Person 1 is approximately ${Math.round(ageNum)} years old.`;
-    }
     const age2Num = Number(age2);
-    if (Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120) {
-      promptContext = `${promptContext} Person 2 is approximately ${Math.round(age2Num)} years old.`;
+    const age1Line =
+      Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
+        ? `Person A is approximately ${Math.round(ageNum)} years old.`
+        : '';
+    const age2Line =
+      Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
+        ? `Person B is approximately ${Math.round(age2Num)} years old.`
+        : '';
+    const h = Number(heightCm);
+    const w = Number(weightKg);
+    const bodyLine = [
+      Number.isFinite(h) && h >= 100 && h <= 250 ? `Requested height about ${Math.round(h)} cm.` : '',
+      Number.isFinite(w) && w >= 30 && w <= 250 ? `Requested weight about ${Math.round(w)} kg (soft body proportion only; do not distort the face).` : ''
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const styleUrl =
+      mode === 'enhance'
+        ? ''
+        : mode === 'pinterest' || customReferenceUrl
+          ? String(customReferenceUrl || '')
+          : String(template.preview_image_url || template.previewImageUrl || template.preview_image || '');
+
+    const effectiveMode =
+      mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
+        ? 'couple'
+        : mode === 'pinterest' || customReferenceUrl
+          ? 'pinterest'
+          : mode === 'enhance'
+            ? 'enhance'
+            : 'template';
+
+    let promptContext = '';
+    if (effectiveMode === 'enhance') {
+      promptContext = [
+        'TASK: Improve the technical quality of the supplied photograph only.',
+        'PRESERVE: exact identity, face, expression, pose, clothing, composition, and background.',
+        'ENHANCE: sharpness, clarity, reduce noise and compression artifacts, natural colors.',
+        'DO NOT: redesign the scene, change age or face structure, beautify, add or remove objects.',
+        quality4k ? 'Aim for maximum visible detail (4K-class clarity).' : 'Aim for clean high-detail output.',
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } else if (effectiveMode === 'pinterest') {
+      promptContext = [
+        'TASK: Create a new photorealistic photo.',
+        'The following images are labeled by role.',
+        'IDENTITY images: the person whose face must appear in the result. Preserve facial structure, eyes, skin, hairline.',
+        'STYLE REFERENCE image: outfit, pose, composition, lighting, background, and mood only — do NOT copy that reference person’s face.',
+        'Do not replace the identity person with the person in the style reference.',
+        age1Line,
+        bodyLine,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } else if (effectiveMode === 'couple') {
+      promptContext = [
+        'TASK: Create one photorealistic photo of TWO people together.',
+        'PERSON A = LEFT side of the frame. PERSON B = RIGHT side of the frame.',
+        'Images labeled PERSON A are only identity for the person on the LEFT.',
+        'Images labeled PERSON B are only identity for the person on the RIGHT.',
+        'Do not merge faces. Do not swap A and B. Do not invent a third person.',
+        styleUrl
+          ? 'STYLE REFERENCE image (if provided): scene, wardrobe, lighting, composition — not identity.'
+          : 'Place both people naturally in a coherent shared scene with consistent lighting.',
+        age1Line,
+        age2Line,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } else {
+      // template single
+      promptContext = [
+        'TASK: Create a photorealistic portrait of the identity person in the style/scene of the reference image.',
+        'IDENTITY images: face and identity source. Preserve recognizable facial features and natural skin.',
+        'STYLE REFERENCE image: clothing, pose intent, background, lighting, and overall look — do NOT use the reference person’s face.',
+        'Do not substitute a different person for the identity subject.',
+        age1Line,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
     }
 
-    const contentsParts: any[] = [{ text: promptContext }];
+    const contentsParts: any[] = [];
 
-    // Primary user selfie (+ extra angles)
-    const primaryPart = await urlToGenerativePart(userPhotoUrl);
-    if (primaryPart) {
-      contentsParts.push(primaryPart);
-    }
-    if (Array.isArray(extraPhotoUrls)) {
-      for (const u of extraPhotoUrls.slice(0, 4)) {
-        const part = await urlToGenerativePart(u);
-        if (part) contentsParts.push(part);
+    if (effectiveMode === 'enhance') {
+      contentsParts.push({ text: promptContext });
+      const primaryPart = await urlToGenerativePart(userPhotoUrl);
+      if (primaryPart) contentsParts.push(primaryPart);
+    } else if (effectiveMode === 'couple') {
+      contentsParts.push({ text: promptContext });
+      contentsParts.push({
+        text: 'PERSON A (LEFT) — identity photos for the person who must appear on the LEFT:'
+      });
+      const primaryPart = await urlToGenerativePart(userPhotoUrl);
+      if (primaryPart) contentsParts.push(primaryPart);
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) {
+          const part = await urlToGenerativePart(u);
+          if (part) contentsParts.push(part);
+        }
       }
-    }
-
-    // Secondary reference (Pinterest image or Couple partner photo)
-    if (customReferenceUrl) {
-      const refPart = await urlToGenerativePart(customReferenceUrl);
-      if (refPart) {
-        contentsParts.push(refPart);
-      }
-    } else if (partnerPhotoUrl) {
-      const partnerPart = await urlToGenerativePart(partnerPhotoUrl);
-      if (partnerPart) {
-        contentsParts.push(partnerPart);
+      contentsParts.push({
+        text: 'PERSON B (RIGHT) — identity photos for the person who must appear on the RIGHT:'
+      });
+      if (partnerPhotoUrl) {
+        const partnerPart = await urlToGenerativePart(partnerPhotoUrl);
+        if (partnerPart) contentsParts.push(partnerPart);
       }
       if (Array.isArray(partnerExtraPhotoUrls)) {
         for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
@@ -476,9 +559,56 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           if (part) contentsParts.push(part);
         }
       }
+      if (styleUrl) {
+        contentsParts.push({
+          text: 'STYLE REFERENCE — scene, clothing, lighting, composition (not a face source):'
+        });
+        const stylePart = await urlToGenerativePart(styleUrl);
+        if (stylePart) contentsParts.push(stylePart);
+      }
+    } else if (effectiveMode === 'pinterest') {
+      contentsParts.push({ text: promptContext });
+      contentsParts.push({ text: 'IDENTITY — photos of the person to place in the result:' });
+      const primaryPart = await urlToGenerativePart(userPhotoUrl);
+      if (primaryPart) contentsParts.push(primaryPart);
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) {
+          const part = await urlToGenerativePart(u);
+          if (part) contentsParts.push(part);
+        }
+      }
+      contentsParts.push({
+        text: 'STYLE REFERENCE — outfit, pose, background, lighting (do not copy this face):'
+      });
+      const refPart = await urlToGenerativePart(customReferenceUrl || styleUrl);
+      if (refPart) contentsParts.push(refPart);
+    } else {
+      // template single
+      contentsParts.push({ text: promptContext });
+      contentsParts.push({ text: 'IDENTITY — photos of the person to portray:' });
+      const primaryPart = await urlToGenerativePart(userPhotoUrl);
+      if (primaryPart) contentsParts.push(primaryPart);
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) {
+          const part = await urlToGenerativePart(u);
+          if (part) contentsParts.push(part);
+        }
+      }
+      if (styleUrl) {
+        contentsParts.push({
+          text: 'STYLE REFERENCE — scene, wardrobe, lighting, composition (do not copy this face):'
+        });
+        const stylePart = await urlToGenerativePart(styleUrl);
+        if (stylePart) contentsParts.push(stylePart);
+      } else if (template.prompt) {
+        // Fallback only when preview is missing
+        contentsParts.push({
+          text: `SCENE FALLBACK (no style image available): ${String(template.prompt).slice(0, 600)}`
+        });
+      }
     }
 
-    const targetRatio = (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4';
+        const targetRatio = (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4';
 
     const genResponse = await aiClient.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
