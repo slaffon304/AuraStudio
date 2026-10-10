@@ -80,6 +80,8 @@ interface AppContextType {
       aspectRatio?: AspectRatio;
       age?: number;
       age2?: number;
+      heightCm?: number | string;
+      weightKg?: number | string;
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
@@ -683,6 +685,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aspectRatio?: AspectRatio;
       age?: number;
       age2?: number;
+      heightCm?: number | string;
+      weightKg?: number | string;
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
@@ -730,7 +734,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         age2: options?.age2,
         extraPhotoUrls: options?.extraPhotoUrls,
         partnerExtraPhotoUrls: options?.partnerExtraPhotoUrls,
-        quality4k: options?.quality4k
+        quality4k: options?.quality4k,
+        heightCm: options?.heightCm,
+        weightKg: options?.weightKg
       })
     });
 
