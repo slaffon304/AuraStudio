@@ -282,17 +282,18 @@ export const GalleryView: React.FC = () => {
 
       {previewUrl && (
         <div
-          className="fixed inset-0 z-[200] flex flex-col bg-black overscroll-none"
+          className="fixed inset-0 z-[300] flex flex-col bg-black overscroll-none"
           onClick={() => {
             setPreviewUrl(null);
             setPreviewJobId(null);
           }}
           onTouchMove={(e) => e.preventDefault()}
         >
-          <div className="flex items-center justify-between p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          {/* Below app header / burger */}
+          <div className="flex items-center justify-between px-3 pb-2 pt-[calc(3.75rem+env(safe-area-inset-top,0px))]">
             <button
               type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
               onClick={() => {
                 setPreviewUrl(null);
                 setPreviewJobId(null);
