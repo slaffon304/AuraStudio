@@ -590,12 +590,12 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
             href="https://t.me/aurastudio_help_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-[#e2e4ec] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#3a4560] shadow-sm transition hover:border-[#c8cce0] hover:bg-[#f7f8fc] dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#e2e4ec] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#3a4560] shadow-sm transition hover:border-[#c8cce0] hover:bg-[#f7f8fc] dark:border-white/10 dark:bg-white/5 dark:text-slate-200 w-auto max-w-fit"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0">
               <path d="M21.5 3.5L2.7 11.1c-1.3.5-1.3 1.3-.2 1.6l4.8 1.5 1.8 5.6c.2.7.4.9 1 .9.6 0 .9-.3 1.2-.6l2.7-2.6 5.6 4.1c1 .6 1.8.3 2.1-.9l3.7-17.4c.4-1.6-.6-2.3-1.7-1.8z" fill="#2AABEE"/>
             </svg>
-            <span>{t.landingTelegramSupport}</span>
+            <span className="leading-tight">{t.landingTelegramSupport}</span>
           </a>
 
           {/* Policy links */}
