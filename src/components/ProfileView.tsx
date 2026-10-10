@@ -12,7 +12,6 @@ import {
   Share2,
   Trophy
 } from 'lucide-react';
-import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath, markFromProfile } from '../lib/navigation';
 import { LEVELS, levelForSpent, nextLevel, progressToNext, LevelId } from '../lib/levels';
 
@@ -96,6 +95,7 @@ export const ProfileView: React.FC = () => {
 
   const L = {
     account: language === 'ru' ? 'АККАУНТ' : language === 'en' ? 'ACCOUNT' : 'CONT',
+    yourAccount: language === 'ru' ? 'Ваш аккаунт' : language === 'en' ? 'Your account' : 'Contul tău',
     free: language === 'ru' ? 'бесплатных' : language === 'en' ? 'free' : 'gratuite',
     paid: language === 'ru' ? 'купленных' : language === 'en' ? 'purchased' : 'cumpărate',
     allTariffs:
@@ -214,7 +214,9 @@ export const ProfileView: React.FC = () => {
         >
           <ArrowLeft className="h-5 w-5 text-slate-700 dark:text-slate-200" />
         </button>
-        <img src={logoImg} alt="AuraStudio" className="h-7 object-contain" />
+        <h1 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+          {L.yourAccount}
+        </h1>
         <button
           type="button"
           onClick={() => signOut()}
