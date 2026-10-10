@@ -613,7 +613,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
             {t.landingFooterLegal}
           </p>
           <p className="text-[11px] text-[#b0b5c2] dark:text-slate-600">
-            © {new Date().getFullYear()} AuraStudio. {t.rightsReserved}
+            © {new Date().getFullYear()} AuraStudio · {(t as any).companyByline || 'by Lab Upgrade AI'}. {t.rightsReserved}
           </p>
         </div>
       </footer>
