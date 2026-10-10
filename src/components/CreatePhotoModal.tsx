@@ -334,6 +334,15 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     fileInputRef.current?.click();
   };
 
+  /** Open library if user has uploaded photos, otherwise device files */
+  const openPhotoSource = () => {
+    if (userPhotos && userPhotos.length > 0) {
+      setShowLibraryPicker(true);
+    } else {
+      triggerFilePick();
+    }
+  };
+
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -908,7 +917,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                       <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   ) : (
-                    <button key={i} type="button" onClick={triggerFilePick} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                    <button key={i} type="button" onClick={openPhotoSource} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
                   );
                 })}
               </div>
@@ -1147,7 +1156,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                       <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   ) : (
-                    <button key={i} type="button" onClick={triggerFilePick} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                    <button key={i} type="button" onClick={openPhotoSource} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
                   );
                 })}
               </div>
@@ -1467,7 +1476,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   <button
                     key={i}
                     type="button"
-                    onClick={triggerFilePick}
+                    onClick={openPhotoSource}
                     disabled={isUploading}
                     className="aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400"
                   >
@@ -1479,13 +1488,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             <p className="mt-3 text-center text-xs text-slate-400">{copy.loaded(sheetPhotos.length)}</p>
             <button
               type="button"
-              onClick={() => {
-                if (userPhotos && userPhotos.length > 0) {
-                  setShowLibraryPicker(true);
-                } else {
-                  triggerFilePick();
-                }
-              }}
+              onClick={openPhotoSource}
               disabled={isUploading || sheetPhotos.length >= MAX_FACE_PHOTOS}
               className="mt-3 w-full rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-800 disabled:opacity-50"
             >
@@ -1501,6 +1504,53 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         </div>
       )}
+
+
+        {showLibraryPicker && (
+          <div className="fixed inset-0 z-[270] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-extrabold">
+                  {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                </h2>
+                <button type="button" onClick={() => setShowLibraryPicker(false)}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {(!userPhotos || userPhotos.length === 0) ? (
+                <div className="py-10 text-center text-sm text-slate-500">
+                  {language === 'ru' ? 'Пока пусто' : language === 'en' ? 'Empty' : 'Gol'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                  {userPhotos.map((ph) => (
+                    <button
+                      key={ph.id}
+                      type="button"
+                      onClick={() => {
+                        selectFromLibrary({ id: ph.id, url: ph.url });
+                        setShowLibraryPicker(false);
+                      }}
+                      className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 active:scale-95 transition"
+                    >
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLibraryPicker(false);
+                  triggerFilePick();
+                }}
+                className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700"
+              >
+                {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
+              </button>
+            </div>
+          </div>
+        )}
 
       <input
         ref={fileInputRef}
