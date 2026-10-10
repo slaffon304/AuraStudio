@@ -51,6 +51,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     t,
     templates,
     uploadPhoto,
+    userPhotos,
     currentUser,
     createGenerationJob,
     setIsPhotoModalOpen,
@@ -86,7 +87,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [uploadTarget, setUploadTarget] = useState<'p1' | 'p2'>('p1');
   const [showTipModal, setShowTipModal] = useState(false);
   const [showUploadSheet, setShowUploadSheet] = useState(false);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [showPinHelp, setShowPinHelp] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [resultQuality, setResultQuality] = useState<'2k' | '4k'>('2k');
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [stepText, setStepText] = useState('');
@@ -139,7 +143,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setEnhanceRes('4k');
     setShowTipModal(false);
     setShowUploadSheet(false);
+    setShowLibraryPicker(false);
     setShowPinHelp(false);
+    setFullscreenOpen(false);
+    setResultQuality('2k');
   }, [isOpen, initialTemplate, ctxSelectedTemplate, templates]);
 
   useEffect(() => {
@@ -185,7 +192,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 
   const slots = slotCount(template?.requiredInputType);
-  const photoCost = template?.photoCost ?? 1;
+  const basePhotoCost = template?.photoCost ?? 1;
+  const photoCost = resultQuality === '4k' ? basePhotoCost * 2 : basePhotoCost;
   const balance = currentUser?.photoBalance ?? 0;
   const hasEnough = balance >= photoCost;
   const hasRequiredPhotos =
@@ -232,7 +240,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadSheetHint:
         'Încarcă până la 5 foto ale acestei persoane — poți selecta mai multe odată. Ideal din unghiuri diferite (față, 3/4, profil), lumină naturală, fără ochelari și filtre. Minim — 1 foto.',
       loaded: (n: number) => `Încărcate ${n} din ${MAX_FACE_PHOTOS}`,
-      pickPhotos: 'Alege fotografiile'
+      pickPhotos: 'Alege din încărcate'
     },
     ru: {
       disclaimer: 'Обратите внимание, итог может немного отличаться от референса.',
@@ -269,7 +277,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadSheetHint:
         'Загрузи до 5 фото этого человека — можно выбрать сразу несколько. Лучше с разных ракурсов (фас, вполоборота, профиль), при дневном свете, без очков и фильтров. Чем больше ракурсов, тем точнее нейросеть поймёт черты. Минимум — 1 фото.',
       loaded: (n: number) => `Загружено ${n} из ${MAX_FACE_PHOTOS}`,
-      pickPhotos: 'Выбрать мои фото'
+      pickPhotos: 'Выбрать из загруженных'
     },
     en: {
       disclaimer: 'Note: the result may differ slightly from the reference.',
@@ -306,7 +314,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       uploadSheetHint:
         'Upload up to 5 photos of this person — you can select several at once. Prefer different angles (front, 3/4, profile), daylight, no glasses or filters. Minimum — 1 photo.',
       loaded: (n: number) => `Uploaded ${n} of ${MAX_FACE_PHOTOS}`,
-      pickPhotos: 'Choose my photos'
+      pickPhotos: 'Choose from uploaded'
     }
   }[language];
 
@@ -364,6 +372,15 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     else setPhotos2((p) => p.filter((_, i) => i !== index));
   };
 
+  const selectFromLibrary = (photo: { id: string; url: string }) => {
+    const current = uploadTarget === 'p1' ? photos1 : photos2;
+    if (current.length >= MAX_FACE_PHOTOS) return;
+    if (current.some((p) => p.id === photo.id || p.url === photo.url)) return;
+    const entry = { url: photo.url, id: photo.id };
+    if (uploadTarget === 'p1') setPhotos1((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
+    else setPhotos2((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
+  };
+
   const handleGenerate = async () => {
     if (!currentUser) {
       setIsAuthModalOpen(true);
@@ -409,7 +426,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         age2: slots === 2 ? age2 : undefined,
         extraPhotoUrls: extraUrls.length ? extraUrls : undefined,
         partnerExtraPhotoUrls:
-          slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined
+          slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined,
+        quality4k: resultQuality === '4k'
       } as any);
 
       clearTimeout(t1);
@@ -457,18 +475,74 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             <CheckCircle className="h-4 w-4" />
             {t.completed}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100">
-              <img src={photos1[0]?.url} alt="" className="h-full w-full object-cover" />
+          {/* Before / After slider */}
+          <div
+            ref={heroRef}
+            className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 select-none touch-none"
+            onPointerDown={(e) => {
+              dragging.current = true;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+              setSliderPct(pct);
+              setHintVisible(false);
+            }}
+          >
+            <img src={resultUrl || ''} alt="After" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 overflow-hidden" style={{ width: `${sliderPct}%` }}>
+              <img
+                src={photos1[0]?.url || ''}
+                alt="Before"
+                className="h-full object-cover max-w-none"
+                style={{ width: heroWidth ? `${heroWidth}px` : '100%' }}
+              />
             </div>
-            <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-violet-400">
-              <img src={resultUrl} alt="" className="h-full w-full object-cover" />
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg z-10"
+              style={{ left: `${sliderPct}%`, transform: 'translateX(-50%)' }}
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white shadow-md flex items-center justify-center">
+                <span className="text-[10px] font-bold text-slate-700">⇆</span>
+              </div>
             </div>
+            {hintVisible && (
+              <div className="absolute bottom-3 inset-x-0 text-center text-[11px] text-white/90 drop-shadow">
+                {copy.hint}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
+              className="absolute top-3 right-3 z-20 rounded-full bg-black/55 text-white text-[11px] font-semibold px-3 py-1.5 backdrop-blur"
+            >
+              {language === 'ru' ? 'На весь экран' : language === 'en' ? 'Fullscreen' : 'Ecran complet'}
+            </button>
           </div>
-          <a href={resultUrl} download={`AuraStudio_${Date.now()}.jpg`} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-bold text-white">
+
+          <button
+            type="button"
+            onClick={async () => {
+              if (!resultUrl) return;
+              try {
+                const res = await fetch(resultUrl);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `AuraStudio_${Date.now()}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+              } catch {
+                // fallback
+                window.open(resultUrl, '_blank');
+              }
+            }}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-bold text-white active:scale-[0.98] transition"
+          >
             <Download className="h-4 w-4" />
-            {t.downloadPhoto}
-          </a>
+            {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+          </button>
           <button type="button" onClick={() => { setIsGenerating(false); setResultUrl(null); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
             <RefreshCw className="h-4 w-4" />
             {language === 'ru' ? 'Ещё раз' : language === 'en' ? 'Again' : 'Din nou'}
@@ -478,6 +552,46 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             {t.myGallery}
           </button>
         </div>
+
+        {fullscreenOpen && resultUrl && (
+          <div className="fixed inset-0 z-[280] bg-black flex flex-col">
+            <div className="flex items-center justify-between p-3">
+              <button
+                type="button"
+                onClick={() => setFullscreenOpen(false)}
+                className="h-10 w-10 rounded-full bg-white/10 text-white flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(resultUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `AuraStudio_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    window.open(resultUrl, '_blank');
+                  }
+                }}
+                className="rounded-full bg-white/10 text-white px-4 py-2 text-sm font-semibold flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-2">
+              <img src={resultUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -804,6 +918,92 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         )}
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+
+        {showLibraryPicker && (
+          <div className="fixed inset-0 z-[270] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-extrabold">
+                  {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                </h2>
+                <button type="button" onClick={() => setShowLibraryPicker(false)}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {(!userPhotos || userPhotos.length === 0) ? (
+                <div className="py-10 text-center text-sm text-slate-500">
+                  {language === 'ru' ? 'Пока пусто' : language === 'en' ? 'Empty' : 'Gol'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                  {userPhotos.map((ph) => (
+                    <button
+                      key={ph.id}
+                      type="button"
+                      onClick={() => {
+                        selectFromLibrary({ id: ph.id, url: ph.url });
+                        setShowLibraryPicker(false);
+                      }}
+                      className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 active:scale-95 transition"
+                    >
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLibraryPicker(false);
+                  triggerFilePick();
+                }}
+                className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700"
+              >
+                {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {fullscreenOpen && resultUrl && (
+          <div className="fixed inset-0 z-[280] bg-black flex flex-col">
+            <div className="flex items-center justify-between p-3">
+              <button
+                type="button"
+                onClick={() => setFullscreenOpen(false)}
+                className="h-10 w-10 rounded-full bg-white/10 text-white flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(resultUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `AuraStudio_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    window.open(resultUrl, '_blank');
+                  }
+                }}
+                className="rounded-full bg-white/10 text-white px-4 py-2 text-sm font-semibold flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-2">
+              <img src={resultUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1120,14 +1320,40 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               {copy.loginTitle}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={isUploading || !hasRequiredPhotos}
-              className="w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 hover:bg-violet-500 disabled:bg-violet-300 disabled:cursor-not-allowed"
-            >
-              {!hasRequiredPhotos ? copy.needPhoto : copy.generate(photoCost)}
-            </button>
+            <>
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResultQuality('2k')}
+                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                    resultQuality === '2k'
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  }`}
+                >
+                  2K · {basePhotoCost} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResultQuality('4k')}
+                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                    resultQuality === '4k'
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  }`}
+                >
+                  4K · {basePhotoCost * 2} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={isUploading || !hasRequiredPhotos}
+                className="w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 hover:bg-violet-500 disabled:bg-violet-300 disabled:cursor-not-allowed"
+              >
+                {!hasRequiredPhotos ? copy.needPhoto : copy.generate(photoCost)}
+              </button>
+            </>
           )}
         </div>
 
@@ -1253,7 +1479,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             <p className="mt-3 text-center text-xs text-slate-400">{copy.loaded(sheetPhotos.length)}</p>
             <button
               type="button"
-              onClick={triggerFilePick}
+              onClick={() => {
+                if (userPhotos && userPhotos.length > 0) {
+                  setShowLibraryPicker(true);
+                } else {
+                  triggerFilePick();
+                }
+              }}
               disabled={isUploading || sheetPhotos.length >= MAX_FACE_PHOTOS}
               className="mt-3 w-full rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-800 disabled:opacity-50"
             >
