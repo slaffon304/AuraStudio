@@ -336,11 +336,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
   /** Open library if user has uploaded photos, otherwise device files */
   const openPhotoSource = () => {
-    if (userPhotos && userPhotos.length > 0) {
-      setShowLibraryPicker(true);
-    } else {
-      triggerFilePick();
-    }
+    // Always open library sheet so the button visibly reacts;
+    // device files are available from inside the sheet.
+    setShowLibraryPicker(true);
   };
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -928,51 +926,56 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         )}
         <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
 
-        {showLibraryPicker && (
-          <div className="fixed inset-0 z-[270] flex items-end justify-center bg-black/50">
-            <div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white p-5 pb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-extrabold">
-                  {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
-                </h2>
-                <button type="button" onClick={() => setShowLibraryPicker(false)}>
-                  <X className="h-5 w-5" />
+        {showLibraryPicker &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55" onClick={() => setShowLibraryPicker(false)}>
+              <div
+                className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white dark:bg-[#12141c] p-5 pb-8 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                    {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                  </h2>
+                  <button type="button" onClick={() => setShowLibraryPicker(false)} className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {(!userPhotos || userPhotos.length === 0) ? (
+                  <div className="py-10 text-center text-sm text-slate-500">
+                    {language === 'ru' ? 'Пока нет загруженных фото' : language === 'en' ? 'No uploaded photos yet' : 'Încă nu sunt fotografii'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                    {userPhotos.map((ph) => (
+                      <button
+                        key={ph.id}
+                        type="button"
+                        onClick={() => {
+                          selectFromLibrary({ id: ph.id, url: ph.url });
+                          setShowLibraryPicker(false);
+                        }}
+                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-95 transition"
+                      >
+                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLibraryPicker(false);
+                    setTimeout(() => triggerFilePick(), 50);
+                  }}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
                 </button>
               </div>
-              {(!userPhotos || userPhotos.length === 0) ? (
-                <div className="py-10 text-center text-sm text-slate-500">
-                  {language === 'ru' ? 'Пока пусто' : language === 'en' ? 'Empty' : 'Gol'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 overflow-y-auto">
-                  {userPhotos.map((ph) => (
-                    <button
-                      key={ph.id}
-                      type="button"
-                      onClick={() => {
-                        selectFromLibrary({ id: ph.id, url: ph.url });
-                        setShowLibraryPicker(false);
-                      }}
-                      className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 active:scale-95 transition"
-                    >
-                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLibraryPicker(false);
-                  triggerFilePick();
-                }}
-                className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700"
-              >
-                {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
-              </button>
-            </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
 
         {fullscreenOpen && resultUrl && (
           <div className="fixed inset-0 z-[280] bg-black flex flex-col">
@@ -1506,51 +1509,56 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       )}
 
 
-        {showLibraryPicker && (
-          <div className="fixed inset-0 z-[270] flex items-end justify-center bg-black/50">
-            <div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white p-5 pb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-extrabold">
-                  {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
-                </h2>
-                <button type="button" onClick={() => setShowLibraryPicker(false)}>
-                  <X className="h-5 w-5" />
+        {showLibraryPicker &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55" onClick={() => setShowLibraryPicker(false)}>
+              <div
+                className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white dark:bg-[#12141c] p-5 pb-8 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                    {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                  </h2>
+                  <button type="button" onClick={() => setShowLibraryPicker(false)} className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {(!userPhotos || userPhotos.length === 0) ? (
+                  <div className="py-10 text-center text-sm text-slate-500">
+                    {language === 'ru' ? 'Пока нет загруженных фото' : language === 'en' ? 'No uploaded photos yet' : 'Încă nu sunt fotografii'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                    {userPhotos.map((ph) => (
+                      <button
+                        key={ph.id}
+                        type="button"
+                        onClick={() => {
+                          selectFromLibrary({ id: ph.id, url: ph.url });
+                          setShowLibraryPicker(false);
+                        }}
+                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-95 transition"
+                      >
+                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLibraryPicker(false);
+                    setTimeout(() => triggerFilePick(), 50);
+                  }}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
                 </button>
               </div>
-              {(!userPhotos || userPhotos.length === 0) ? (
-                <div className="py-10 text-center text-sm text-slate-500">
-                  {language === 'ru' ? 'Пока пусто' : language === 'en' ? 'Empty' : 'Gol'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 overflow-y-auto">
-                  {userPhotos.map((ph) => (
-                    <button
-                      key={ph.id}
-                      type="button"
-                      onClick={() => {
-                        selectFromLibrary({ id: ph.id, url: ph.url });
-                        setShowLibraryPicker(false);
-                      }}
-                      className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 active:scale-95 transition"
-                    >
-                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLibraryPicker(false);
-                  triggerFilePick();
-                }}
-                className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700"
-              >
-                {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
-              </button>
-            </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
 
       <input
         ref={fileInputRef}
