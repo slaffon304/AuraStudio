@@ -558,7 +558,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             >
               <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
-            <img src={logoImg} alt="AuraStudio" className="h-7 object-contain dark:brightness-110" />
+            <img src={logoImg} alt="AuraStudio" className="h-10 object-contain dark:brightness-110" />
           </div>
 
           <div className="rounded-3xl bg-gradient-to-br from-violet-500 to-blue-700 text-white p-5 shadow-lg">
@@ -638,16 +638,16 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           <div className="mt-5 grid grid-cols-2 gap-3">
             <div>
               <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Рост · опц.' : 'Height · opt.'}</p>
-              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3">
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
                 <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="165" />
-                <span className="text-xs text-slate-400 font-semibold">CM</span>
+                <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'см' : 'cm'}</span>
               </div>
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Вес · опц.' : 'Weight · opt.'}</p>
-              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3">
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Вес · опц.' : language === 'en' ? 'Weight · opt.' : 'Greutate · opț.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
                 <input value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="48" />
-                <span className="text-xs text-slate-400 font-semibold">KG</span>
+                <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'кг' : 'kg'}</span>
               </div>
             </div>
           </div>
@@ -844,7 +844,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             >
               <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
             </button>
-            <img src={logoImg} alt="AuraStudio" className="h-7 object-contain dark:brightness-110" />
+            <img src={logoImg} alt="AuraStudio" className="h-10 object-contain dark:brightness-110" />
           </div>
 
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
