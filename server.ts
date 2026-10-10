@@ -593,6 +593,8 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           'STYLE REFERENCE — scene, clothing, lighting, pose ONLY. Do NOT copy any face from this image:'
         );
         await pushImageFromUrl(styleUrl);
+        pushText('IDENTITY FACE LOCK — match this face exactly, ignore any face from the style image:');
+        await pushImageFromUrl(userPhotoUrl);
       }
     } else if (effectiveMode === 'pinterest') {
       pushText('IDENTITY — the ONLY face that must appear in the result:');
