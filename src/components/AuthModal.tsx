@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle, MapPin } from 'lucide-react';
 import { consumeAfterAuthRedirect, viewToPath } from '../lib/navigation';
@@ -7,12 +7,16 @@ import logoImg from '../assets/images/aurastudio-logo.png';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Prefer sign-in tab (e.g. after email confirmation) */
+  initialMode?: 'signin' | 'signup';
+  /** Banner text after email confirmation */
+  notice?: string | null;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'signin', notice = null }) => {
   const { signIn, signUp, setCurrentView, setCurrency, language } = useApp();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -22,7 +26,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [awaitingEmail, setAwaitingEmail] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      if (notice) setSuccessMsg(notice);
+    }
+  }, [isOpen, initialMode, notice]);
+
   if (!isOpen) return null;
+
+  const L = {
+    studio: language === 'ru' ? 'Аккаунт Studio AI' : language === 'en' ? 'Studio AI account' : 'Cont Studio AI',
+    signin: language === 'ru' ? 'Вход' : language === 'en' ? 'Sign in' : 'Autentificare',
+    signup: language === 'ru' ? 'Регистрация' : language === 'en' ? 'Sign up' : 'Înregistrare',
+    name: language === 'ru' ? 'Имя и фамилия' : language === 'en' ? 'Full name' : 'Nume & Prenume',
+    namePh: language === 'ru' ? 'например, Мария Попеску' : language === 'en' ? 'e.g. Maria Popescu' : 'e.g. Maria Popescu',
+    country: language === 'ru' ? 'Страна' : language === 'en' ? 'Country' : 'Țara',
+    email: 'Email',
+    emailPh: language === 'ru' ? 'name@example.com' : language === 'en' ? 'name@example.com' : 'nume@exemplu.com',
+    password: language === 'ru' ? 'Пароль' : language === 'en' ? 'Password' : 'Parolă',
+    passwordPh: language === 'ru' ? 'Минимум 6 символов' : language === 'en' ? 'At least 6 characters' : 'Minim 6 caractere',
+    processing: language === 'ru' ? 'Обработка…' : language === 'en' ? 'Processing…' : 'Se procesează...',
+    connect: language === 'ru' ? 'Войти' : language === 'en' ? 'Sign in' : 'Conectează-te',
+    create: language === 'ru' ? 'Создать аккаунт' : language === 'en' ? 'Create account' : 'Creează Contul',
+    noAccount: language === 'ru' ? 'Нет аккаунта?' : language === 'en' ? "Don't have an account?" : 'Nu ai un cont?',
+    registerFree: language === 'ru' ? 'Зарегистрируйся бесплатно' : language === 'en' ? 'Sign up free' : 'Înregistrează-te gratuit',
+    hasAccount: language === 'ru' ? 'Уже есть аккаунт?' : language === 'en' ? 'Already have an account?' : 'Ai deja un cont?',
+    signInLink: language === 'ru' ? 'Войти' : language === 'en' ? 'Sign in' : 'Conectează-te',
+    needName: language === 'ru' ? 'Укажи имя.' : language === 'en' ? 'Please enter your name.' : 'Te rugăm să introduci numele tău.',
+    signInFail: language === 'ru' ? 'Вход не удался. Проверь данные.' : language === 'en' ? 'Sign-in failed. Check your details.' : 'Autentificare eșuată. Verifică datele introduse.',
+    signUpFail: language === 'ru' ? 'Не удалось создать аккаунт.' : language === 'en' ? 'Could not create account.' : 'Crearea contului a eșuat.',
+    createdOk: language === 'ru' ? 'Аккаунт создан!' : language === 'en' ? 'Account created!' : 'Cont creat cu succes!',
+    confirmTitle: language === 'ru' ? 'Подтверди почту' : language === 'en' ? 'Confirm your email' : 'Confirmă emailul',
+    moldova: language === 'ru' ? 'Молдова (MDL)' : language === 'en' ? 'Moldova (MDL)' : 'Moldova (MDL)',
+    romania: language === 'ru' ? 'Румыния (RON)' : language === 'en' ? 'Romania (RON)' : 'România (RON)',
+    other: language === 'ru' ? 'Другая (EUR)' : language === 'en' ? 'Other (EUR)' : 'Other (EUR)',
+  };
 
   const currencyForCountry = (c: 'Moldova' | 'Romania' | 'Other') => {
     if (c === 'Moldova') return 'MDL' as const;
@@ -51,20 +90,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       if (mode === 'signin') {
         const res = await signIn(email, password);
         if (!res.success) {
-          setErrorMsg(res.error || 'Autentificare eșuată. Verifică datele introduse.');
+          setErrorMsg(res.error || L.signInFail);
         } else {
           finishAuth();
         }
       } else {
         if (!name.trim()) {
-          setErrorMsg('Te rugăm să introduci numele tău.');
+          setErrorMsg(L.needName);
           setLoading(false);
           return;
         }
 
         const res = await signUp(email, password, name, country);
         if (!res.success) {
-          setErrorMsg(res.error || 'Crearea contului a eșuat.');
+          setErrorMsg(res.error || L.signUpFail);
         } else if (res.needsEmailConfirmation) {
           setCurrency(currencyForCountry(country));
           setAwaitingEmail(true);
@@ -77,7 +116,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           );
         } else {
           setCurrency(currencyForCountry(country));
-          setSuccessMsg('Cont creat cu succes!');
+          setSuccessMsg(L.createdOk);
           setTimeout(() => finishAuth(), 800);
         }
       }
@@ -87,7 +126,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#12141c] p-6 shadow-2xl">
         <button
           onClick={onClose}
@@ -102,7 +141,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             alt="AuraStudio"
             className="h-10 w-auto max-w-[160px] object-contain brightness-110"
           />
-          <p className="text-[11px] text-slate-400">Cont Studio AI</p>
+          <p className="text-[11px] text-slate-400">{L.studio}</p>
         </div>
 
         {!awaitingEmail && (
@@ -112,13 +151,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               onClick={() => {
                 setMode('signin');
                 setErrorMsg(null);
-                setSuccessMsg(null);
+                setSuccessMsg(notice);
               }}
               className={`py-2 text-xs font-semibold rounded-lg transition-colors ${
                 mode === 'signin' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Autentificare
+              {L.signin}
             </button>
             <button
               type="button"
@@ -131,7 +170,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 mode === 'signup' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Înregistrare
+              {L.signup}
             </button>
           </div>
         )}
@@ -153,13 +192,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         {awaitingEmail ? (
           <div className="mt-5 space-y-4">
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-100 leading-relaxed">
-              <p className="font-bold text-amber-300 mb-2">
-                {language === 'ru'
-                  ? 'Подтверди почту'
-                  : language === 'en'
-                  ? 'Confirm your email'
-                  : 'Confirmă emailul'}
-              </p>
+              <p className="font-bold text-amber-300 mb-2">{L.confirmTitle}</p>
               <p>
                 {language === 'ru'
                   ? `Письмо отправлено на ${email}. Открой ссылку в письме. Пока почта не подтверждена, генерация и загрузка фото заблокированы.`
@@ -181,13 +214,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             {mode === 'signup' && (
               <>
                 <div>
-                  <label className="text-[11px] font-medium text-slate-300 block mb-1">Nume & Prenume</label>
+                  <label className="text-[11px] font-medium text-slate-300 block mb-1">{L.name}</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Maria Popescu"
+                      placeholder={L.namePh}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
@@ -196,7 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-medium text-slate-300 block mb-1">Țara</label>
+                  <label className="text-[11px] font-medium text-slate-300 block mb-1">{L.country}</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
                     <select
@@ -204,9 +237,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                       onChange={(e) => setCountry(e.target.value as 'Moldova' | 'Romania' | 'Other')}
                       className="w-full rounded-xl border border-white/10 bg-[#161924] pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400 appearance-none"
                     >
-                      <option value="Moldova">Moldova (MDL)</option>
-                      <option value="Romania">România (RON)</option>
-                      <option value="Other">Other (EUR)</option>
+                      <option value="Moldova">{L.moldova}</option>
+                      <option value="Romania">{L.romania}</option>
+                      <option value="Other">{L.other}</option>
                     </select>
                   </div>
                 </div>
@@ -214,13 +247,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             )}
 
             <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">Email</label>
+              <label className="text-[11px] font-medium text-slate-300 block mb-1">{L.email}</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <input
                   type="email"
                   required
-                  placeholder="nume@exemplu.com"
+                  placeholder={L.emailPh}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
@@ -229,14 +262,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-slate-300 block mb-1">Parolă</label>
+              <label className="text-[11px] font-medium text-slate-300 block mb-1">{L.password}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <input
                   type="password"
                   required
                   minLength={6}
-                  placeholder="Minim 6 caractere"
+                  placeholder={L.passwordPh}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-amber-400"
@@ -250,11 +283,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 py-3 text-xs font-bold text-slate-950 shadow-md hover:brightness-110 active:scale-95 disabled:opacity-50"
             >
               <span>
-                {loading
-                  ? 'Se procesează...'
-                  : mode === 'signin'
-                  ? 'Conectează-te'
-                  : 'Creează Contul'}
+                {loading ? L.processing : mode === 'signin' ? L.connect : L.create}
               </span>
               <ArrowRight className="h-4 w-4" />
             </button>
@@ -265,16 +294,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <div className="mt-4 text-center text-[11px] text-slate-500">
             {mode === 'signin' ? (
               <span>
-                Nu ai un cont?{' '}
+                {L.noAccount}{' '}
                 <button type="button" onClick={() => setMode('signup')} className="text-amber-400 hover:underline font-semibold">
-                  Înregistrează-te gratuit
+                  {L.registerFree}
                 </button>
               </span>
             ) : (
               <span>
-                Ai deja un cont?{' '}
+                {L.hasAccount}{' '}
                 <button type="button" onClick={() => setMode('signin')} className="text-amber-400 hover:underline font-semibold">
-                  Conectează-te
+                  {L.signInLink}
                 </button>
               </span>
             )}
