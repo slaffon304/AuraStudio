@@ -20,6 +20,40 @@ import { PwaInstallBanner } from './components/PwaInstallBanner';
 import { PhotoTemplate } from './types';
 import { pathToView, viewToPath } from './lib/navigation';
 
+function detectEmailConfirmedRedirect(): boolean {
+  try {
+    if (sessionStorage.getItem('aurastudio_email_confirmed') === '1') {
+      sessionStorage.removeItem('aurastudio_email_confirmed');
+      return true;
+    }
+    const hash = window.location.hash?.replace(/^#/, '') || '';
+    const search = window.location.search?.replace(/^\?/, '') || '';
+    const hp = new URLSearchParams(hash);
+    const sp = new URLSearchParams(search);
+    const type = (hp.get('type') || sp.get('type') || '').toLowerCase();
+    const flag = sp.get('email_confirmed') === '1' || hp.get('email_confirmed') === '1';
+    const error = hp.get('error') || sp.get('error');
+    if (error) return false;
+
+    // Supabase after verify: type=signup|email|email_change, or our ?email_confirmed=1
+    const isConfirm =
+      flag ||
+      type === 'signup' ||
+      type === 'email' ||
+      type === 'email_change';
+
+    if (isConfirm) {
+      if (hash || search) {
+        window.history.replaceState({}, '', window.location.pathname || '/');
+      }
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 const MainAppContent: React.FC = () => {
   const {
     currentView,
@@ -34,10 +68,14 @@ const MainAppContent: React.FC = () => {
     selectedTemplate,
     openCustomPinterest,
     openEnhanceQuality,
-    isBackendConnected
+    isBackendConnected,
+    language,
+    signOut
   } = useApp();
 
   const [previewTemplate, setPreviewTemplate] = useState<PhotoTemplate | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
 
   useEffect(() => {
     const applyPath = () => {
@@ -47,6 +85,25 @@ const MainAppContent: React.FC = () => {
     window.addEventListener('popstate', applyPath);
     return () => window.removeEventListener('popstate', applyPath);
   }, [setCurrentView]);
+
+  // After email confirmation link → home: show notice + open sign-in
+  useEffect(() => {
+    const confirmed = detectEmailConfirmedRedirect();
+    if (!confirmed) return;
+
+    const msg =
+      language === 'ru'
+        ? 'Email подтверждён. Войди в аккаунт ещё раз.'
+        : language === 'en'
+        ? 'Email confirmed. Please sign in again.'
+        : 'Email confirmat. Te rugăm să te autentifici din nou.';
+
+    setAuthNotice(msg);
+    setAuthInitialMode('signin');
+    setIsAuthModalOpen(true);
+    // Link may create a session — user should sign in explicitly again
+    signOut().catch(() => {});
+  }, [language, setIsAuthModalOpen, signOut]);
 
   return (
     <div className="aura-stage min-h-screen w-full overflow-x-hidden text-slate-900 dark:text-slate-100 flex flex-col transition-colors">
@@ -148,7 +205,15 @@ const MainAppContent: React.FC = () => {
 
       <CreditPurchaseModal isOpen={isPhotoModalOpen} onClose={() => setIsPhotoModalOpen(false)} />
 
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setAuthNotice(null);
+        }}
+        initialMode={authInitialMode}
+        notice={authNotice}
+      />
 
       <PwaInstallBanner />
     </div>
