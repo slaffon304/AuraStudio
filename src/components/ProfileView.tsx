@@ -272,7 +272,13 @@ export const ProfileView: React.FC = () => {
         </button>
         <button
           type="button"
-          className="rounded-[20px] bg-white/95 backdrop-blur-sm p-4 text-left shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10 opacity-80"
+          onClick={() => {
+            markFromProfile();
+            setCurrentView('gallery');
+            window.history.pushState({}, '', viewToPath('gallery'));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="rounded-[20px] bg-white/95 backdrop-blur-sm p-4 text-left shadow-md border border-slate-200 dark:bg-[#12141c]/95 dark:border-white/10"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] dark:bg-blue-500/15">
             <Play className="h-4 w-4 text-[#4f63f0]" />
