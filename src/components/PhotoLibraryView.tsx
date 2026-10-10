@@ -46,6 +46,15 @@ export const PhotoLibraryView: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!window.confirm(language === 'ru' ? 'Удалить это фото?' : language === 'en' ? 'Delete this photo?' : 'Ștergi această fotografie?')) {
+      return;
+    }
+    await deletePhoto(id);
+  };
+
   if (!currentUser) {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center space-y-4">
@@ -146,20 +155,23 @@ export const PhotoLibraryView: React.FC = () => {
                 />
 
                 {/* Ambient Scrim */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
 
-                {/* Quick Delete */}
+                {/* Delete — always visible on mobile, hover on desktop */}
                 <button
-                  onClick={() => deletePhoto(photo.id)}
-                  className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
-                  title="Șterge fotografia"
+                  type="button"
+                  onClick={(e) => handleDelete(photo.id, e)}
+                  className="absolute top-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-red-500 active:scale-95 transition-all z-10"
+                  title={language === 'ru' ? 'Удалить' : language === 'en' ? 'Delete' : 'Șterge'}
+                  aria-label="Delete photo"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
 
                 {/* Use In Shoot Button */}
-                <div className="absolute inset-x-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-x-2 bottom-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
+                    type="button"
                     onClick={() => setIsCreateModalOpen(true)}
                     className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 py-2 text-[11px] font-bold shadow-md hover:brightness-110 active:scale-95 transition-all"
                   >
