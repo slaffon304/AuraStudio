@@ -516,10 +516,11 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     } else {
       // template single
       promptContext = [
-        'TASK: Create a photorealistic portrait of the identity person in the style/scene of the reference image.',
-        'IDENTITY images: face and identity source. Preserve recognizable facial features and natural skin.',
-        'STYLE REFERENCE image: clothing, pose intent, background, lighting, and overall look — do NOT use the reference person’s face.',
-        'Do not substitute a different person for the identity subject.',
+        'TASK: Generate a NEW photorealistic photo (not a copy of the identity selfie).',
+        'Put the IDENTITY person into the STYLE REFERENCE scene: new clothing, pose, background and lighting from the style image.',
+        'IDENTITY images: face and identity only — keep recognizable facial features and natural skin.',
+        'STYLE REFERENCE image: clothing, pose, background, lighting — do NOT copy the style reference person’s face.',
+        'The result must clearly look different from the original selfie (outfit/background/pose change).',
         age1Line,
         avoidLine
       ]
@@ -610,12 +611,22 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
         const targetRatio = (aspectRatio === '9:16' || aspectRatio === '16:9' || aspectRatio === '4:3' || aspectRatio === '3:4') ? aspectRatio : '3:4';
 
+    console.log('[generate]', {
+      mode: effectiveMode,
+      parts: contentsParts.length,
+      hasStyle: Boolean(styleUrl || customReferenceUrl),
+      aspect: targetRatio,
+      promptChars: promptContext.length
+    });
+
     const genResponse = await aiClient.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
       contents: {
         parts: contentsParts
       },
       config: {
+        // Required for native image output — without this the model often echoes the input
+        responseModalities: ['TEXT', 'IMAGE'],
         imageConfig: {
           aspectRatio: targetRatio
         }
@@ -632,11 +643,21 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           break;
         }
       }
+      if (!imageBase64Data) {
+        const textBits = parts.map((p: any) => p.text).filter(Boolean).join(' ').slice(0, 400);
+        console.warn('[generate] no image in response, text:', textBits);
+      }
+    } else {
+      console.warn('[generate] empty candidates', JSON.stringify(genResponse)?.slice(0, 500));
     }
 
     if (!imageBase64Data) {
-      throw new Error('Modelul Gemini nu a returnat date vizuale pentru imagine.');
+      throw new Error(
+        'Modelul Gemini nu a returnat o imagine. Verifică GEMINI_API_KEY și că modelul gemini-3.1-flash-lite-image este disponibil pe cheie.'
+      );
     }
+
+    console.log('[generate] image ok', { mimeType, bytesApprox: Math.round((imageBase64Data.length * 3) / 4) });
 
     // 6. Save generated image to private Supabase Storage bucket 'generated-images'
     const storagePath = `${userId}/${jobId}.jpg`;
