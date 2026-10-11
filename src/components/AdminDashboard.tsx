@@ -64,6 +64,8 @@ export const AdminDashboard: React.FC = () => {
     descRo: '',
     category: 'Trending' as TemplateCategory,
     previewImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80',
+    maskImageUrl: '',
+    expression: '',
     prompt: '',
     negativePrompt: '',
     aspectRatio: '3:4' as AspectRatio,
@@ -127,6 +129,8 @@ export const AdminDashboard: React.FC = () => {
       },
       category: newTemplateForm.category,
       previewImage: newTemplateForm.previewImage,
+      maskImageUrl: newTemplateForm.maskImageUrl || undefined,
+      expression: newTemplateForm.expression || undefined,
       prompt: newTemplateForm.prompt,
       negativePrompt: newTemplateForm.negativePrompt,
       aspectRatio: newTemplateForm.aspectRatio,
@@ -845,6 +849,42 @@ export const AdminDashboard: React.FC = () => {
                     })
                   }
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Mask image URL (лицо+волосы закрыты)
+                </label>
+                <input
+                  type="url"
+                  value={editingTemplate.maskImageUrl || ''}
+                  onChange={(e) =>
+                    setEditingTemplate({
+                      ...editingTemplate,
+                      maskImageUrl: e.target.value || undefined
+                    })
+                  }
+                  placeholder="https://... mask without face/hair"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Expression
+                </label>
+                <input
+                  type="text"
+                  value={editingTemplate.expression || ''}
+                  onChange={(e) =>
+                    setEditingTemplate({
+                      ...editingTemplate,
+                      expression: e.target.value || undefined
+                    })
+                  }
+                  placeholder="calm neutral expression, closed mouth, no smile"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white"
                 />
               </div>
 
