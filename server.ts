@@ -3,7 +3,6 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
-import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import {
   supabaseAdmin,
@@ -295,72 +294,6 @@ async function urlToGenerativePart(url: string) {
   return null;
 }
 
-/** Moderate face soften on STYLE image only — head tilt stays readable, face not usable as identity */
-async function softenStyleFaces(input: Buffer): Promise<Buffer> {
-  const meta = await sharp(input, { failOn: 'none' }).metadata();
-  const w = meta.width || 1024;
-  const h = meta.height || 1024;
-
-  const regions = [
-    { cx: 0.5, cy: 0.32, rw: 0.28, rh: 0.22 },
-    { cx: 0.34, cy: 0.3, rw: 0.22, rh: 0.2 },
-    { cx: 0.66, cy: 0.3, rw: 0.22, rh: 0.2 }
-  ];
-
-  const composites: { input: Buffer; left: number; top: number }[] = [];
-
-  for (const r of regions) {
-    const left = Math.max(0, Math.round(w * (r.cx - r.rw / 2)));
-    const top = Math.max(0, Math.round(h * (r.cy - r.rh / 2)));
-    const width = Math.min(w - left, Math.round(w * r.rw));
-    const height = Math.min(h - top, Math.round(h * r.rh));
-    if (width < 8 || height < 8) continue;
-
-    const piece = await sharp(input, { failOn: 'none' })
-      .extract({ left, top, width, height })
-      .blur(12)
-      .toBuffer();
-
-    composites.push({ input: piece, left, top });
-  }
-
-  if (composites.length === 0) {
-    return sharp(input, { failOn: 'none' }).jpeg({ quality: 92 }).toBuffer();
-  }
-
-  return sharp(input, { failOn: 'none' })
-    .composite(composites)
-    .jpeg({ quality: 92 })
-    .toBuffer();
-}
-
-async function urlToStyleGenerativePart(url: string) {
-  if (!url) return null;
-  try {
-    let buffer: Buffer;
-    if (url.startsWith('data:image/')) {
-      const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (!match) return null;
-      buffer = Buffer.from(match[2], 'base64');
-    } else {
-      const resp = await fetch(url);
-      if (!resp.ok) return null;
-      buffer = Buffer.from(await resp.arrayBuffer());
-    }
-    const softened = await softenStyleFaces(buffer);
-    return {
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: softened.toString('base64')
-      }
-    };
-  } catch (err) {
-    console.warn('[style-soften] fallback to original', err);
-    return urlToGenerativePart(url);
-  }
-}
-
-
 // ====================================================================
 // GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
 // ====================================================================
@@ -494,100 +427,102 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     let imageBase64Data: string | null = null;
     let mimeType = 'image/jpeg';
 
-    // ── Prompt + image parts (mode-specific contract) ─────────────────
-    // Style/scene comes from images (template preview / Pinterest ref).
-    // templates.prompt is NOT sent when a style image is attached.
-    // ── Load system prompts from DB (fallback to strong built-ins) ──
-    const BUILTIN_PROMPTS: Record<string, string> = {
-      template: [
-        'CRITICAL IDENTITY RULES (highest priority):',
-        '1) The output face MUST be the same person as in the IDENTITY images — same bone structure, eye shape and color, nose, lips, eyebrows, skin texture, age, wrinkles, facial hair pattern, and hairline.',
-        '2) NEVER use the face, skin tone, age, or head shape from the STYLE REFERENCE image.',
-        '3) If IDENTITY and STYLE faces conflict, always keep the IDENTITY face and only take clothing/pose/scene from STYLE.',
-        '4) Do not beautify into a different person. Keep realistic skin pores, asymmetry, and age signs from IDENTITY.',
-        'TASK: Generate a NEW photorealistic photo. Put the IDENTITY person into the STYLE REFERENCE scene.',
-        'From IDENTITY: face only. From STYLE: clothing, pose, background, lighting — never the face.',
-        '{{age_line}}',
-        '{{avoid_line}}'
-      ].join('\n'),
-      couple: [
-        'CRITICAL IDENTITY RULES (highest priority):',
-        '1) PERSON A face MUST match IDENTITY A images only. PERSON B face MUST match IDENTITY B images only.',
-        '2) NEVER copy faces from the STYLE REFERENCE.',
-        '3) Do not merge faces, swap A/B, or invent a third person.',
-        'TASK: One photorealistic photo of TWO people. PERSON A = LEFT. PERSON B = RIGHT.',
-        'STYLE REFERENCE (if any): scene/wardrobe/lighting only — not identity.',
-        '{{age1_line}}',
-        '{{age2_line}}',
-        '{{avoid_line}}'
-      ].join('\n'),
-      pinterest: [
-        'CRITICAL IDENTITY RULES (highest priority):',
-        '1) Output face MUST match IDENTITY images only.',
-        '2) STYLE REFERENCE face must be ignored completely.',
-        'TASK: New photorealistic photo. IDENTITY = who appears. STYLE = outfit/pose/scene only.',
-        '{{age_line}}',
-        '{{body_line}}',
-        '{{avoid_line}}'
-      ].join('\n'),
-      enhance: [
-        'TASK: Improve technical quality only. PRESERVE exact identity, face, pose, clothing, background.',
-        'DO NOT change age or face structure or beautify into another person.',
-        '{{quality_line}}',
-        '{{avoid_line}}'
-      ].join('\n'),
-      avoid_default:
-        'Avoid distorted anatomy, extra fingers, unnatural hands, plastic over-smoothed skin, watermarks, logos, random text overlays, and any face that does not match the IDENTITY photos.'
-    };
+    // ── Prompt + images: IDENTITY selfies + SCENE TEXT (no style image) ──
+    // Templates: scene from templates.prompt
+    // Pinterest: scene from on-the-fly vision analysis of the reference
+    // Blur / style-image face transfer removed on purpose.
 
-    let promptRows: Record<string, string> = { ...BUILTIN_PROMPTS };
-    try {
-      const { data: rows } = await supabaseAdmin
-        .from('generation_prompts')
-        .select('key, body');
-      if (Array.isArray(rows)) {
-        for (const r of rows) {
-          if (r?.key && r?.body) promptRows[r.key] = String(r.body);
-        }
+    const SCENE_ANALYZE_PROMPT = `You are a photography director writing a scene brief for an AI image generator.
+
+Analyze the reference photograph in extreme detail. Output ONLY a single dense English paragraph (no bullet lists, no markdown, no preamble).
+
+Describe the COMPLETE scene so another model can recreate the same shot WITHOUT seeing this image and WITHOUT copying any person's face:
+- Camera: exact framing (head-and-shoulders / waist-up / full body), camera height, angle (eye-level / slight low / high), approximate focal length feel (e.g. 35mm, 50mm, 85mm), depth of field
+- Pose: body orientation, head turn, gaze direction, arm and hand placement, weight distribution
+- Wardrobe: garments, colors, fabrics, fit, accessories, shoes if visible
+- Environment: location type, architecture, furniture, props, what is left/right/behind the subject
+- Lighting: key light direction and quality (soft/hard), fill, rim, color temperature, time of day, reflections
+- Color grade and mood: overall palette, contrast, atmosphere
+- Composition: subject placement in frame, leading lines, background blur amount
+
+STRICT RULES:
+- Do NOT describe facial features, age, gender presentation, skin, hair style/color, or identity of any person.
+- Do NOT invent objects that are not visible.
+- Prefer concrete visual facts over vague adjectives.
+- Write as an executable scene prompt for photorealistic generation.`;
+
+    async function analyzeSceneFromImage(url: string): Promise<string> {
+      const part = await urlToGenerativePart(url);
+      if (!part?.inlineData?.data) {
+        throw new Error('Nu s-a putut încărca imaginea de referință pentru analiză.');
       }
-    } catch (e) {
-      console.warn('[generate] generation_prompts table missing or unreadable, using built-ins');
+      // Text+vision model for scene breakdown (not the image generator)
+      const analysisModel =
+        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
+      try {
+        const resp = await aiClient!.models.generateContent({
+          model: analysisModel,
+          contents: {
+            parts: [
+              { text: SCENE_ANALYZE_PROMPT },
+              {
+                inlineData: {
+                  mimeType: part.inlineData.mimeType || 'image/jpeg',
+                  data: part.inlineData.data
+                }
+              }
+            ]
+          }
+        });
+        const text =
+          (resp as any)?.text ||
+          (resp as any)?.candidates?.[0]?.content?.parts
+            ?.map((p: any) => p.text)
+            .filter(Boolean)
+            .join(' ') ||
+          '';
+        const cleaned = String(text).trim().replace(/\s+/g, ' ');
+        if (cleaned.length < 40) {
+          throw new Error('Analiza scenei a returnat un text prea scurt.');
+        }
+        return cleaned.slice(0, 2500);
+      } catch (err: any) {
+        console.error('[scene-analyze]', err?.message || err);
+        throw new Error(
+          'Nu s-a putut analiza referința Pinterest: ' + (err?.message || 'unknown')
+        );
+      }
     }
 
-    const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
-    const avoidBase = (promptRows['avoid_default'] || BUILTIN_PROMPTS.avoid_default).trim();
-    const avoidLine = negFromDb ? `Avoid: ${negFromDb}. ${avoidBase}` : avoidBase;
-
-    // Age only if client explicitly sent a valid number (no default 25)
     const ageProvided = age !== undefined && age !== null && age !== '';
     const age2Provided = age2 !== undefined && age2 !== null && age2 !== '';
     const ageNum = ageProvided ? Number(age) : NaN;
     const age2Num = age2Provided ? Number(age2) : NaN;
     const age1Line =
       Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
-        ? `Person A is approximately ${Math.round(ageNum)} years old — keep this age, do not rejuvenate.`
+        ? `Apparent age of Person A should be about ${Math.round(ageNum)} years (only if consistent with the identity photos).`
         : '';
     const age2Line =
       Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
-        ? `Person B is approximately ${Math.round(age2Num)} years old — keep this age, do not rejuvenate.`
+        ? `Apparent age of Person B should be about ${Math.round(age2Num)} years (only if consistent with the identity photos).`
         : '';
     const h = Number(heightCm);
     const w = Number(weightKg);
     const bodyLine = [
-      Number.isFinite(h) && h >= 100 && h <= 250 ? `Requested height about ${Math.round(h)} cm.` : '',
+      Number.isFinite(h) && h >= 100 && h <= 250
+        ? `If full body is visible, height about ${Math.round(h)} cm.`
+        : '',
       Number.isFinite(w) && w >= 30 && w <= 250
-        ? `Requested weight about ${Math.round(w)} kg (body proportion only; do not distort the face).`
+        ? `Body build consistent with about ${Math.round(w)} kg (do not distort the face).`
         : ''
     ]
       .filter(Boolean)
       .join(' ');
 
-    const styleUrl =
-      mode === 'enhance'
-        ? ''
-        : mode === 'pinterest' || customReferenceUrl
-          ? String(customReferenceUrl || '')
-          : String(template.preview_image_url || template.previewImageUrl || template.preview_image || '');
+    const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
+    const avoidLine = negFromDb
+      ? `Avoid: ${negFromDb}`
+      : 'Avoid: distorted anatomy, extra fingers, plastic skin, watermarks, logos, text overlays.';
 
     const effectiveMode =
       mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
@@ -598,37 +533,86 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
             ? 'enhance'
             : 'template';
 
-    const fill = (tpl: string, vars: Record<string, string>) =>
-      tpl
-        .replace(/\{\{age_line\}\}/g, vars.age_line || '')
-        .replace(/\{\{age1_line\}\}/g, vars.age1_line || '')
-        .replace(/\{\{age2_line\}\}/g, vars.age2_line || '')
-        .replace(/\{\{body_line\}\}/g, vars.body_line || '')
-        .replace(/\{\{avoid_line\}\}/g, vars.avoid_line || '')
-        .replace(/\{\{quality_line\}\}/g, vars.quality_line || '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+    // Resolve SCENE TEXT (never send style/template image to the image model)
+    let sceneText = '';
+    if (effectiveMode === 'enhance') {
+      sceneText = '';
+    } else if (effectiveMode === 'pinterest') {
+      const ref = String(customReferenceUrl || '');
+      if (!ref) {
+        throw new Error('Referința Pinterest lipsește.');
+      }
+      sceneText = await analyzeSceneFromImage(ref);
+      console.log('[scene-analyze] pinterest chars:', sceneText.length, sceneText.slice(0, 200));
+    } else {
+      // template / couple — detailed prompt from DB
+      sceneText = String(template.prompt || '').trim();
+      if (!sceneText) {
+        throw new Error('Template prompt lipsește în baza de date.');
+      }
+    }
 
-    const promptContext = fill(promptRows[effectiveMode] || BUILTIN_PROMPTS[effectiveMode] || '', {
-      age_line: age1Line,
-      age1_line: age1Line,
-      age2_line: age2Line,
-      body_line: bodyLine,
-      avoid_line: avoidLine,
-      quality_line: quality4k
-        ? 'Aim for maximum visible detail (4K-class clarity).'
-        : 'Aim for clean high-detail output.'
-    });
+    let promptContext = '';
+    if (effectiveMode === 'enhance') {
+      promptContext = [
+        'TASK: Improve technical quality of this photo only.',
+        'Preserve exact identity, face, expression, pose, clothing, composition, background.',
+        'Do not restyle, beautify into another person, or change age.',
+        quality4k ? 'Maximum clarity and detail.' : 'Clean high detail.',
+        avoidLine
+      ].join('\n');
+    } else if (effectiveMode === 'couple') {
+      promptContext = [
+        'TASK: Create ONE photorealistic photo of TWO real people together.',
+        'PERSON A appears on the LEFT. PERSON B appears on the RIGHT.',
+        'Faces must match the IDENTITY photos for A and B only. Do not invent or swap faces.',
+        'Follow the SCENE description exactly for setting, wardrobe, pose intent, camera angle, lighting, and framing.',
+        'Do not invent a different camera angle than the scene describes.',
+        'SCENE:',
+        sceneText,
+        age1Line,
+        age2Line,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } else if (effectiveMode === 'pinterest') {
+      promptContext = [
+        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
+        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline).',
+        'Recreate the SCENE as described: same camera angle, framing, pose, wardrobe, lighting, and environment.',
+        'Do not invent a different viewpoint than the scene specifies.',
+        'SCENE (from reference analysis — no face identity in this text):',
+        sceneText,
+        age1Line,
+        bodyLine,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } else {
+      // template single
+      promptContext = [
+        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
+        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline, age signs).',
+        'Follow the SCENE description closely for environment, wardrobe, pose, camera angle, focal length feel, lighting, and framing.',
+        'Do not change the camera angle or crop style described in the scene.',
+        'If the scene text mentions a generic person, ignore their face/identity — use only the IDENTITY photos for the face.',
+        'SCENE:',
+        sceneText,
+        age1Line,
+        avoidLine
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
 
-    // Build input for Interactions API — IDENTITY images BEFORE style
     const interactionInput: any[] = [];
-
     const pushText = (t: string) => {
       if (t && String(t).trim()) {
         interactionInput.push({ type: 'text', text: String(t).trim() });
       }
     };
-
     const pushImageFromUrl = async (url: string) => {
       if (!url) return;
       const part = await urlToGenerativePart(url);
@@ -641,93 +625,37 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       }
     };
 
-    const pushStyleImageFromUrl = async (url: string) => {
-      if (!url) return;
-      const part = await urlToStyleGenerativePart(url);
-      if (part?.inlineData?.data) {
-        interactionInput.push({
-          type: 'image',
-          mime_type: part.inlineData.mimeType || 'image/jpeg',
-          data: part.inlineData.data
-        });
-
-        // DEBUG: save softened style for browser viewing during calibration
-        try {
-          const bin = Buffer.from(part.inlineData.data, 'base64');
-          const pathName = `debug/style-softened-${Date.now()}.jpg`;
-          const bucket = 'template-previews';
-          await supabaseAdmin.storage.from(bucket).upload(pathName, bin, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
-          const { data: pub } = supabaseAdmin.storage.from(bucket).getPublicUrl(pathName);
-          console.log('[style-soften] public url:', pub?.publicUrl || pathName);
-        } catch (e) {
-          console.warn('[style-soften] could not upload debug image', e);
-        }
-      }
-    };
-
-    // Instructions first
     pushText(promptContext);
 
     if (effectiveMode === 'enhance') {
-      pushText('PHOTO TO ENHANCE (preserve this exact person):');
+      pushText('PHOTO TO ENHANCE:');
       await pushImageFromUrl(userPhotoUrl);
     } else if (effectiveMode === 'couple') {
-      pushText('IDENTITY A (LEFT person) — use ONLY these faces for the person on the LEFT:');
+      pushText('IDENTITY A (LEFT) — face source for the person on the LEFT:');
       await pushImageFromUrl(userPhotoUrl);
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
       }
-      pushText('IDENTITY B (RIGHT person) — use ONLY these faces for the person on the RIGHT:');
+      pushText('IDENTITY B (RIGHT) — face source for the person on the RIGHT:');
       if (partnerPhotoUrl) await pushImageFromUrl(partnerPhotoUrl);
       if (Array.isArray(partnerExtraPhotoUrls)) {
         for (const u of partnerExtraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
       }
-      if (styleUrl) {
-        pushText(
-          'STYLE REFERENCE — scene, clothing, lighting, pose ONLY. Do NOT copy any face from this image:'
-        );
-        await pushStyleImageFromUrl(styleUrl);
-        pushText('IDENTITY FACE LOCK — match this face exactly, ignore any face from the style image:');
-        await pushImageFromUrl(userPhotoUrl);
-      }
-    } else if (effectiveMode === 'pinterest') {
-      pushText('IDENTITY — the ONLY face that must appear in the result:');
-      await pushImageFromUrl(userPhotoUrl);
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
-      }
-      pushText(
-        'STYLE REFERENCE — outfit, pose, background, lighting ONLY. Do NOT copy this face:'
-      );
-      await pushStyleImageFromUrl(customReferenceUrl || styleUrl);
     } else {
-      // template single — identity first, style last
-      pushText('IDENTITY — the ONLY face that must appear in the result (match exactly):');
+      pushText('IDENTITY — the only face that must appear in the result:');
       await pushImageFromUrl(userPhotoUrl);
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
       }
-      if (styleUrl) {
-        pushText(
-          'STYLE REFERENCE — clothing, pose, background, lighting ONLY. STRICTly ignore the face in this image:'
-        );
-        await pushStyleImageFromUrl(styleUrl);
-      } else if (template.prompt) {
-        pushText(`SCENE FALLBACK (no style image): ${String(template.prompt).slice(0, 600)}`);
-      }
     }
 
-    // Final reminder after images (models often weight later tokens)
-    if (effectiveMode !== 'enhance') {
-      pushText(
-        'FINAL CHECK: The face in the output must match IDENTITY photo(s), not the style reference. Prefer identity likeness over style likeness.'
-      );
-    }
+    pushText(
+      effectiveMode === 'enhance'
+        ? 'Output an enhanced version of the same photo.'
+        : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
+    );
 
-        const targetRatio =
+            const targetRatio =
       aspectRatio === '9:16' ||
       aspectRatio === '16:9' ||
       aspectRatio === '4:3' ||
