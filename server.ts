@@ -723,10 +723,13 @@ STRICT RULES:
       }
     };
 
-    // ── TWO-PASS (template + mask_image_url only) ─────────────────────
-    // Pass 1: identity + scene text @ 1K → face at correct scale
-    // Pass 2: mask scene + pass1 head + expression @ 2K/4K → final
-    if (effectiveMode === 'template' && maskUrl) {
+    // ── TWO-PASS when mask_image_url is set ───────────────────────────
+    // template and couple are SEPARATE prompt contracts (no shared text)
+    const useTwoPass =
+      (effectiveMode === 'template' || effectiveMode === 'couple') && Boolean(maskUrl);
+
+    if (useTwoPass && effectiveMode === 'template') {
+      // ========== SINGLE: PASS 1 ==========
       await supabaseAdmin
         .from('generation_jobs')
         .update({
@@ -763,8 +766,9 @@ STRICT RULES:
         'FINAL: Face and hair from IDENTITY only. Output a single photorealistic image.'
       );
 
-      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1');
+      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
 
+      // ========== SINGLE: PASS 2 ==========
       await supabaseAdmin
         .from('generation_jobs')
         .update({
@@ -781,6 +785,8 @@ STRICT RULES:
           'Image 2 is a photograph of the person whose head must be used.',
           '',
           'Generate a photorealistic photo: keep the scene from Image 1 unchanged (background, pose, hands, clothing, props, light, camera angle) and replace the masked region with the head from Image 2: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to the pose on Image 1.',
+          '',
+          'Skin color: use the skin tone from the head in Image 2 everywhere it belongs on that person — face, ears, neck, and any visible skin that is part of the head/neck area. Do not use the skin tone of the original person in Image 1. The whole head-and-neck skin must match Image 2; do not leave a different skin tone on the neck or jawline.',
           '',
           `Facial expression: ${expressionText}. Do not change anything else about the face: do not add wrinkles or under-eye bags, do not age or de-age.`,
           '',
@@ -800,15 +806,107 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL: Composite head from Image 2 onto the masked scene of Image 1. One photorealistic image.'
+        'FINAL: Composite the head from Image 2 onto the masked scene of Image 1. One photorealistic image. Skin tone of the head matches Image 2.'
       );
 
-      const pass2Size: '2K' | '4K' = quality4k ? '4K' : '2K';
-      const pass2 = await runImagePass(pass2Input, pass2Size, 'PASS2');
+      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-single');
+      imageBase64Data = pass2.data;
+      mimeType = pass2.mimeType;
+    } else if (useTwoPass && effectiveMode === 'couple') {
+      // ========== COUPLE: PASS 1 (two identities) ==========
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 45,
+          current_step_message: 'Pass 1/2: two identities + scene (1K)...'
+        })
+        .eq('id', jobId);
+
+      const pass1Input: any[] = [];
+      pushText(
+        pass1Input,
+        [
+          'TASK: Create ONE photorealistic photo of TWO people together in the SCENE below.',
+          'PERSON A appears on the LEFT side of the frame. PERSON B appears on the RIGHT side of the frame.',
+          'Each face must match that person\'s IDENTITY photos only. Do not invent faces. Do not swap A and B.',
+          'Hair for each person: take color, length and texture only from that person\'s own IDENTITY photos; ignore any hair described in the scene text.',
+          'Follow the SCENE for environment, wardrobe, poses, camera angle, lighting, and framing.',
+          'Scene accuracy is secondary to correct, well-scaled faces and heads for both people.',
+          'SCENE:',
+          sceneText,
+          age1Line,
+          age2Line,
+          avoidLine
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
+      pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
+      await pushImageFromUrl(pass1Input, userPhotoUrl);
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
+      }
+      pushText(pass1Input, 'IDENTITY B (RIGHT) — photos of the person who must appear on the RIGHT:');
+      if (partnerPhotoUrl) await pushImageFromUrl(pass1Input, partnerPhotoUrl);
+      if (Array.isArray(partnerExtraPhotoUrls)) {
+        for (const u of partnerExtraPhotoUrls.slice(0, 4))
+          await pushImageFromUrl(pass1Input, u);
+      }
+      pushText(
+        pass1Input,
+        'FINAL: Two people in one image. Faces and hair from IDENTITY A and IDENTITY B only. Do not merge or swap them.'
+      );
+
+      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
+
+      // ========== COUPLE: PASS 2 (two masked heads) ==========
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 70,
+          current_step_message: 'Pass 2/2: composite both heads on masked scene (2K/4K)...'
+        })
+        .eq('id', jobId);
+
+      const pass2Input: any[] = [];
+      pushText(
+        pass2Input,
+        [
+          'Image 1 is the SCENE with TWO people. Both faces and both heads of hair are covered by masks.',
+          'Image 2 is a photograph of the SAME two people whose heads must be used (left person and right person already placed correctly in Image 2).',
+          '',
+          'Generate one photorealistic photo: keep the scene from Image 1 unchanged (background, both body poses, hands, clothing, props, light, camera angle). Replace EACH masked head with the matching head from Image 2.',
+          'Left masked person ← head of the left person in Image 2. Right masked person ← head of the right person in Image 2. Do not swap them. Do not put the same face on both. Do not invent a third person.',
+          'For each head: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to each pose on Image 1.',
+          '',
+          'Skin color: for EACH person, use the skin tone from that person\'s head in Image 2 on their face, ears, neck, and any visible skin in the head/neck area. Do not use the skin tones of the original people in Image 1. Do not leave a different skin tone on the neck or jawline.',
+          '',
+          `Facial expressions: ${expressionText}. Apply a natural expression to each person. Do not add wrinkles or under-eye bags; do not age or de-age either person.`,
+          '',
+          'Do not retouch or beautify. Sharpness, grain and face colors must match the rest of the frame.',
+          avoidLine
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
+      pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
+      await pushImageFromUrl(pass2Input, maskUrl);
+      pushText(pass2Input, 'IMAGE 2 — both HEADS / IDENTITY sources (left and right as already composed):');
+      pass2Input.push({
+        type: 'image',
+        mime_type: pass1.mimeType || 'image/png',
+        data: pass1.data
+      });
+      pushText(
+        pass2Input,
+        'FINAL: Composite both heads from Image 2 onto the two masked people in Image 1. One photorealistic image. Do not swap left and right. Each person\'s skin tone matches their own head in Image 2.'
+      );
+
+      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-couple');
       imageBase64Data = pass2.data;
       mimeType = pass2.mimeType;
     } else {
-      // ── SINGLE PASS (enhance / pinterest / couple / template without mask) ──
+      // ── SINGLE PASS (enhance / pinterest / no mask) ───────────────────
       const interactionInput: any[] = [];
       pushText(interactionInput, promptContext);
 
