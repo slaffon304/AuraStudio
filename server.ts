@@ -668,7 +668,7 @@ STRICT RULES:
     console.log('[generate]', {
       mode: effectiveMode,
       parts: interactionInput.length,
-      hasStyle: Boolean(styleUrl || customReferenceUrl),
+      hasSceneText: Boolean(sceneText), sceneChars: sceneText?.length || 0, hasPinterestRef: Boolean(customReferenceUrl),
       aspect: targetRatio,
       imageSize,
       promptChars: promptContext.length,
