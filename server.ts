@@ -647,6 +647,21 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           mime_type: part.inlineData.mimeType || 'image/jpeg',
           data: part.inlineData.data
         });
+
+        // DEBUG: save softened style for browser viewing during calibration
+        try {
+          const bin = Buffer.from(part.inlineData.data, 'base64');
+          const pathName = `debug/style-softened-${Date.now()}.jpg`;
+          const bucket = 'template-previews';
+          await supabaseAdmin.storage.from(bucket).upload(pathName, bin, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+          const { data: pub } = supabaseAdmin.storage.from(bucket).getPublicUrl(pathName);
+          console.log('[style-soften] public url:', pub?.publicUrl || pathName);
+        } catch (e) {
+          console.warn('[style-soften] could not upload debug image', e);
+        }
       }
     };
 
@@ -728,6 +743,27 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       promptChars: promptContext.length,
       model: 'gemini-nano-banana-2.1'
     });
+
+    // DEBUG: full payload summary (calibration)
+    console.log('======== GENERATION INPUT ========');
+    console.log('mode:', effectiveMode);
+    for (let i = 0; i < interactionInput.length; i++) {
+      const p = interactionInput[i] as any;
+      if (p.type === 'text' || typeof p.text === 'string') {
+        const t = String(p.text || '');
+        console.log(`[${i}] TEXT (${t.length} chars):`, t.slice(0, 800));
+        if (t.length > 800) console.log(`[${i}] TEXT ... +${t.length - 800} more chars`);
+      } else if (p.type === 'image' || p.data) {
+        const b64 = String(p.data || '');
+        const approxBytes = Math.round((b64.length * 3) / 4);
+        console.log(
+          `[${i}] IMAGE mime=${p.mime_type || p.mimeType || '?'} ~${approxBytes} bytes base64Len=${b64.length}`
+        );
+      } else {
+        console.log(`[${i}] OTHER:`, JSON.stringify(p).slice(0, 300));
+      }
+    }
+    console.log('======== END INPUT ========');
 
     const interaction = await aiClient.interactions.create({
       model: 'gemini-nano-banana-2.1',
