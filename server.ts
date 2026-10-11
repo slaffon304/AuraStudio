@@ -558,8 +558,11 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     const avoidBase = (promptRows['avoid_default'] || BUILTIN_PROMPTS.avoid_default).trim();
     const avoidLine = negFromDb ? `Avoid: ${negFromDb}. ${avoidBase}` : avoidBase;
 
-    const ageNum = Number(age);
-    const age2Num = Number(age2);
+    // Age only if client explicitly sent a valid number (no default 25)
+    const ageProvided = age !== undefined && age !== null && age !== '';
+    const age2Provided = age2 !== undefined && age2 !== null && age2 !== '';
+    const ageNum = ageProvided ? Number(age) : NaN;
+    const age2Num = age2Provided ? Number(age2) : NaN;
     const age1Line =
       Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
         ? `Person A is approximately ${Math.round(ageNum)} years old — keep this age, do not rejuvenate.`
