@@ -73,8 +73,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [weightKg, setWeightKg] = useState('');
   /** enhance: '2k' | '4k' */
   const [enhanceRes, setEnhanceRes] = useState<'2k' | '4k'>('4k');
-  const [age1, setAge1] = useState(25);
-  const [age2, setAge2] = useState(25);
+  const [age1, setAge1] = useState<number | ''>('');
+  const [age2, setAge2] = useState<number | ''>('');
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
 
   const [sliderPct, setSliderPct] = useState(8);
@@ -131,8 +131,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setResultUrl(null);
     setIsGenerating(false);
     setErrorMessage(null);
-    setAge1(25);
-    setAge2(25);
+    setAge1('');
+    setAge2('');
     // Do NOT auto-fill previous uploads
     setPhotos1([]);
     setPhotos2([]);
@@ -397,14 +397,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       setErrorMessage(copy.needPhoto);
       return;
     }
-    if (!age1 || age1 < 1 || age1 > 120) {
-      setErrorMessage(copy.ageRequired);
-      return;
-    }
-    if (slots === 2 && (!age2 || age2 < 1 || age2 > 120)) {
-      setErrorMessage(copy.ageRequired);
-      return;
-    }
     if (!hasEnough) {
       setIsPhotoModalOpen(true);
       return;
@@ -429,8 +421,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         mode: slots === 2 ? 'couple' : 'template',
         partnerPhotoUrl: slots === 2 ? photos2[0]?.url : undefined,
         aspectRatio: selectedAspectRatio,
-        age: age1,
-        age2: slots === 2 ? age2 : undefined,
+        age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
+        age2: slots === 2 && typeof age2 === 'number' && age2 >= 1 && age2 <= 120 ? age2 : undefined,
         extraPhotoUrls: extraUrls.length ? extraUrls : undefined,
         partnerExtraPhotoUrls:
           slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined,
@@ -633,7 +625,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           mode: 'pinterest',
           customReferenceUrl: refUrl,
           aspectRatio: selectedAspectRatio,
-          age: age1,
+          age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
           heightCm: heightCm || undefined,
           weightKg: weightKg || undefined,
           extraPhotoUrls: photos1.slice(1).map((x) => x.url)
@@ -1266,13 +1258,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.ageYou}</p>
               <div className="flex justify-center">
-                <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+                <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
               </div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.agePartner}</p>
               <div className="flex justify-center">
-                <input type="number" min={1} max={120} value={age2} onChange={(e) => setAge2(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+                <input type="number" min={1} max={120} value={age2} onChange={(e) => { const v = e.target.value; setAge2(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
               </div>
             </div>
           </div>
@@ -1280,7 +1272,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           <div className="mt-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.age}</p>
             <div className="flex justify-center">
-              <input type="number" min={1} max={120} value={age1} onChange={(e) => setAge1(Number(e.target.value) || 0)} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
           </div>
         )}
