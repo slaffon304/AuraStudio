@@ -607,55 +607,7 @@ STRICT RULES:
         .join('\n');
     }
 
-    const interactionInput: any[] = [];
-    const pushText = (t: string) => {
-      if (t && String(t).trim()) {
-        interactionInput.push({ type: 'text', text: String(t).trim() });
-      }
-    };
-    const pushImageFromUrl = async (url: string) => {
-      if (!url) return;
-      const part = await urlToGenerativePart(url);
-      if (part?.inlineData?.data) {
-        interactionInput.push({
-          type: 'image',
-          mime_type: part.inlineData.mimeType || 'image/jpeg',
-          data: part.inlineData.data
-        });
-      }
-    };
-
-    pushText(promptContext);
-
-    if (effectiveMode === 'enhance') {
-      pushText('PHOTO TO ENHANCE:');
-      await pushImageFromUrl(userPhotoUrl);
-    } else if (effectiveMode === 'couple') {
-      pushText('IDENTITY A (LEFT) — face source for the person on the LEFT:');
-      await pushImageFromUrl(userPhotoUrl);
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
-      }
-      pushText('IDENTITY B (RIGHT) — face source for the person on the RIGHT:');
-      if (partnerPhotoUrl) await pushImageFromUrl(partnerPhotoUrl);
-      if (Array.isArray(partnerExtraPhotoUrls)) {
-        for (const u of partnerExtraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
-      }
-    } else {
-      pushText('IDENTITY — the only face that must appear in the result:');
-      await pushImageFromUrl(userPhotoUrl);
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(u);
-      }
-    }
-
-    pushText(
-      effectiveMode === 'enhance'
-        ? 'Output an enhanced version of the same photo.'
-        : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
-    );
-
-            const targetRatio =
+    const targetRatio =
       aspectRatio === '9:16' ||
       aspectRatio === '16:9' ||
       aspectRatio === '4:3' ||
@@ -663,93 +615,244 @@ STRICT RULES:
         ? aspectRatio
         : '3:4';
 
-    const imageSize = quality4k ? '4K' : '2K';
+    const maskUrl = String(
+      template.mask_image_url || template.maskImageUrl || ''
+    ).trim();
+    const expressionText = String(template.expression || '').trim() ||
+      'calm neutral expression, closed mouth, no smile';
 
-    console.log('[generate]', {
-      mode: effectiveMode,
-      parts: interactionInput.length,
-      hasSceneText: Boolean(sceneText), sceneChars: sceneText?.length || 0, hasPinterestRef: Boolean(customReferenceUrl),
-      aspect: targetRatio,
-      imageSize,
-      promptChars: promptContext.length,
-      model: 'gemini-nano-banana-2.1'
-    });
-
-    // DEBUG: full payload summary (calibration)
-    console.log('======== GENERATION INPUT ========');
-    console.log('mode:', effectiveMode);
-    for (let i = 0; i < interactionInput.length; i++) {
-      const p = interactionInput[i] as any;
-      if (p.type === 'text' || typeof p.text === 'string') {
-        const t = String(p.text || '');
-        console.log(`[${i}] TEXT (${t.length} chars):`, t.slice(0, 800));
-        if (t.length > 800) console.log(`[${i}] TEXT ... +${t.length - 800} more chars`);
-      } else if (p.type === 'image' || p.data) {
-        const b64 = String(p.data || '');
-        const approxBytes = Math.round((b64.length * 3) / 4);
-        console.log(
-          `[${i}] IMAGE mime=${p.mime_type || p.mimeType || '?'} ~${approxBytes} bytes base64Len=${b64.length}`
-        );
-      } else {
-        console.log(`[${i}] OTHER:`, JSON.stringify(p).slice(0, 300));
-      }
-    }
-    console.log('======== END INPUT ========');
-
-    const interaction = await aiClient.interactions.create({
-      model: 'gemini-nano-banana-2.1',
-      input: interactionInput,
-      response_format: {
-        type: 'image',
-        aspect_ratio: targetRatio,
-        image_size: imageSize
-      }
-    });
-
-    // Prefer convenience property
-    if (interaction?.output_image?.data) {
-      imageBase64Data = interaction.output_image.data;
-      mimeType = interaction.output_image.mime_type || interaction.output_image.mimeType || 'image/png';
-    } else {
-      // Fallback: inspect steps for image content blocks
-      const steps = (interaction as any)?.steps || [];
-      for (const step of steps) {
-        const blocks = step?.content || step?.images || [];
-        for (const block of blocks) {
-          if (
-            (block?.type === 'image' || block?.inlineData) &&
-            (block?.data || block?.inlineData?.data)
-          ) {
-            imageBase64Data = block.data || block.inlineData.data;
-            mimeType =
-              block.mime_type ||
-              block.mimeType ||
-              block.inlineData?.mimeType ||
-              'image/png';
-            break;
-          }
+    // Helper: one Interactions image call
+    async function runImagePass(
+      input: any[],
+      imageSize: '1K' | '2K' | '4K',
+      passLabel: string
+    ): Promise<{ data: string; mimeType: string }> {
+      console.log(`[generate] ${passLabel}`, {
+        parts: input.length,
+        aspect: targetRatio,
+        imageSize,
+        model: 'gemini-nano-banana-2.1'
+      });
+      console.log(`======== ${passLabel} INPUT ========`);
+      for (let i = 0; i < input.length; i++) {
+        const p = input[i] as any;
+        if (p.type === 'text' || typeof p.text === 'string') {
+          const t = String(p.text || '');
+          console.log(`[${i}] TEXT (${t.length} chars):`, t.slice(0, 600));
+        } else if (p.type === 'image' || p.data) {
+          const b64 = String(p.data || '');
+          console.log(
+            `[${i}] IMAGE mime=${p.mime_type || p.mimeType || '?'} ~${Math.round((b64.length * 3) / 4)} bytes`
+          );
+        } else {
+          console.log(`[${i}] OTHER:`, JSON.stringify(p).slice(0, 200));
         }
-        if (imageBase64Data) break;
       }
+      console.log(`======== END ${passLabel} ========`);
+
+      const interaction = await aiClient!.interactions.create({
+        model: 'gemini-nano-banana-2.1',
+        input,
+        response_format: {
+          type: 'image',
+          aspect_ratio: targetRatio,
+          image_size: imageSize
+        }
+      });
+
+      let data: string | null = null;
+      let mime = 'image/png';
+
+      if (interaction?.output_image?.data) {
+        data = interaction.output_image.data;
+        mime =
+          interaction.output_image.mime_type ||
+          interaction.output_image.mimeType ||
+          'image/png';
+      } else {
+        const steps = (interaction as any)?.steps || [];
+        for (const step of steps) {
+          const blocks = step?.content || step?.images || [];
+          for (const block of blocks) {
+            if (
+              (block?.type === 'image' || block?.inlineData) &&
+              (block?.data || block?.inlineData?.data)
+            ) {
+              data = block.data || block.inlineData.data;
+              mime =
+                block.mime_type ||
+                block.mimeType ||
+                block.inlineData?.mimeType ||
+                'image/png';
+              break;
+            }
+          }
+          if (data) break;
+        }
+      }
+
+      if (!data) {
+        console.warn(
+          `[generate] ${passLabel} no image`,
+          JSON.stringify(interaction)?.slice(0, 600)
+        );
+        throw new Error(
+          `${passLabel}: model did not return an image. Check GEMINI_API_KEY / model availability.`
+        );
+      }
+
+      console.log(`[generate] ${passLabel} ok`, {
+        mime,
+        bytesApprox: Math.round((data.length * 3) / 4)
+      });
+      return { data, mimeType: mime };
+    }
+
+    const pushText = (arr: any[], t: string) => {
+      if (t && String(t).trim()) arr.push({ type: 'text', text: String(t).trim() });
+    };
+    const pushImageFromUrl = async (arr: any[], url: string) => {
+      if (!url) return;
+      const part = await urlToGenerativePart(url);
+      if (part?.inlineData?.data) {
+        arr.push({
+          type: 'image',
+          mime_type: part.inlineData.mimeType || 'image/jpeg',
+          data: part.inlineData.data
+        });
+      }
+    };
+
+    // ── TWO-PASS (template + mask_image_url only) ─────────────────────
+    // Pass 1: identity + scene text @ 1K → face at correct scale
+    // Pass 2: mask scene + pass1 head + expression @ 2K/4K → final
+    if (effectiveMode === 'template' && maskUrl) {
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 45,
+          current_step_message: 'Pass 1/2: identity + scene (1K)...'
+        })
+        .eq('id', jobId);
+
+      const pass1Input: any[] = [];
+      pushText(
+        pass1Input,
+        [
+          'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
+          'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin).',
+          'Hair: take color, length and texture only from the IDENTITY photo; ignore any hair described in the scene.',
+          'Follow the SCENE for environment, wardrobe, pose, camera angle, lighting, and framing.',
+          'Scene accuracy is secondary to a correct, well-scaled face and head.',
+          'SCENE:',
+          sceneText,
+          age1Line,
+          bodyLine,
+          avoidLine
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
+      pushText(pass1Input, 'IDENTITY — the only face that must appear:');
+      await pushImageFromUrl(pass1Input, userPhotoUrl);
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
+      }
+      pushText(
+        pass1Input,
+        'FINAL: Face and hair from IDENTITY only. Output a single photorealistic image.'
+      );
+
+      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1');
+
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 70,
+          current_step_message: 'Pass 2/2: composite on masked scene (2K/4K)...'
+        })
+        .eq('id', jobId);
+
+      const pass2Input: any[] = [];
+      pushText(
+        pass2Input,
+        [
+          'Image 1 is the SCENE. The person\'s face and hair on it are covered by a mask.',
+          'Image 2 is a photograph of the person whose head must be used.',
+          '',
+          'Generate a photorealistic photo: keep the scene from Image 1 unchanged (background, pose, hands, clothing, props, light, camera angle) and replace the masked region with the head from Image 2: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to the pose on Image 1.',
+          '',
+          `Facial expression: ${expressionText}. Do not change anything else about the face: do not add wrinkles or under-eye bags, do not age or de-age.`,
+          '',
+          'Do not retouch or beautify. Sharpness, grain and face color must match the rest of the frame.',
+          avoidLine
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
+      pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
+      await pushImageFromUrl(pass2Input, maskUrl);
+      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY source:');
+      pass2Input.push({
+        type: 'image',
+        mime_type: pass1.mimeType || 'image/png',
+        data: pass1.data
+      });
+      pushText(
+        pass2Input,
+        'FINAL: Composite head from Image 2 onto the masked scene of Image 1. One photorealistic image.'
+      );
+
+      const pass2Size: '2K' | '4K' = quality4k ? '4K' : '2K';
+      const pass2 = await runImagePass(pass2Input, pass2Size, 'PASS2');
+      imageBase64Data = pass2.data;
+      mimeType = pass2.mimeType;
+    } else {
+      // ── SINGLE PASS (enhance / pinterest / couple / template without mask) ──
+      const interactionInput: any[] = [];
+      pushText(interactionInput, promptContext);
+
+      if (effectiveMode === 'enhance') {
+        pushText(interactionInput, 'PHOTO TO ENHANCE:');
+        await pushImageFromUrl(interactionInput, userPhotoUrl);
+      } else if (effectiveMode === 'couple') {
+        pushText(interactionInput, 'IDENTITY A (LEFT) — face source for the person on the LEFT:');
+        await pushImageFromUrl(interactionInput, userPhotoUrl);
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u);
+        }
+        pushText(interactionInput, 'IDENTITY B (RIGHT) — face source for the person on the RIGHT:');
+        if (partnerPhotoUrl) await pushImageFromUrl(interactionInput, partnerPhotoUrl);
+        if (Array.isArray(partnerExtraPhotoUrls)) {
+          for (const u of partnerExtraPhotoUrls.slice(0, 4))
+            await pushImageFromUrl(interactionInput, u);
+        }
+      } else {
+        pushText(interactionInput, 'IDENTITY — the only face that must appear in the result:');
+        await pushImageFromUrl(interactionInput, userPhotoUrl);
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u);
+        }
+      }
+
+      pushText(
+        interactionInput,
+        effectiveMode === 'enhance'
+          ? 'Output an enhanced version of the same photo.'
+          : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
+      );
+
+      const imageSize: '2K' | '4K' = quality4k ? '4K' : '2K';
+      const single = await runImagePass(interactionInput, imageSize, 'SINGLE');
+      imageBase64Data = single.data;
+      mimeType = single.mimeType;
     }
 
     if (!imageBase64Data) {
-      console.warn(
-        '[generate] no image in interaction response',
-        JSON.stringify(interaction)?.slice(0, 800)
-      );
-      throw new Error(
-        'Модель gemini-nano-banana-2.1 не вернула изображение. Проверь GEMINI_API_KEY и доступность модели.'
-      );
+      throw new Error('Model did not return image data.');
     }
 
-    console.log('[generate] image ok', {
-      mimeType,
-      bytesApprox: Math.round((imageBase64Data.length * 3) / 4),
-      model: 'gemini-nano-banana-2.1'
-    });
-
-    // 6. Save generated image to private Supabase Storage bucket 'generated-images'
+        // 6. Save generated image to private Supabase Storage bucket 'generated-images'
     const storagePath = `${userId}/${jobId}.jpg`;
     const imageBuffer = Buffer.from(imageBase64Data, 'base64');
 
