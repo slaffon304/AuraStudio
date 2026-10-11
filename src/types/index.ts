@@ -41,6 +41,10 @@ export interface PhotoTemplate {
   gender?: 'women' | 'men' | 'unisex' | 'couple';
   previewImage: string;
   beforeImage?: string;
+  /** Scene image with face+hair masked; enables two-pass generation */
+  maskImageUrl?: string;
+  /** Facial expression for pass 2; empty → calm neutral */
+  expression?: string;
   prompt: string;
   negativePrompt?: string;
   aspectRatio: AspectRatio;
