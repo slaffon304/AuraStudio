@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
+import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import {
   supabaseAdmin,
@@ -294,6 +295,72 @@ async function urlToGenerativePart(url: string) {
   return null;
 }
 
+/** Moderate face soften on STYLE image only — head tilt stays readable, face not usable as identity */
+async function softenStyleFaces(input: Buffer): Promise<Buffer> {
+  const meta = await sharp(input, { failOn: 'none' }).metadata();
+  const w = meta.width || 1024;
+  const h = meta.height || 1024;
+
+  const regions = [
+    { cx: 0.5, cy: 0.32, rw: 0.28, rh: 0.22 },
+    { cx: 0.34, cy: 0.3, rw: 0.22, rh: 0.2 },
+    { cx: 0.66, cy: 0.3, rw: 0.22, rh: 0.2 }
+  ];
+
+  const composites: { input: Buffer; left: number; top: number }[] = [];
+
+  for (const r of regions) {
+    const left = Math.max(0, Math.round(w * (r.cx - r.rw / 2)));
+    const top = Math.max(0, Math.round(h * (r.cy - r.rh / 2)));
+    const width = Math.min(w - left, Math.round(w * r.rw));
+    const height = Math.min(h - top, Math.round(h * r.rh));
+    if (width < 8 || height < 8) continue;
+
+    const piece = await sharp(input, { failOn: 'none' })
+      .extract({ left, top, width, height })
+      .blur(12)
+      .toBuffer();
+
+    composites.push({ input: piece, left, top });
+  }
+
+  if (composites.length === 0) {
+    return sharp(input, { failOn: 'none' }).jpeg({ quality: 92 }).toBuffer();
+  }
+
+  return sharp(input, { failOn: 'none' })
+    .composite(composites)
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}
+
+async function urlToStyleGenerativePart(url: string) {
+  if (!url) return null;
+  try {
+    let buffer: Buffer;
+    if (url.startsWith('data:image/')) {
+      const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (!match) return null;
+      buffer = Buffer.from(match[2], 'base64');
+    } else {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      buffer = Buffer.from(await resp.arrayBuffer());
+    }
+    const softened = await softenStyleFaces(buffer);
+    return {
+      inlineData: {
+        mimeType: 'image/jpeg',
+        data: softened.toString('base64')
+      }
+    };
+  } catch (err) {
+    console.warn('[style-soften] fallback to original', err);
+    return urlToGenerativePart(url);
+  }
+}
+
+
 // ====================================================================
 // GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
 // ====================================================================
@@ -571,6 +638,18 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       }
     };
 
+    const pushStyleImageFromUrl = async (url: string) => {
+      if (!url) return;
+      const part = await urlToStyleGenerativePart(url);
+      if (part?.inlineData?.data) {
+        interactionInput.push({
+          type: 'image',
+          mime_type: part.inlineData.mimeType || 'image/jpeg',
+          data: part.inlineData.data
+        });
+      }
+    };
+
     // Instructions first
     pushText(promptContext);
 
@@ -592,7 +671,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         pushText(
           'STYLE REFERENCE — scene, clothing, lighting, pose ONLY. Do NOT copy any face from this image:'
         );
-        await pushImageFromUrl(styleUrl);
+        await pushStyleImageFromUrl(styleUrl);
         pushText('IDENTITY FACE LOCK — match this face exactly, ignore any face from the style image:');
         await pushImageFromUrl(userPhotoUrl);
       }
@@ -605,7 +684,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       pushText(
         'STYLE REFERENCE — outfit, pose, background, lighting ONLY. Do NOT copy this face:'
       );
-      await pushImageFromUrl(customReferenceUrl || styleUrl);
+      await pushStyleImageFromUrl(customReferenceUrl || styleUrl);
     } else {
       // template single — identity first, style last
       pushText('IDENTITY — the ONLY face that must appear in the result (match exactly):');
@@ -617,7 +696,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         pushText(
           'STYLE REFERENCE — clothing, pose, background, lighting ONLY. STRICTly ignore the face in this image:'
         );
-        await pushImageFromUrl(styleUrl);
+        await pushStyleImageFromUrl(styleUrl);
       } else if (template.prompt) {
         pushText(`SCENE FALLBACK (no style image): ${String(template.prompt).slice(0, 600)}`);
       }
