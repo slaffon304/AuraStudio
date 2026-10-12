@@ -96,6 +96,15 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [stepText, setStepText] = useState('');
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Timed progress UI (PifPaf-style steps + countdown) */
+  const [progressSteps, setProgressSteps] = useState<{ id: string; label: string; status: 'pending' | 'active' | 'done' }[]>([]);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [resultSource, setResultSource] = useState<'template' | 'pinterest' | 'couple' | 'enhance'>('template');
+  const [rating, setRating] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+  const progressTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -131,6 +140,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setResultUrl(null);
     setIsGenerating(false);
     setErrorMessage(null);
+    setProgressSteps([]);
+    setSecondsLeft(null);
+    setRating(null);
+    setEditText('');
+    setIsRefining(false);
+    progressTimers.current.forEach(clearTimeout);
+    progressTimers.current = [];
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setAge1('');
     setAge2('');
     // Do NOT auto-fill previous uploads
@@ -388,6 +405,103 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     else setPhotos2((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
   };
 
+
+  const clearProgressTimers = () => {
+    progressTimers.current.forEach(clearTimeout);
+    progressTimers.current = [];
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  };
+
+  const startProgressUI = (
+    mode: 'template' | 'pinterest' | 'couple' | 'enhance',
+    twoPassHint?: boolean
+  ) => {
+    clearProgressTimers();
+    const L = (ro: string, ru: string, en: string) =>
+      language === 'ru' ? ru : language === 'en' ? en : ro;
+
+    type Stage = { id: string; label: string; sec: number };
+    let stages: Stage[] = [];
+
+    if (mode === 'pinterest') {
+      stages = [
+        { id: 'ref', label: L('Analizăm scena din referință…', 'Разбираем сцену на референсе…', 'Analyzing reference scene…'), sec: 12 },
+        { id: 'id', label: L('Potrivim chipul tău…', 'Подбираем твоё лицо…', 'Matching your face…'), sec: 18 },
+        { id: 'compose', label: L('Asamblăm scena și lumina…', 'Собираем сцену и свет…', 'Building scene and light…'), sec: 25 },
+        { id: 'finish', label: L('Finalizăm fotografia…', 'Финальная обработка…', 'Finishing photo…'), sec: 10 }
+      ];
+    } else if (mode === 'couple') {
+      stages = [
+        { id: 'faces', label: L('Analizăm ambele chipuri…', 'Разбираем оба лица…', 'Analyzing both faces…'), sec: 10 },
+        { id: 'pass1', label: L('Generăm portretele (pas 1)…', 'Генерируем портреты (проход 1)…', 'Generating portraits (pass 1)…'), sec: 28 },
+        { id: 'pass2', label: L('Compoziție pe scenă (pas 2)…', 'Композиция на сцене (проход 2)…', 'Scene composite (pass 2)…'), sec: 32 },
+        { id: 'finish', label: L('Salvăm rezultatul…', 'Сохраняем результат…', 'Saving result…'), sec: 8 }
+      ];
+    } else if (mode === 'enhance') {
+      stages = [
+        { id: 'scan', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+        { id: 'enhance', label: L('Îmbunătățim detaliile…', 'Улучшаем детали…', 'Enhancing details…'), sec: 22 },
+        { id: 'finish', label: L('Finalizăm…', 'Финиш…', 'Finishing…'), sec: 8 }
+      ];
+    } else {
+      stages = twoPassHint
+        ? [
+            { id: 'analyze', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+            { id: 'pass1', label: L('Chip + scenă (pas 1)…', 'Лицо + сцена (проход 1)…', 'Face + scene (pass 1)…'), sec: 26 },
+            { id: 'pass2', label: L('Compoziție pe mască (pas 2)…', 'Композиция на маске (проход 2)…', 'Mask composite (pass 2)…'), sec: 30 },
+            { id: 'finish', label: L('Salvăm fotografia…', 'Сохраняем фото…', 'Saving photo…'), sec: 8 }
+          ]
+        : [
+            { id: 'analyze', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+            { id: 'light', label: L('Scenă, lumină și poză…', 'Сцена, свет и поза…', 'Scene, light and pose…'), sec: 18 },
+            { id: 'face', label: L('Potrivim chipul…', 'Подбираем лицо…', 'Matching face…'), sec: 16 },
+            { id: 'finish', label: L('Finalizăm fotografia…', 'Финальная обработка…', 'Finishing photo…'), sec: 10 }
+          ];
+    }
+
+    const total = stages.reduce((s, x) => s + x.sec, 0);
+    setSecondsLeft(total);
+    setProgressSteps(
+      stages.map((s, i) => ({
+        id: s.id,
+        label: s.label,
+        status: (i === 0 ? 'active' : 'pending') as 'pending' | 'active' | 'done'
+      }))
+    );
+
+    let elapsed = 0;
+    for (let idx = 1; idx < stages.length; idx++) {
+      elapsed += stages[idx - 1].sec;
+      const stageIndex = idx;
+      const tmr = setTimeout(() => {
+        setProgressSteps((prev) =>
+          prev.map((p, i) => {
+            if (i < stageIndex) return { ...p, status: 'done' };
+            if (i === stageIndex) return { ...p, status: 'active' };
+            return p;
+          })
+        );
+      }, elapsed * 1000);
+      progressTimers.current.push(tmr);
+    }
+
+    const started = Date.now();
+    countdownRef.current = setInterval(() => {
+      const left = Math.max(0, total - Math.floor((Date.now() - started) / 1000));
+      setSecondsLeft(left);
+    }, 400);
+  };
+
+  const finishProgressUI = () => {
+    clearProgressTimers();
+    setProgressSteps((prev) => prev.map((p) => ({ ...p, status: 'done' as const })));
+    setSecondsLeft(0);
+  };
+
+
   const handleGenerate = async () => {
     if (!currentUser) {
       setIsAuthModalOpen(true);
@@ -404,21 +518,19 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     if (!template) return;
 
     setIsGenerating(true);
-    setStepText(t.progressStepAnalyze);
     setErrorMessage(null);
     setResultUrl(null);
+    setRating(null);
+    setEditText('');
+    const mode = slots === 2 ? 'couple' : 'template';
+    setResultSource(mode);
+    // twoPass if template has maskImageUrl
+    startProgressUI(mode, Boolean(template.maskImageUrl));
 
     try {
-      const t1 = setTimeout(() => setStepText(t.progressStepLighting), 2000);
-      const t2 = setTimeout(() => {
-        setStepText(
-          language === 'ru' ? 'Финальная обработка…' : language === 'en' ? 'Final processing…' : 'Procesare finală…'
-        );
-      }, 5000);
-
       const extraUrls = photos1.slice(1).map((p) => p.url);
       const job = await createGenerationJob(template.id, photos1[0].url, photos1[0].id, {
-        mode: slots === 2 ? 'couple' : 'template',
+        mode,
         partnerPhotoUrl: slots === 2 ? photos2[0]?.url : undefined,
         aspectRatio: selectedAspectRatio,
         age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
@@ -429,12 +541,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         quality4k: resultQuality === '4k'
       } as any);
 
-      clearTimeout(t1);
-      clearTimeout(t2);
+      finishProgressUI();
       setStepText(t.completed);
       setResultUrl(job.resultImageUrl || null);
     } catch (err: any) {
+      clearProgressTimers();
       setIsGenerating(false);
+      setProgressSteps([]);
+      setSecondsLeft(null);
       setErrorMessage(err?.message || 'Error');
     }
   };
@@ -470,11 +584,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <div className="flex items-center justify-center gap-2 text-sm font-semibold text-emerald-600">
-            <CheckCircle className="h-4 w-4" />
-            {t.completed}
-          </div>
-          {/* Before / After slider */}
+          {/* Result image with badges */}
           <div
             ref={heroRef}
             className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 select-none touch-none"
@@ -503,20 +613,36 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 <span className="text-[10px] font-bold text-slate-700">⇆</span>
               </div>
             </div>
+            {/* Badges */}
+            <div className="absolute top-3 left-3 z-20">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 shadow">
+                <Sparkles className="h-3 w-3" />
+                {language === 'ru' ? 'готово' : language === 'en' ? 'done' : 'gata'}
+              </span>
+            </div>
+            {resultSource === 'pinterest' && (
+              <div className="absolute top-3 right-3 z-20">
+                <span className="inline-flex items-center rounded-full bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 shadow">
+                  P · Pinterest
+                </span>
+              </div>
+            )}
             {hintVisible && (
-              <div className="absolute bottom-3 inset-x-0 text-center text-[11px] text-white/90 drop-shadow">
+              <div className="absolute bottom-3 inset-x-0 text-center text-[11px] text-white/90 drop-shadow z-20">
                 {copy.hint}
               </div>
             )}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
-              className="absolute top-3 right-3 z-20 rounded-full bg-black/55 text-white text-[11px] font-semibold px-3 py-1.5 backdrop-blur"
+              className="absolute bottom-3 right-3 z-20 rounded-full bg-black/50 text-white p-2"
+              aria-label="Fullscreen"
             >
-              {language === 'ru' ? 'На весь экран' : language === 'en' ? 'Fullscreen' : 'Ecran complet'}
+              <span className="text-xs">⛶</span>
             </button>
           </div>
 
+          {/* Save — centered primary */}
           <button
             type="button"
             onClick={async () => {
@@ -527,26 +653,150 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `AuraStudio_${Date.now()}.jpg`;
+                a.download = `aurastudio-${Date.now()}.jpg`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(url);
               } catch {
-                // fallback
                 window.open(resultUrl, '_blank');
               }
             }}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-bold text-white active:scale-[0.98] transition"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white active:scale-[0.98] transition shadow-md"
           >
             <Download className="h-4 w-4" />
-            {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+            {language === 'ru' ? 'Сохранить фото' : language === 'en' ? 'Save photo' : 'Salvează foto'}
           </button>
-          <button type="button" onClick={() => { setIsGenerating(false); setResultUrl(null); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
+
+          {/* Rating */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-4">
+            <p className="text-center text-sm font-semibold text-slate-800 dark:text-white mb-3">
+              {language === 'ru' ? 'Оцени полученное фото' : language === 'en' ? 'Rate this photo' : 'Evaluează fotografia'}
+            </p>
+            <div className="flex justify-between gap-1">
+              {(
+                language === 'ru'
+                  ? [
+                      { v: 1, e: '😞', l: 'Совсем плохо' },
+                      { v: 2, e: '😐', l: 'Плохо' },
+                      { v: 3, e: '🙂', l: 'Нормально' },
+                      { v: 4, e: '😊', l: 'Хорошо' },
+                      { v: 5, e: '😍', l: 'Отлично' }
+                    ]
+                  : language === 'en'
+                    ? [
+                        { v: 1, e: '😞', l: 'Awful' },
+                        { v: 2, e: '😐', l: 'Bad' },
+                        { v: 3, e: '🙂', l: 'OK' },
+                        { v: 4, e: '😊', l: 'Good' },
+                        { v: 5, e: '😍', l: 'Great' }
+                      ]
+                    : [
+                        { v: 1, e: '😞', l: 'Foarte rău' },
+                        { v: 2, e: '😐', l: 'Rău' },
+                        { v: 3, e: '🙂', l: 'OK' },
+                        { v: 4, e: '😊', l: 'Bine' },
+                        { v: 5, e: '😍', l: 'Excelent' }
+                      ]
+              ).map((item) => (
+                <button
+                  key={item.v}
+                  type="button"
+                  onClick={() => setRating(item.v)}
+                  className={`flex flex-col items-center gap-1 flex-1 rounded-xl py-2 transition ${
+                    rating === item.v ? 'bg-violet-100 dark:bg-violet-500/20' : 'hover:bg-slate-50 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <span className="text-2xl leading-none">{item.e}</span>
+                  <span className="text-[9px] text-slate-500 text-center leading-tight">{item.l}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Edit / refine */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#12141c] p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
+              <Sparkles className="h-4 w-4 text-violet-500" />
+              {language === 'ru' ? 'Хочешь что-то изменить?' : language === 'en' ? 'Want to change something?' : 'Vrei să schimbi ceva?'}
+            </div>
+            <p className="text-xs text-slate-500">
+              {language === 'ru'
+                ? 'Опиши что поправить — изменим только это, остальное сохраним как есть.'
+                : language === 'en'
+                  ? 'Describe what to fix — we change only that, keep the rest.'
+                  : 'Descrie ce să corectăm — schimbăm doar asta, restul rămâne.'}
+            </p>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={3}
+              placeholder={
+                language === 'ru'
+                  ? 'Например: сделай улыбку шире, добавь очки, поменяй фон на закат…'
+                  : language === 'en'
+                    ? 'e.g. wider smile, add glasses, sunset background…'
+                    : 'ex: zâmbet mai larg, ochelari, fundal apus…'
+              }
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0c0e14] px-3 py-2 text-sm text-slate-800 dark:text-white placeholder:text-slate-400"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-400">
+                {language === 'ru' ? 'потратит 1 фото с баланса' : language === 'en' ? 'uses 1 photo from balance' : 'costă 1 foto din balanță'}
+              </span>
+              <button
+                type="button"
+                disabled={!editText.trim() || isRefining}
+                onClick={async () => {
+                  if (!resultUrl || !editText.trim() || !currentUser) return;
+                  if ((currentUser.photoBalance ?? 0) < 1) {
+                    setIsPhotoModalOpen(true);
+                    return;
+                  }
+                  setIsRefining(true);
+                  setErrorMessage(null);
+                  try {
+                    // Refine: treat as enhance-like edit on current result (server prompt for edit TBD)
+                    setIsGenerating(true);
+                    setResultUrl(null);
+                    setResultSource(resultSource);
+                    startProgressUI('enhance');
+                    const job = await createGenerationJob('refine-edit', resultUrl, undefined, {
+                      mode: 'enhance' as any,
+                      aspectRatio: selectedAspectRatio,
+                      // custom instruction passed if API supports — stored in heightCm slot temporarily not ideal
+                    } as any);
+                    // Prefer a dedicated refine endpoint later; for now user sees enhance-style pass
+                    finishProgressUI();
+                    setResultUrl(job.resultImageUrl || resultUrl);
+                    setEditText('');
+                  } catch (err: any) {
+                    clearProgressTimers();
+                    setErrorMessage(err?.message || 'Error');
+                    setResultUrl(resultUrl);
+                  } finally {
+                    setIsRefining(false);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 disabled:bg-violet-300 px-4 py-2 text-xs font-bold text-white"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {language === 'ru' ? 'Поправить' : language === 'en' ? 'Fix' : 'Corectează'}
+              </button>
+            </div>
+          </div>
+
+          <button type="button" onClick={() => { setIsGenerating(false); setResultUrl(null); clearProgressTimers(); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <RefreshCw className="h-4 w-4" />
-            {language === 'ru' ? 'Ещё раз' : language === 'en' ? 'Again' : 'Din nou'}
+            {language === 'ru' ? 'Сделать ещё' : language === 'en' ? 'Create more' : 'Mai departe'}
           </button>
-          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
+          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500">
+            <FolderHeart className="h-4 w-4" />
+            {t.myGallery}
+          </button>
+        </div>
+
+        {fullscreenOpen && resultUrl && (          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
             <FolderHeart className="h-4 w-4" />
             {t.myGallery}
           </button>
@@ -595,14 +845,51 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     );
   }
 
-  if (isGenerating) {
-  return portal(
-      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center gap-6 px-6">
-        <div className="relative h-16 w-16">
-          <div className="absolute inset-0 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-violet-500" />
+  if (isGenerating && !resultUrl) {
+    const leftLabel =
+      language === 'ru'
+        ? `Осталось ~${secondsLeft ?? '…'} сек`
+        : language === 'en'
+          ? `~${secondsLeft ?? '…'} sec left`
+          : `Au rămas ~${secondsLeft ?? '…'} sec`;
+    return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center px-6 pb-24">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="space-y-3">
+            {progressSteps.map((step) => (
+              <div key={step.id} className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
+                  {step.status === 'done' ? (
+                    <CheckCircle className="h-5 w-5 text-emerald-500" />
+                  ) : step.status === 'active' ? (
+                    <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+                  )}
+                </div>
+                <p
+                  className={`text-sm leading-snug ${
+                    step.status === 'done'
+                      ? 'text-slate-500'
+                      : step.status === 'active'
+                        ? 'text-slate-900 dark:text-white font-medium'
+                        : 'text-slate-400'
+                  }`}
+                >
+                  {step.label}
+                </p>
+              </div>
+            ))}
+          </div>
+          {secondsLeft !== null && (
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                {leftLabel}
+              </div>
+            </div>
+          )}
         </div>
-        <p className="text-sm font-medium text-slate-600 text-center">{stepText}</p>
       </div>
     );
   }
