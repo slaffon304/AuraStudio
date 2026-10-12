@@ -540,42 +540,54 @@ STRICT RULES:
       if (!part?.inlineData?.data) {
         throw new Error('Nu s-a putut încărca imaginea de referință pentru analiză.');
       }
-      // Text+vision model for scene breakdown (not the image generator)
-      const analysisModel =
-        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
-      try {
-        const resp = await aiClient!.models.generateContent({
-          model: analysisModel,
-          contents: {
-            parts: [
-              { text: SCENE_ANALYZE_PROMPT },
-              {
-                inlineData: {
-                  mimeType: part.inlineData.mimeType || 'image/jpeg',
-                  data: part.inlineData.data
-                }
-              }
-            ]
+      // Primary 3.8, then fallbacks 3.7 → 3.6 → 3.5 if the model is down / unavailable
+      const analysisModels = [
+        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash'
+      ].filter((m, i, arr) => arr.indexOf(m) === i);
+
+      const parts = [
+        { text: SCENE_ANALYZE_PROMPT },
+        {
+          inlineData: {
+            mimeType: part.inlineData.mimeType || 'image/jpeg',
+            data: part.inlineData.data
           }
-        });
-        const text =
-          (resp as any)?.text ||
-          (resp as any)?.candidates?.[0]?.content?.parts
-            ?.map((p: any) => p.text)
-            .filter(Boolean)
-            .join(' ') ||
-          '';
-        const cleaned = String(text).trim().replace(/\s+/g, ' ');
-        if (cleaned.length < 40) {
-          throw new Error('Analiza scenei a returnat un text prea scurt.');
         }
-        return cleaned.slice(0, 2500);
-      } catch (err: any) {
-        console.error('[scene-analyze]', err?.message || err);
-        throw new Error(
-          'Nu s-a putut analiza referința Pinterest: ' + (err?.message || 'unknown')
-        );
+      ];
+
+      let lastErr: any = null;
+      for (const model of analysisModels) {
+        try {
+          console.log('[scene-analyze] trying model', model);
+          const resp = await aiClient!.models.generateContent({
+            model,
+            contents: { parts }
+          });
+          const text =
+            (resp as any)?.text ||
+            (resp as any)?.candidates?.[0]?.content?.parts
+              ?.map((p: any) => p.text)
+              .filter(Boolean)
+              .join(' ') ||
+            '';
+          const cleaned = String(text).trim().replace(/\s+/g, ' ');
+          if (cleaned.length < 40) {
+            throw new Error('Analiza scenei a returnat un text prea scurt.');
+          }
+          console.log('[scene-analyze] ok model=', model, 'chars=', cleaned.length);
+          return cleaned.slice(0, 2500);
+        } catch (err: any) {
+          lastErr = err;
+          console.warn('[scene-analyze] model failed', model, err?.message || err);
+        }
       }
+      console.error('[scene-analyze] all models failed', lastErr?.message || lastErr);
+      throw new Error(
+        'Nu s-a putut analiza referința Pinterest: ' + (lastErr?.message || 'unknown')
+      );
     }
 
     const ageProvided = age !== undefined && age !== null && age !== '';
