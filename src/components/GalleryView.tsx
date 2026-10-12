@@ -213,14 +213,13 @@ export const GalleryView: React.FC = () => {
       // Prefer a dedicated refine endpoint later; for now use enhance path if available
       if (typeof createGenerationJob === 'function') {
         const job = await createGenerationJob(
-          'custom-pinterest',
+          'refine-edit',
           previewUrl,
           undefined,
           {
-            mode: 'enhance',
-            customReferenceUrl: undefined,
-            quality4k: false,
-            // pass edit instruction via extra field if backend supports it later
+            mode: 'refine' as any,
+            editInstruction: editText.trim(),
+            quality: '2K'
           } as any
         );
         const newUrl = job?.resultImageUrl || job?.result_image_url;
@@ -242,7 +241,7 @@ export const GalleryView: React.FC = () => {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            mode: 'enhance',
+            mode: 'refine',
             userPhotoUrl: previewUrl,
             quality: '2K',
             editInstruction: editText.trim()
