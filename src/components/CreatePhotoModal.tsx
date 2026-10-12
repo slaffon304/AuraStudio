@@ -90,7 +90,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [showPinHelp, setShowPinHelp] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [resultQuality, setResultQuality] = useState<'1k' | '2k' | '4k'>('2k');
+  const [resultQuality, setResultQuality] = useState<'2k' | '4k'>('2k');
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [stepText, setStepText] = useState('');
@@ -538,7 +538,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         extraPhotoUrls: extraUrls.length ? extraUrls : undefined,
         partnerExtraPhotoUrls:
           slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined,
-        quality: resultQuality === '1k' ? '1K' : resultQuality === '4k' ? '4K' : '2K', quality4k: resultQuality === '4k'
+        quality4k: resultQuality === '4k'
       } as any);
 
       finishProgressUI();
@@ -762,11 +762,11 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                     setResultSource(resultSource);
                     startProgressUI('enhance');
                     const job = await createGenerationJob('refine-edit', resultUrl, undefined, {
-                      mode: 'enhance' as any,
+                      mode: 'refine' as any,
                       aspectRatio: selectedAspectRatio,
-                      // custom instruction passed if API supports — stored in heightCm slot temporarily not ideal
+                      editInstruction: editText.trim(),
+                      quality: '2K'
                     } as any);
-                    // Prefer a dedicated refine endpoint later; for now user sees enhance-style pass
                     finishProgressUI();
                     setResultUrl(job.resultImageUrl || resultUrl);
                     setEditText('');
@@ -1619,18 +1619,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </button>
           ) : (
             <>
-              <div className="mb-3 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResultQuality('1k')}
-                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
-                    resultQuality === '1k'
-                      ? 'border-violet-500 bg-violet-50 text-violet-700'
-                      : 'border-slate-200 bg-white text-slate-600'
-                  }`}
-                >
-                  1K · {basePhotoCost} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
-                </button>
+              <div className="mb-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setResultQuality('2k')}
