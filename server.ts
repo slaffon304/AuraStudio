@@ -340,6 +340,17 @@ async function loadPromptFromDb(key: string): Promise<string | null> {
   }
 }
 
+/** Replace {{placeholders}} in prompt body. Unknown keys become empty string. */
+function fillPrompt(
+  template: string,
+  vars: Record<string, string | undefined | null>
+): string {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => {
+    const v = vars[key];
+    return v == null ? '' : String(v);
+  }).replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // ====================================================================
 // GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
 // ====================================================================
@@ -593,9 +604,29 @@ STRICT RULES:
       .join(' ');
 
     const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
-    const avoidLine = negFromDb
+    let avoidLine = negFromDb
       ? `Avoid: ${negFromDb}`
-      : 'Avoid: distorted anatomy, extra fingers, plastic skin, watermarks, logos, text overlays.';
+      : '';
+    if (!avoidLine) {
+      const avoidDefault = await loadPromptFromDb('avoid_default');
+      avoidLine = avoidDefault
+        ? (avoidDefault.trim().startsWith('Avoid') || avoidDefault.trim().startsWith('Избег')
+            ? avoidDefault.trim()
+            : `Avoid: ${avoidDefault.trim()}`)
+        : 'Avoid: distorted anatomy, extra fingers, unnatural hands, plastic over-smoothed skin, watermarks, logos, random text overlays, and any face that does not match the IDENTITY photos.';
+    }
+
+    const expressionRaw = String(template.expression || template.expression_text || '').trim();
+    const expressionLine = expressionRaw
+      ? expressionRaw
+      : 'спокойное нейтральное выражение';
+
+    const qualityLine =
+      imageQuality === '4K'
+        ? 'Максимальная чёткость и детализация (4K).'
+        : imageQuality === '1K'
+          ? 'Базовая детализация (1K).'
+          : 'Высокая детализация (2K).';
 
     const effectiveMode =
       mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
@@ -629,79 +660,96 @@ STRICT RULES:
       }
     }
 
+    // Shared vars for DB prompt templates
+    const promptVars: Record<string, string> = {
+      scene: sceneText || '',
+      age1: age1Line || '',
+      age2: age2Line || '',
+      body: bodyLine || '',
+      avoid: avoidLine || '',
+      expression: expressionLine || '',
+      edit: editText || '',
+      quality: qualityLine || ''
+    };
+
+    async function promptOrFallback(key: string, fallback: string): Promise<string> {
+      const fromDb = await loadPromptFromDb(key);
+      if (fromDb) {
+        console.log('[prompt] using DB key=', key, 'chars=', fromDb.length);
+        return fillPrompt(fromDb, promptVars);
+      }
+      console.warn('[prompt] missing DB key=', key, '— using code fallback');
+      return fillPrompt(fallback, promptVars);
+    }
+
     let promptContext = '';
     if (effectiveMode === 'enhance') {
-      promptContext = [
-        'TASK: Improve technical quality of this photo only.',
-        'Preserve exact identity, face, expression, pose, clothing, composition, background.',
-        'Do not restyle, beautify into another person, or change age.',
-        quality4k ? 'Maximum clarity and detail.' : 'Clean high detail.',
-        avoidLine
-      ].join('\n');
+      promptContext = await promptOrFallback(
+        'pass1_enhance',
+        [
+          'ЗАДАЧА: Улучши только техническое качество присланного фото.',
+          'СОХРАНИ: личность, лицо, выражение, позу, одежду, композицию, фон.',
+          'УЛУЧШИ: резкость, чистоту, шум/сжатие, естественный цвет.',
+          'НЕЛЬЗЯ: переделывать сцену, менять возраст или структуру лица, превращать в другого человека.',
+          '{{quality}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else if (effectiveMode === 'refine') {
       if (!editText) {
         throw new Error('editInstruction is required for refine mode.');
       }
-      const fromDb = await loadPromptFromDb('refine');
-      if (fromDb) {
-        promptContext = fromDb
-          .replace(/\{\{edit\}\}/g, editText)
-          .replace(/\{\{edit_instruction\}\}/g, editText)
-          .replace(/\{\{avoid_line\}\}/g, avoidLine);
-      } else {
-        promptContext = [
-          'TASK: Edit the supplied photograph according to the user instruction below.',
-          'Change ONLY what the instruction asks. Keep identity, face structure, pose, clothing, background, and composition unless the instruction explicitly changes them.',
-          'Do not invent a different person. Do not age the subject. Light natural skin is ok; no plastic beautify.',
-          'USER INSTRUCTION:',
-          editText,
-          avoidLine
-        ].join('\n');
-      }
-    } else if (effectiveMode === 'couple') {
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of TWO real people together.',
-        'PERSON A appears on the LEFT. PERSON B appears on the RIGHT.',
-        'Faces must match the IDENTITY photos for A and B only. Do not invent or swap faces.',
-        'Follow the SCENE description exactly for setting, wardrobe, pose intent, camera angle, lighting, and framing.',
-        'Do not invent a different camera angle than the scene describes.',
-        'SCENE:',
-        sceneText,
-        age1Line,
-        age2Line,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
+      promptContext = await promptOrFallback(
+        'refine',
+        [
+          'ЗАДАЧА: Отредактируй присланное фото строго по инструкции пользователя.',
+          'Меняй ТОЛЬКО то, о чём просят. Личность и композицию сохраняй, если инструкция явно этого не меняет.',
+          'ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ:',
+          '{{edit}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else if (effectiveMode === 'pinterest') {
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline).',
-        'Recreate the SCENE as described: same camera angle, framing, pose, wardrobe, lighting, and environment.',
-        'Do not invent a different viewpoint than the scene specifies.',
-        'SCENE (from reference analysis — no face identity in this text):',
-        sceneText,
-        age1Line,
-        bodyLine,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
+      promptContext = await promptOrFallback(
+        'pass1_pinterest',
+        [
+          'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
+          'IDENTITY — кто должен получиться (лицо только с этих фото).',
+          'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{body}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
+    } else if (effectiveMode === 'couple') {
+      // single-pass couple (no mask) — still use pass1_couple text
+      promptContext = await promptOrFallback(
+        'pass1_couple',
+        [
+          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе.',
+          'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{age2}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else {
-      // template single
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline, age signs).',
-        'Follow the SCENE description closely for environment, wardrobe, pose, camera angle, focal length feel, lighting, and framing.',
-        'Do not change the camera angle or crop style described in the scene.',
-        'If the scene text mentions a generic person, ignore their face/identity — use only the IDENTITY photos for the face.',
-        'SCENE:',
-        sceneText,
-        age1Line,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
+      // template single-pass fallback text
+      promptContext = await promptOrFallback(
+        'pass1_template',
+        [
+          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{body}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     }
 
     const targetRatio =
@@ -715,10 +763,7 @@ STRICT RULES:
     const maskUrl = String(
       template.mask_image_url || template.maskImageUrl || ''
     ).trim();
-    const expressionText = String(template.expression || '').trim() ||
-      'calm neutral expression, closed mouth, no smile';
 
-    // Helper: one Interactions image call
     async function runImagePass(
       input: any[],
       imageSize: '1K' | '2K' | '4K',
@@ -842,23 +887,20 @@ STRICT RULES:
         .eq('id', jobId);
 
       const pass1Input: any[] = [];
-      pushText(
-        pass1Input,
-        [
-          'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-          'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin).',
-          'Hair: take color, length and texture only from the IDENTITY photo; ignore any hair described in the scene.',
-          'Follow the SCENE for environment, wardrobe, pose, camera angle, lighting, and framing.',
-          'Scene accuracy is secondary to a correct, well-scaled face and head.',
-          'SCENE:',
-          sceneText,
-          age1Line,
-          bodyLine,
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
-      );
+      {
+        const p1 = await promptOrFallback(
+          'pass1_template',
+          [
+            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ ниже.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{body}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass1Input, p1);
+      }
       pushText(pass1Input, 'IDENTITY — the only face that must appear:');
       await pushImageFromUrl(pass1Input, userPhotoUrl);
       if (Array.isArray(extraPhotoUrls)) {
@@ -881,23 +923,19 @@ STRICT RULES:
         .eq('id', jobId);
 
       const pass2Input: any[] = [];
-      pushText(
-        pass2Input,
-        [
-          'Image 1 is the SCENE. The person\'s face and hair on it are covered by a mask.',
-          'Image 2 is a photograph of the person whose head must be used.',
-          '',
-          'Generate a photorealistic photo: keep the scene from Image 1 unchanged (background, pose, hands, clothing, props, light, camera angle) and replace the masked region with the head from Image 2: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to the pose on Image 1.',
-          '',
-          'Skin color: use the skin tone from the head in Image 2 everywhere it belongs on that person — face, ears, neck, and any visible skin that is part of the head/neck area. Do not use the skin tone of the original person in Image 1. The whole head-and-neck skin must match Image 2; do not leave a different skin tone on the neck or jawline.',
-          '',
-          `Facial expression: ${expressionText}. Do not change anything else about the face: do not add wrinkles or under-eye bags, do not age or de-age.`,
-          '',
-          'Keep the same identity, but apply a subtle natural finish: slightly fresher look (soften under-eye heaviness and deep wrinkles only a little), healthy skin with real texture — no plastic blur, no beauty-filter face. Do not change bone structure, eye shape, nose, lips, or make the person look like someone else. Do not age the person. Sharpness and grain should still match the rest of the frame.',
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
+      {
+        const p2 = await promptOrFallback(
+          'pass2_template',
+          [
+            'Image 1 — СЦЕНА с маской на лице/волосах.',
+            'Image 2 — IDENTITY (голова).',
+            'Сцену с Image 1 сохрани. Голову возьми с Image 2.',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass2Input, p2);
+      }
       );
       pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
@@ -926,23 +964,21 @@ STRICT RULES:
         .eq('id', jobId);
 
       const pass1Input: any[] = [];
-      pushText(
-        pass1Input,
-        [
-          'TASK: Create ONE photorealistic photo of TWO people together in the SCENE below.',
-          'PERSON A appears on the LEFT side of the frame. PERSON B appears on the RIGHT side of the frame.',
-          'Each face must match that person\'s IDENTITY photos only. Do not invent faces. Do not swap A and B.',
-          'Hair for each person: take color, length and texture only from that person\'s own IDENTITY photos; ignore any hair described in the scene text.',
-          'Follow the SCENE for environment, wardrobe, poses, camera angle, lighting, and framing.',
-          'Scene accuracy is secondary to correct, well-scaled faces and heads for both people.',
-          'SCENE:',
-          sceneText,
-          age1Line,
-          age2Line,
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
+      {
+        const p1 = await promptOrFallback(
+          'pass1_couple',
+          [
+            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе в СЦЕНЕ.',
+            'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{age2}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass1Input, p1);
+      }
       );
       pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
       await pushImageFromUrl(pass1Input, userPhotoUrl);
@@ -972,25 +1008,18 @@ STRICT RULES:
         .eq('id', jobId);
 
       const pass2Input: any[] = [];
-      pushText(
-        pass2Input,
-        [
-          'Image 1 is the SCENE with TWO people. Both faces and both heads of hair are covered by masks.',
-          'Image 2 is a photograph of the SAME two people whose heads must be used (left person and right person already placed correctly in Image 2).',
-          '',
-          'Generate one photorealistic photo: keep the scene from Image 1 unchanged (background, both body poses, hands, clothing, props, light, camera angle). Replace EACH masked head with the matching head from Image 2.',
-          'Left masked person ← head of the left person in Image 2. Right masked person ← head of the right person in Image 2. Do not swap them. Do not put the same face on both. Do not invent a third person.',
-          'For each head: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to each pose on Image 1.',
-          '',
-          'Skin color: for EACH person, use the skin tone from that person\'s head in Image 2 on their face, ears, neck, and any visible skin in the head/neck area. Do not use the skin tones of the original people in Image 1. Do not leave a different skin tone on the neck or jawline.',
-          '',
-          `Facial expressions: ${expressionText}. Apply a natural expression to each person. Do not add wrinkles or under-eye bags; do not age or de-age either person.`,
-          '',
-          'Keep the same identity, but apply a subtle natural finish: slightly fresher look (soften under-eye heaviness and deep wrinkles only a little), healthy skin with real texture — no plastic blur, no beauty-filter face. Do not change bone structure, eye shape, nose, lips, or make the person look like someone else. Do not age the person. Sharpness and grain should still match the rest of the frame.',
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
+      {
+        const p2 = await promptOrFallback(
+          'pass2_couple',
+          [
+            'Image 1 — СЦЕНА с ДВУМЯ людьми, лица под масками.',
+            'Image 2 — оба человека (лево/право).',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass2Input, p2);
+      }
       );
       pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
@@ -1008,8 +1037,136 @@ STRICT RULES:
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
       imageBase64Data = pass2.data;
       mimeType = pass2.mimeType;
+    } else if (effectiveMode === 'pinterest') {
+      // ========== PINTEREST multi-pass ==========
+      // 1) sceneText already from analyzeSceneFromImage(ref) — «атомы»
+      // 2) PASS1 1K: IDENTITY selfies + scene text
+      // 3) MASK 1K: reference with faces/hair covered
+      // 4) PASS2 user quality: mask + PASS1 result
+      const refUrl = String(customReferenceUrl || '').trim();
+      if (!refUrl) {
+        throw new Error('Referința Pinterest lipsește.');
+      }
+
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 40,
+          current_step_message: 'Pinterest 1/4: сцена разобрана, генерируем PASS1 (1K)...'
+        })
+        .eq('id', jobId);
+
+      const pass1Input: any[] = [];
+      {
+        const p1 = await promptOrFallback(
+          'pass1_pinterest',
+          [
+            'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
+            'IDENTITY — кто должен получиться (лицо только с этих фото).',
+            'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{body}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass1Input, p1);
+      }
+      pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
+      await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity');
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) {
+          await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
+        }
+      }
+      // optional second person on reference
+      if (partnerPhotoUrl) {
+        pushText(pass1Input, 'IDENTITY B (второй персонаж на референсе), если нужен:');
+        await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
+        if (Array.isArray(partnerExtraPhotoUrls)) {
+          for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
+            await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
+          }
+        }
+      }
+      pushText(
+        pass1Input,
+        'ФИНАЛ: лицо с IDENTITY, сцена из текста. Один фотореалистичный кадр.'
+      );
+
+      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-pinterest');
+
+      // --- 3) MASK reference faces/hair at 1K ---
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 60,
+          current_step_message: 'Pinterest 2/4: маска лиц/волос на референсе (1K)...'
+        })
+        .eq('id', jobId);
+
+      const maskInput: any[] = [];
+      pushText(
+        maskInput,
+        [
+          'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
+          'Полностью закрась (сплошной нейтральной заливкой, например светло-серой) ВСЕ лица и ВСЕ волосы всех людей на кадре.',
+          'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
+          'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.'
+        ].join('\n')
+      );
+      pushText(maskInput, 'ИСХОДНЫЙ РЕФЕРЕНС:');
+      await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
+      pushText(maskInput, 'ФИНАЛ: тот же кадр, лица и волосы замазаны.');
+
+      const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
+
+      // --- 4) PASS2 composite at user quality ---
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 78,
+          current_step_message: 'Pinterest 3/4: композит маска + PASS1...'
+        })
+        .eq('id', jobId);
+
+      const pass2Input: any[] = [];
+      {
+        const p2 = await promptOrFallback(
+          'pass2_pinterest',
+          [
+            'Image 1 — СЦЕНА с маской на лице/волосах (референс).',
+            'Image 2 — IDENTITY / результат прохода с лицом пользователя.',
+            'Сцену с Image 1 сохрани. Голову(ы) возьми с Image 2.',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
+        pushText(pass2Input, p2);
+      }
+      pushText(pass2Input, 'IMAGE 1 — SCENE (лица и волосы под маской):');
+      pass2Input.push({
+        type: 'image',
+        mime_type: maskPass.mimeType || 'image/jpeg',
+        data: maskPass.data
+      });
+      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):');
+      pass2Input.push({
+        type: 'image',
+        mime_type: pass1.mimeType || 'image/jpeg',
+        data: pass1.data
+      });
+      pushText(
+        pass2Input,
+        'ФИНАЛ: голова(ы) с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр.'
+      );
+
+      const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
+      imageBase64Data = pass2.data;
+      mimeType = pass2.mimeType;
     } else {
-      // ── SINGLE PASS (enhance / pinterest / no mask) ───────────────────
+      // ── SINGLE PASS (enhance / refine / template|couple without mask) ───
       const interactionInput: any[] = [];
       pushText(interactionInput, promptContext);
 
