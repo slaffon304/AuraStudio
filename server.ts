@@ -265,33 +265,79 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
 // Helper to convert dataURL or fetch image buffer to Gemini inlineData
 async function urlToGenerativePart(url: string) {
   if (!url) return null;
+
+  const normalizeMime = (raw: string | null | undefined): string => {
+    const base = (raw || 'image/jpeg').split(';')[0].trim().toLowerCase();
+    if (base === 'image/jpg' || base === 'image/pjpeg') return 'image/jpeg';
+    if (base === 'application/octet-stream') return 'image/jpeg';
+    if (base.startsWith('image/')) return base;
+    return 'image/jpeg';
+  };
+
   if (url.startsWith('data:image/')) {
-    const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-    if (match) {
+    const match = url.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+    if (match && match[2].replace(/\s/g, '').length > 100) {
       return {
         inlineData: {
-          mimeType: match[1],
-          data: match[2]
+          mimeType: normalizeMime(match[1]),
+          data: match[2].replace(/\s/g, '')
         }
       };
     }
+    console.warn('[urlToGenerativePart] bad data-url');
+    return null;
   }
+
   try {
-    const resp = await fetch(url);
-    if (resp.ok) {
-      const buffer = await resp.arrayBuffer();
-      const contentType = resp.headers.get('content-type') || 'image/jpeg';
-      return {
-        inlineData: {
-          mimeType: contentType,
-          data: Buffer.from(buffer).toString('base64')
-        }
-      };
+    const resp = await fetch(url, {
+      redirect: 'follow',
+      headers: { Accept: 'image/*,*/*' }
+    });
+    if (!resp.ok) {
+      console.warn('[urlToGenerativePart] fetch failed', resp.status, url.slice(0, 140));
+      return null;
     }
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    if (buffer.length < 100) {
+      console.warn('[urlToGenerativePart] too small', buffer.length, url.slice(0, 140));
+      return null;
+    }
+    const head = buffer.slice(0, 32).toString('utf8').toLowerCase();
+    if (head.includes('<!doctype') || head.includes('<html')) {
+      console.warn('[urlToGenerativePart] HTML instead of image', url.slice(0, 140));
+      return null;
+    }
+    let mime = normalizeMime(resp.headers.get('content-type'));
+    if (buffer[0] === 0xff && buffer[1] === 0xd8) mime = 'image/jpeg';
+    else if (buffer[0] === 0x89 && buffer[1] === 0x50) mime = 'image/png';
+    else if (buffer[0] === 0x52 && buffer[1] === 0x49) mime = 'image/webp';
+    else if (buffer[0] === 0x47 && buffer[1] === 0x49) mime = 'image/gif';
+
+    console.log('[urlToGenerativePart] ok', mime, buffer.length, 'bytes');
+    return {
+      inlineData: {
+        mimeType: mime,
+        data: buffer.toString('base64')
+      }
+    };
   } catch (err) {
-    console.warn('Could not parse or fetch image for generative part:', err);
+    console.warn('[urlToGenerativePart] error', err);
   }
   return null;
+}
+
+async function loadPromptFromDb(key: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('generation_prompts')
+      .select('body')
+      .eq('key', key)
+      .maybeSingle();
+    if (error || !data?.body) return null;
+    return String(data.body).trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 // ====================================================================
@@ -313,11 +359,18 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     heightCm,
     weightKg,
     extraPhotoUrls,
-    partnerExtraPhotoUrls
+    partnerExtraPhotoUrls,
+    editInstruction
   } = req.body;
   const userId = req.user!.id;
 
-  if (!templateId && !customReferenceUrl && mode !== 'enhance' && mode !== 'pinterest') {
+  if (
+    !templateId &&
+    !customReferenceUrl &&
+    mode !== 'enhance' &&
+    mode !== 'pinterest' &&
+    mode !== 'refine'
+  ) {
     return res.status(400).json({ error: 'Parametrul templateId sau customReferenceUrl este obligatoriu.' });
   }
 
@@ -339,15 +392,27 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
   }
 
   if (!template) {
-    template = {
-      id: 'custom-pinterest',
-      name_ro: 'Referință Pinterest Personalizată',
-      name_ru: 'Кастомный референс из Pinterest',
-      name_en: 'Custom Pinterest Reference',
-      photo_cost: 1,
-      aspect_ratio: aspectRatio || '3:4',
-      prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
-    };
+    if (mode === 'refine' || mode === 'enhance') {
+      template = {
+        id: mode === 'refine' ? 'refine-edit' : 'enhance-quality',
+        name_ro: mode === 'refine' ? 'Editare foto' : 'Îmbunătățire',
+        name_ru: mode === 'refine' ? 'Правка фото' : 'Улучшение',
+        name_en: mode === 'refine' ? 'Photo edit' : 'Enhance',
+        photo_cost: 1,
+        aspect_ratio: aspectRatio || '3:4',
+        prompt: ''
+      };
+    } else {
+      template = {
+        id: 'custom-pinterest',
+        name_ro: 'Referință Pinterest Personalizată',
+        name_ru: 'Кастомный референс из Pinterest',
+        name_en: 'Custom Pinterest Reference',
+        photo_cost: 1,
+        aspect_ratio: aspectRatio || '3:4',
+        prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
+      };
+    }
   }
 
   // Resolution: accept quality ('1K'|'2K'|'4K') or legacy quality4k boolean
@@ -539,11 +604,15 @@ STRICT RULES:
           ? 'pinterest'
           : mode === 'enhance'
             ? 'enhance'
-            : 'template';
+            : mode === 'refine'
+              ? 'refine'
+              : 'template';
+
+    const editText = String(editInstruction || '').trim();
 
     // Resolve SCENE TEXT (never send style/template image to the image model)
     let sceneText = '';
-    if (effectiveMode === 'enhance') {
+    if (effectiveMode === 'enhance' || effectiveMode === 'refine') {
       sceneText = '';
     } else if (effectiveMode === 'pinterest') {
       const ref = String(customReferenceUrl || '');
@@ -569,6 +638,26 @@ STRICT RULES:
         quality4k ? 'Maximum clarity and detail.' : 'Clean high detail.',
         avoidLine
       ].join('\n');
+    } else if (effectiveMode === 'refine') {
+      if (!editText) {
+        throw new Error('editInstruction is required for refine mode.');
+      }
+      const fromDb = await loadPromptFromDb('refine');
+      if (fromDb) {
+        promptContext = fromDb
+          .replace(/\{\{edit\}\}/g, editText)
+          .replace(/\{\{edit_instruction\}\}/g, editText)
+          .replace(/\{\{avoid_line\}\}/g, avoidLine);
+      } else {
+        promptContext = [
+          'TASK: Edit the supplied photograph according to the user instruction below.',
+          'Change ONLY what the instruction asks. Keep identity, face structure, pose, clothing, background, and composition unless the instruction explicitly changes them.',
+          'Do not invent a different person. Do not age the subject. Light natural skin is ok; no plastic beautify.',
+          'USER INSTRUCTION:',
+          editText,
+          avoidLine
+        ].join('\n');
+      }
     } else if (effectiveMode === 'couple') {
       promptContext = [
         'TASK: Create ONE photorealistic photo of TWO real people together.',
@@ -719,16 +808,22 @@ STRICT RULES:
     const pushText = (arr: any[], t: string) => {
       if (t && String(t).trim()) arr.push({ type: 'text', text: String(t).trim() });
     };
-    const pushImageFromUrl = async (arr: any[], url: string) => {
-      if (!url) return;
-      const part = await urlToGenerativePart(url);
-      if (part?.inlineData?.data) {
-        arr.push({
-          type: 'image',
-          mime_type: part.inlineData.mimeType || 'image/jpeg',
-          data: part.inlineData.data
-        });
+    const pushImageFromUrl = async (arr: any[], url: string, label = 'image') => {
+      if (!url) {
+        throw new Error(`Missing ${label} URL`);
       }
+      const part = await urlToGenerativePart(url);
+      if (!part?.inlineData?.data) {
+        throw new Error(
+          `Unable to load ${label} for the model. Check that the URL is a reachable image (JPEG/PNG/WEBP).`
+        );
+      }
+      const mime = (part.inlineData.mimeType || 'image/jpeg').split(';')[0].trim();
+      arr.push({
+        type: 'image',
+        mime_type: mime,
+        data: part.inlineData.data
+      });
     };
 
     // ── TWO-PASS when mask_image_url is set ───────────────────────────
@@ -798,7 +893,7 @@ STRICT RULES:
           '',
           `Facial expression: ${expressionText}. Do not change anything else about the face: do not add wrinkles or under-eye bags, do not age or de-age.`,
           '',
-          'Do not retouch or beautify. Sharpness, grain and face color must match the rest of the frame.',
+          'Keep the same identity, but apply a subtle natural finish: slightly fresher look (soften under-eye heaviness and deep wrinkles only a little), healthy skin with real texture — no plastic blur, no beauty-filter face. Do not change bone structure, eye shape, nose, lips, or make the person look like someone else. Do not age the person. Sharpness and grain should still match the rest of the frame.',
           avoidLine
         ]
           .filter(Boolean)
@@ -891,7 +986,7 @@ STRICT RULES:
           '',
           `Facial expressions: ${expressionText}. Apply a natural expression to each person. Do not add wrinkles or under-eye bags; do not age or de-age either person.`,
           '',
-          'Do not retouch or beautify. Sharpness, grain and face colors must match the rest of the frame.',
+          'Keep the same identity, but apply a subtle natural finish: slightly fresher look (soften under-eye heaviness and deep wrinkles only a little), healthy skin with real texture — no plastic blur, no beauty-filter face. Do not change bone structure, eye shape, nose, lips, or make the person look like someone else. Do not age the person. Sharpness and grain should still match the rest of the frame.',
           avoidLine
         ]
           .filter(Boolean)
@@ -921,6 +1016,10 @@ STRICT RULES:
       if (effectiveMode === 'enhance') {
         pushText(interactionInput, 'PHOTO TO ENHANCE:');
         await pushImageFromUrl(interactionInput, userPhotoUrl);
+      } else if (effectiveMode === 'refine') {
+        pushText(interactionInput, 'PHOTO TO EDIT (base image):');
+        await pushImageFromUrl(interactionInput, userPhotoUrl, 'refine base');
+        pushText(interactionInput, 'Apply the USER INSTRUCTION only. Output one edited photorealistic image.');
       } else if (effectiveMode === 'couple') {
         pushText(interactionInput, 'IDENTITY A (LEFT) — face source for the person on the LEFT:');
         await pushImageFromUrl(interactionInput, userPhotoUrl);
@@ -945,7 +1044,9 @@ STRICT RULES:
         interactionInput,
         effectiveMode === 'enhance'
           ? 'Output an enhanced version of the same photo.'
-          : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
+          : effectiveMode === 'refine'
+            ? 'Output one edited photorealistic image following the USER INSTRUCTION.'
+            : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
       );
 
       const imageSize: '1K' | '2K' | '4K' = imageQuality;
