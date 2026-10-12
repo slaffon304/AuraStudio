@@ -1,1712 +1,1886 @@
-import express, { Request, Response, NextFunction } from 'express';
-import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { useApp } from '../context/AppContext';
+import { PhotoTemplate, AspectRatio } from '../types';
+import logoImg from '../assets/images/aurastudio-logo.png';
 import {
-  supabaseAdmin,
-  authenticateRequest,
-  isServerSupabaseConfigured,
-  AuthenticatedUser
-} from './src/lib/supabase-server.js';
-import { paymentGateway } from './src/services/payments/index.js';
+  Upload,
+  Sparkles,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Download,
+  FolderHeart,
+  LogIn,
+  ChevronLeft,
+  Camera,
+  Send,
+  X,
+  Plus
+} from 'lucide-react';
 
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Initialize Google GenAI Client
-let aiClient: GoogleGenAI | null = null;
-if (process.env.GEMINI_API_KEY) {
-  aiClient = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build'
-      }
-    }
-  });
+interface CreatePhotoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialTemplate?: PhotoTemplate | null;
 }
 
-// Custom request with authenticated user
-interface AuthRequest extends Request {
-  user?: AuthenticatedUser;
+const ASPECT_OPTIONS: { value: AspectRatio; labelRo: string; labelRu: string; labelEn: string }[] = [
+  { value: '1:1', labelRo: 'pătrat', labelRu: 'квадрат', labelEn: 'square' },
+  { value: '9:16', labelRo: 'vertical', labelRu: 'вертикаль', labelEn: 'vertical' },
+  { value: '3:4', labelRo: 'portret', labelRu: 'портрет', labelEn: 'portrait' },
+  { value: '4:3', labelRo: 'orizontal', labelRu: 'горизонталь', labelEn: 'landscape' }
+];
+
+const MAX_FACE_PHOTOS = 5;
+
+function slotCount(type?: string): number {
+  if (type === 'couple_portrait') return 2;
+  return 1;
 }
 
-// Authentication Middleware
-async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!isServerSupabaseConfigured()) {
-    return res.status(503).json({
-      error: 'Supabase is not configured. Please configure SUPABASE_URL and SUPABASE_SECRET_KEY in .env.'
-    });
-  }
+type FacePhoto = { url: string; id: string };
 
-  const user = await authenticateRequest(req);
-  if (!user) {
-    return res.status(401).json({ error: 'Autentificare necesară. Token invalid sau expirat.' });
-  }
-
-  req.user = user;
-  next();
-}
-
-// Admin Authorization Middleware
-async function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Acces interzis. Rolul de administrator este necesar.' });
-  }
-  next();
-}
-
-// ====================================================================
-// PUBLIC ENDPOINTS
-// ====================================================================
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    time: new Date().toISOString(),
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-    supabaseConfigured: isServerSupabaseConfigured()
-  });
-});
-
-// Templates list (public)
-app.get('/api/templates', async (req, res) => {
-  if (!isServerSupabaseConfigured()) {
-    // Return empty array or notify
-    return res.json([]);
-  }
-
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('templates')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true });
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Photo packages (public)
-app.get('/api/photo-packages', async (req, res) => {
-  if (!isServerSupabaseConfigured()) {
-    return res.json([]);
-  }
-
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('photo_packages')
-      .select('*')
-      .eq('is_active', true)
-      .order('photos', { ascending: true });
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ====================================================================
-// AUTHENTICATED USER ENDPOINTS
-// ====================================================================
-
-// Get current profile
-app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', req.user!.id)
-      .single();
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Upload a user photo (to 'user-photos' storage bucket)
-app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
-  const { dataUrl, filename } = req.body;
-  if (!dataUrl || !dataUrl.startsWith('data:image/')) {
-    return res.status(400).json({ error: 'Imagine invalidă. Se acceptă doar fișiere de tip imagine.' });
-  }
-
-  const userId = req.user!.id;
-  const photoId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const storagePath = `${userId}/${photoId}.jpg`;
-
-  try {
-    // Convert Base64 dataURL to binary Buffer for Supabase Storage
-    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    // 1. Upload to Supabase Storage 'user-photos' bucket
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('user-photos')
-      .upload(storagePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-      });
-
-    if (uploadError) throw uploadError;
-
-    // 2. Insert metadata record in user_photos
-    const { data: record, error: dbError } = await supabaseAdmin
-      .from('user_photos')
-      .insert({
-        user_id: userId,
-        storage_path: storagePath,
-        filename: filename || 'my_photo.jpg',
-        mime_type: 'image/jpeg',
-        file_size: buffer.length
-      })
-      .select('*')
-      .single();
-
-    if (dbError) throw dbError;
-
-    // 3. Create signed URL for frontend display
-    const { data: signedData } = await supabaseAdmin.storage
-      .from('user-photos')
-      .createSignedUrl(storagePath, 3600);
-
-    res.json({
-      ...record,
-      url: signedData?.signedUrl || ''
-    });
-  } catch (err: any) {
-    console.error('Error uploading photo:', err);
-    res.status(500).json({ error: 'Încărcarea fotografiei a eșuat: ' + err.message });
-  }
-});
-
-// List user photos
-app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data: photos, error } = await supabaseAdmin
-      .from('user_photos')
-      .select('*')
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Generate signed URLs for private images
-    const photosWithUrls = await Promise.all(
-      (photos || []).map(async (photo) => {
-        const { data: signedData } = await supabaseAdmin.storage
-          .from('user-photos')
-          .createSignedUrl(photo.storage_path, 3600);
-        return {
-          id: photo.id,
-          userId: photo.user_id,
-          url: signedData?.signedUrl || '',
-          filename: photo.filename,
-          uploadedAt: photo.created_at,
-          storagePath: photo.storage_path
-        };
-      })
-    );
-
-    res.json(photosWithUrls);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Delete user photo
-app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data: photo, error: fetchError } = await supabaseAdmin
-      .from('user_photos')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (fetchError || !photo) {
-      return res.status(404).json({ error: 'Fotografia nu a fost găsită.' });
-    }
-
-    // Delete from storage
-    await supabaseAdmin.storage
-      .from('user-photos')
-      .remove([photo.storage_path]);
-
-    // Delete from database
-    await supabaseAdmin
-      .from('user_photos')
-      .delete()
-      .eq('id', photo.id);
-
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Helper to convert dataURL or fetch image buffer to Gemini inlineData
-async function urlToGenerativePart(url: string) {
-  if (!url) return null;
-  if (url.startsWith('data:image/')) {
-    const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-    if (match) {
-      return {
-        inlineData: {
-          mimeType: match[1],
-          data: match[2]
-        }
-      };
-    }
-  }
-  try {
-    const resp = await fetch(url);
-    if (resp.ok) {
-      const buffer = await resp.arrayBuffer();
-      const contentType = resp.headers.get('content-type') || 'image/jpeg';
-      return {
-        inlineData: {
-          mimeType: contentType,
-          data: Buffer.from(buffer).toString('base64')
-        }
-      };
-    }
-  } catch (err) {
-    console.warn('Could not parse or fetch image for generative part:', err);
-  }
-  return null;
-}
-
-// ====================================================================
-// GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
-// ====================================================================
-
-// Create and trigger AI generation job
-app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
+export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
+  isOpen,
+  onClose,
+  initialTemplate
+}) => {
   const {
-    templateId,
-    userPhotoUrl,
-    aspectRatio,
-    mode = 'template',
-    customReferenceUrl,
-    partnerPhotoUrl,
-    isPack = false,
-    age,
-    age2,
-    heightCm,
-    weightKg,
-    extraPhotoUrls,
-    partnerExtraPhotoUrls
-  } = req.body;
-  const userId = req.user!.id;
+    language,
+    t,
+    templates,
+    uploadPhoto,
+    userPhotos,
+    currentUser,
+    createGenerationJob,
+    setIsPhotoModalOpen,
+    setIsAuthModalOpen,
+    setCurrentView,
+    selectedTemplate: ctxSelectedTemplate,
+    studioMode
+  } = useApp();
 
-  if (!templateId && !customReferenceUrl && mode !== 'enhance' && mode !== 'pinterest') {
-    return res.status(400).json({ error: 'Parametrul templateId sau customReferenceUrl este obligatoriu.' });
-  }
+  const [template, setTemplate] = useState<PhotoTemplate | null>(null);
+  /** Person 1 face angles (1–5) */
+  const [photos1, setPhotos1] = useState<FacePhoto[]>([]);
+  /** Person 2 (couple) */
+  const [photos2, setPhotos2] = useState<FacePhoto[]>([]);
+  /** Pinterest reference image (not a face pack) */
+  const [refUrl, setRefUrl] = useState('');
+  const [pinLink, setPinLink] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  /** enhance: '2k' | '4k' */
+  const [enhanceRes, setEnhanceRes] = useState<'2k' | '4k'>('4k');
+  const [age1, setAge1] = useState<number | ''>('');
+  const [age2, setAge2] = useState<number | ''>('');
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio>('3:4');
 
-  if (!userPhotoUrl) {
-    return res.status(400).json({ error: 'Fotografia utilizatorului este obligatorie.' });
-  }
+  const [sliderPct, setSliderPct] = useState(8);
+  const [hintVisible, setHintVisible] = useState(true);
+  const dragging = useRef(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [heroWidth, setHeroWidth] = useState(0);
 
-  // 1. Fetch template from database or create dynamic Pinterest reference config
-  let template: any = null;
-  if (templateId) {
-    const { data: tmpl, error: tmplError } = await supabaseAdmin
-      .from('templates')
-      .select('*')
-      .eq('id', templateId)
-      .single();
-    if (!tmplError && tmpl) {
-      template = tmpl;
-    }
-  }
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'p1' | 'p2'>('p1');
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [showUploadSheet, setShowUploadSheet] = useState(false);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [showPinHelp, setShowPinHelp] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [resultQuality, setResultQuality] = useState<'2k' | '4k'>('2k');
 
-  if (!template) {
-    template = {
-      id: 'custom-pinterest',
-      name_ro: 'Referință Pinterest Personalizată',
-      name_ru: 'Кастомный референс из Pinterest',
-      name_en: 'Custom Pinterest Reference',
-      photo_cost: 1,
-      aspect_ratio: aspectRatio || '3:4',
-      prompt: 'High-end Pinterest fashion editorial, cinematic studio lighting, elegant wardrobe and pose transferred from reference photo, 85mm lens portrait, European luxury aesthetic.'
-    };
-  }
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [stepText, setStepText] = useState('');
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Timed progress UI (PifPaf-style steps + countdown) */
+  const [progressSteps, setProgressSteps] = useState<{ id: string; label: string; status: 'pending' | 'active' | 'done' }[]>([]);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [resultSource, setResultSource] = useState<'template' | 'pinterest' | 'couple' | 'enhance'>('template');
+  const [rating, setRating] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+  const progressTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const quality4k = Boolean(req.body.quality4k);
-  const baseCost = Number(template.photo_cost ?? template.credit_cost ?? 1) || 1;
-  // 1 photo standard; 2 photos for 4K upgrade (video = 8 later)
-  const effectivePhotoCost = quality4k ? 2 : baseCost;
 
-  // Check if AI provider is configured
-  if (!process.env.GEMINI_API_KEY || !aiClient) {
-    return res.status(503).json({
-      error: 'Generarea AI nu este configurată pe server: GEMINI_API_KEY lipsește în Secrets. Te rugăm să configurezi cheia Gemini în panoul de Secrets.'
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+
+  // Lock page scroll while modal is open + always open at TOP (not bottom of previous scroll)
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = document.body.style.paddingRight;
+    const sbw = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    if (sbw > 0) document.body.style.paddingRight = `${sbw}px`;
+    // Reset scroll position of the modal shell
+    requestAnimationFrame(() => {
+      if (modalScrollRef.current) modalScrollRef.current.scrollTop = 0;
+      window.scrollTo(0, 0);
     });
-  }
-
-  let jobId: string | null = null;
-
-  try {
-    // 2. Create job record in queued state
-    const { data: jobRecord, error: jobCreateError } = await supabaseAdmin
-      .from('generation_jobs')
-      .insert({
-        user_id: userId,
-        template_id: template.id,
-        status: 'queued',
-        progress: 10,
-        current_step_message: 'Verificare foto și autorizare...',
-        provider_id: 'gemini-genai',
-        photo_cost: effectivePhotoCost,
-        aspect_ratio: aspectRatio || template.aspect_ratio || '3:4'
-      })
-      .select('id')
-      .single();
-
-    if (jobCreateError || !jobRecord) {
-      throw new Error('Eroare la crearea înregistrării generării: ' + jobCreateError?.message);
-    }
-
-    jobId = jobRecord.id;
-
-    // 3. ATOMICALLY DEDUCT PHOTOS using PostgreSQL stored procedure
-    const { data: newBalance, error: deductError } = await supabaseAdmin
-      .rpc('deduct_photos_for_generation', {
-        p_user_id: userId,
-        p_amount: effectivePhotoCost,
-        p_template_id: template.id,
-        p_template_name: template.name_ro || 'Photo Shoot',
-        p_job_id: jobId
-      });
-
-    if (deductError) {
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          status: 'failed',
-          error_message: 'Foto insuficiente pentru această generare.'
-        })
-        .eq('id', jobId);
-
-      return res.status(402).json({
-        error: 'Foto insuficiente. Cumpără un pachet pentru a genera această fotografie.',
-        required: effectivePhotoCost
-      });
-    }
-
-    // 4. Update job to processing
-    await supabaseAdmin
-      .from('generation_jobs')
-      .update({
-        status: 'processing',
-        progress: 35,
-        current_step_message: 'Sinteză portret fotorealist prin Google Gemini...',
-        started_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
-
-    // 5. Execute REAL server-side AI generation with Gemini SDK
-    let imageBase64Data: string | null = null;
-    let mimeType = 'image/jpeg';
-
-    // ── Prompt + images: IDENTITY selfies + SCENE TEXT (no style image) ──
-    // Templates: scene from templates.prompt
-    // Pinterest: scene from on-the-fly vision analysis of the reference
-    // Blur / style-image face transfer removed on purpose.
-
-    const SCENE_ANALYZE_PROMPT = `You are a photography director writing a scene brief for an AI image generator.
-
-Analyze the reference photograph in extreme detail. Output ONLY a single dense English paragraph (no bullet lists, no markdown, no preamble).
-
-Describe the COMPLETE scene so another model can recreate the same shot WITHOUT seeing this image and WITHOUT copying any person's face:
-- Camera: exact framing (head-and-shoulders / waist-up / full body), camera height, angle (eye-level / slight low / high), approximate focal length feel (e.g. 35mm, 50mm, 85mm), depth of field
-- Pose: body orientation, head turn, gaze direction, arm and hand placement, weight distribution
-- Wardrobe: garments, colors, fabrics, fit, accessories, shoes if visible
-- Environment: location type, architecture, furniture, props, what is left/right/behind the subject
-- Lighting: key light direction and quality (soft/hard), fill, rim, color temperature, time of day, reflections
-- Color grade and mood: overall palette, contrast, atmosphere
-- Composition: subject placement in frame, leading lines, background blur amount
-
-STRICT RULES:
-- Do NOT describe facial features, age, gender presentation, skin, hair style/color, or identity of any person.
-- Do NOT invent objects that are not visible.
-- Prefer concrete visual facts over vague adjectives.
-- Write as an executable scene prompt for photorealistic generation.`;
-
-    async function analyzeSceneFromImage(url: string): Promise<string> {
-      const part = await urlToGenerativePart(url);
-      if (!part?.inlineData?.data) {
-        throw new Error('Nu s-a putut încărca imaginea de referință pentru analiză.');
-      }
-      // Text+vision model for scene breakdown (not the image generator)
-      const analysisModel =
-        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
-      try {
-        const resp = await aiClient!.models.generateContent({
-          model: analysisModel,
-          contents: {
-            parts: [
-              { text: SCENE_ANALYZE_PROMPT },
-              {
-                inlineData: {
-                  mimeType: part.inlineData.mimeType || 'image/jpeg',
-                  data: part.inlineData.data
-                }
-              }
-            ]
-          }
-        });
-        const text =
-          (resp as any)?.text ||
-          (resp as any)?.candidates?.[0]?.content?.parts
-            ?.map((p: any) => p.text)
-            .filter(Boolean)
-            .join(' ') ||
-          '';
-        const cleaned = String(text).trim().replace(/\s+/g, ' ');
-        if (cleaned.length < 40) {
-          throw new Error('Analiza scenei a returnat un text prea scurt.');
-        }
-        return cleaned.slice(0, 2500);
-      } catch (err: any) {
-        console.error('[scene-analyze]', err?.message || err);
-        throw new Error(
-          'Nu s-a putut analiza referința Pinterest: ' + (err?.message || 'unknown')
-        );
-      }
-    }
-
-    const ageProvided = age !== undefined && age !== null && age !== '';
-    const age2Provided = age2 !== undefined && age2 !== null && age2 !== '';
-    const ageNum = ageProvided ? Number(age) : NaN;
-    const age2Num = age2Provided ? Number(age2) : NaN;
-    const age1Line =
-      Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
-        ? `Apparent age of Person A should be about ${Math.round(ageNum)} years (only if consistent with the identity photos).`
-        : '';
-    const age2Line =
-      Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
-        ? `Apparent age of Person B should be about ${Math.round(age2Num)} years (only if consistent with the identity photos).`
-        : '';
-    const h = Number(heightCm);
-    const w = Number(weightKg);
-    const bodyLine = [
-      Number.isFinite(h) && h >= 100 && h <= 250
-        ? `If full body is visible, height about ${Math.round(h)} cm.`
-        : '',
-      Number.isFinite(w) && w >= 30 && w <= 250
-        ? `Body build consistent with about ${Math.round(w)} kg (do not distort the face).`
-        : ''
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
-    const avoidLine = negFromDb
-      ? `Avoid: ${negFromDb}`
-      : 'Avoid: distorted anatomy, extra fingers, plastic skin, watermarks, logos, text overlays.';
-
-    const effectiveMode =
-      mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
-        ? 'couple'
-        : mode === 'pinterest' || customReferenceUrl
-          ? 'pinterest'
-          : mode === 'enhance'
-            ? 'enhance'
-            : 'template';
-
-    // Resolve SCENE TEXT (never send style/template image to the image model)
-    let sceneText = '';
-    if (effectiveMode === 'enhance') {
-      sceneText = '';
-    } else if (effectiveMode === 'pinterest') {
-      const ref = String(customReferenceUrl || '');
-      if (!ref) {
-        throw new Error('Referința Pinterest lipsește.');
-      }
-      sceneText = await analyzeSceneFromImage(ref);
-      console.log('[scene-analyze] pinterest chars:', sceneText.length, sceneText.slice(0, 200));
-    } else {
-      // template / couple — detailed prompt from DB
-      sceneText = String(template.prompt || '').trim();
-      if (!sceneText) {
-        throw new Error('Template prompt lipsește în baza de date.');
-      }
-    }
-
-    let promptContext = '';
-    if (effectiveMode === 'enhance') {
-      promptContext = [
-        'TASK: Improve technical quality of this photo only.',
-        'Preserve exact identity, face, expression, pose, clothing, composition, background.',
-        'Do not restyle, beautify into another person, or change age.',
-        quality4k ? 'Maximum clarity and detail.' : 'Clean high detail.',
-        avoidLine
-      ].join('\n');
-    } else if (effectiveMode === 'couple') {
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of TWO real people together.',
-        'PERSON A appears on the LEFT. PERSON B appears on the RIGHT.',
-        'Faces must match the IDENTITY photos for A and B only. Do not invent or swap faces.',
-        'Follow the SCENE description exactly for setting, wardrobe, pose intent, camera angle, lighting, and framing.',
-        'Do not invent a different camera angle than the scene describes.',
-        'SCENE:',
-        sceneText,
-        age1Line,
-        age2Line,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
-    } else if (effectiveMode === 'pinterest') {
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline).',
-        'Recreate the SCENE as described: same camera angle, framing, pose, wardrobe, lighting, and environment.',
-        'Do not invent a different viewpoint than the scene specifies.',
-        'SCENE (from reference analysis — no face identity in this text):',
-        sceneText,
-        age1Line,
-        bodyLine,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
-    } else {
-      // template single
-      promptContext = [
-        'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-        'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin, hairline, age signs).',
-        'Follow the SCENE description closely for environment, wardrobe, pose, camera angle, focal length feel, lighting, and framing.',
-        'Do not change the camera angle or crop style described in the scene.',
-        'If the scene text mentions a generic person, ignore their face/identity — use only the IDENTITY photos for the face.',
-        'SCENE:',
-        sceneText,
-        age1Line,
-        avoidLine
-      ]
-        .filter(Boolean)
-        .join('\n');
-    }
-
-    const targetRatio =
-      aspectRatio === '9:16' ||
-      aspectRatio === '16:9' ||
-      aspectRatio === '4:3' ||
-      aspectRatio === '3:4'
-        ? aspectRatio
-        : '3:4';
-
-    const maskUrl = String(
-      template.mask_image_url || template.maskImageUrl || ''
-    ).trim();
-    const expressionText = String(template.expression || '').trim() ||
-      'calm neutral expression, closed mouth, no smile';
-
-    // Helper: one Interactions image call
-    async function runImagePass(
-      input: any[],
-      imageSize: '1K' | '2K' | '4K',
-      passLabel: string
-    ): Promise<{ data: string; mimeType: string }> {
-      console.log(`[generate] ${passLabel}`, {
-        parts: input.length,
-        aspect: targetRatio,
-        imageSize,
-        model: 'gemini-nano-banana-2.1'
-      });
-      console.log(`======== ${passLabel} INPUT ========`);
-      for (let i = 0; i < input.length; i++) {
-        const p = input[i] as any;
-        if (p.type === 'text' || typeof p.text === 'string') {
-          const t = String(p.text || '');
-          console.log(`[${i}] TEXT (${t.length} chars):`, t.slice(0, 600));
-        } else if (p.type === 'image' || p.data) {
-          const b64 = String(p.data || '');
-          console.log(
-            `[${i}] IMAGE mime=${p.mime_type || p.mimeType || '?'} ~${Math.round((b64.length * 3) / 4)} bytes`
-          );
-        } else {
-          console.log(`[${i}] OTHER:`, JSON.stringify(p).slice(0, 200));
-        }
-      }
-      console.log(`======== END ${passLabel} ========`);
-
-      const interaction = await aiClient!.interactions.create({
-        model: 'gemini-nano-banana-2.1',
-        input,
-        response_format: {
-          type: 'image',
-          aspect_ratio: targetRatio,
-          image_size: imageSize
-        }
-      });
-
-      let data: string | null = null;
-      let mime = 'image/png';
-
-      if (interaction?.output_image?.data) {
-        data = interaction.output_image.data;
-        mime =
-          interaction.output_image.mime_type ||
-          interaction.output_image.mimeType ||
-          'image/png';
-      } else {
-        const steps = (interaction as any)?.steps || [];
-        for (const step of steps) {
-          const blocks = step?.content || step?.images || [];
-          for (const block of blocks) {
-            if (
-              (block?.type === 'image' || block?.inlineData) &&
-              (block?.data || block?.inlineData?.data)
-            ) {
-              data = block.data || block.inlineData.data;
-              mime =
-                block.mime_type ||
-                block.mimeType ||
-                block.inlineData?.mimeType ||
-                'image/png';
-              break;
-            }
-          }
-          if (data) break;
-        }
-      }
-
-      if (!data) {
-        console.warn(
-          `[generate] ${passLabel} no image`,
-          JSON.stringify(interaction)?.slice(0, 600)
-        );
-        throw new Error(
-          `${passLabel}: model did not return an image. Check GEMINI_API_KEY / model availability.`
-        );
-      }
-
-      console.log(`[generate] ${passLabel} ok`, {
-        mime,
-        bytesApprox: Math.round((data.length * 3) / 4)
-      });
-      return { data, mimeType: mime };
-    }
-
-    const pushText = (arr: any[], t: string) => {
-      if (t && String(t).trim()) arr.push({ type: 'text', text: String(t).trim() });
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPadding;
     };
-    const pushImageFromUrl = async (arr: any[], url: string) => {
-      if (!url) return;
-      const part = await urlToGenerativePart(url);
-      if (part?.inlineData?.data) {
-        arr.push({
-          type: 'image',
-          mime_type: part.inlineData.mimeType || 'image/jpeg',
-          data: part.inlineData.data
-        });
-      }
+  }, [isOpen]);
+
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const tmpl = initialTemplate || ctxSelectedTemplate || templates[0] || null;
+    setTemplate(tmpl);
+    if (tmpl?.aspectRatio) setSelectedAspectRatio(tmpl.aspectRatio);
+    setSliderPct(8);
+    setHintVisible(true);
+    setResultUrl(null);
+    setIsGenerating(false);
+    setErrorMessage(null);
+    setProgressSteps([]);
+    setSecondsLeft(null);
+    setRating(null);
+    setEditText('');
+    setIsRefining(false);
+    progressTimers.current.forEach(clearTimeout);
+    progressTimers.current = [];
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setAge1('');
+    setAge2('');
+    // Do NOT auto-fill previous uploads
+    setPhotos1([]);
+    setPhotos2([]);
+    setRefUrl('');
+    setPinLink('');
+    setHeightCm('');
+    setWeightKg('');
+    setEnhanceRes('4k');
+    setShowTipModal(false);
+    setShowUploadSheet(false);
+    setShowLibraryPicker(false);
+    setShowPinHelp(false);
+    setFullscreenOpen(false);
+    setResultQuality('2k');
+  }, [isOpen, initialTemplate, ctxSelectedTemplate, templates]);
+
+  useEffect(() => {
+    if (!isOpen || !heroRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setHeroWidth(e.contentRect.width);
+    });
+    ro.observe(heroRef.current);
+    setHeroWidth(heroRef.current.clientWidth);
+    return () => ro.disconnect();
+  }, [isOpen]);
+
+  const onPointerMove = useCallback((clientX: number) => {
+    const el = heroRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pct = Math.max(2, Math.min(98, ((clientX - rect.left) / rect.width) * 100));
+    setSliderPct(pct);
+    setHintVisible(false);
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      onPointerMove(e.clientX);
     };
+    const onUp = () => {
+      dragging.current = false;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [onPointerMove]);
 
-    // ── TWO-PASS when mask_image_url is set ───────────────────────────
-    // template and couple are SEPARATE prompt contracts (no shared text)
-    const useTwoPass =
-      (effectiveMode === 'template' || effectiveMode === 'couple') && Boolean(maskUrl);
+  if (!isOpen) return null;
 
-    if (useTwoPass && effectiveMode === 'template') {
-      // ========== SINGLE: PASS 1 ==========
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          progress: 45,
-          current_step_message: 'Pass 1/2: identity + scene (1K)...'
-        })
-        .eq('id', jobId);
+  const portal = (node: React.ReactNode) =>
+    typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 
-      const pass1Input: any[] = [];
-      pushText(
-        pass1Input,
-        [
-          'TASK: Create ONE photorealistic photo of the IDENTITY person in the SCENE below.',
-          'The face must match the IDENTITY photo(s) exactly (bone structure, eyes, nose, lips, skin).',
-          'Hair: take color, length and texture only from the IDENTITY photo; ignore any hair described in the scene.',
-          'Follow the SCENE for environment, wardrobe, pose, camera angle, lighting, and framing.',
-          'Scene accuracy is secondary to a correct, well-scaled face and head.',
-          'SCENE:',
-          sceneText,
-          age1Line,
-          bodyLine,
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
-      );
-      pushText(pass1Input, 'IDENTITY — the only face that must appear:');
-      await pushImageFromUrl(pass1Input, userPhotoUrl);
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
-      }
-      pushText(
-        pass1Input,
-        'FINAL: Face and hair from IDENTITY only. Output a single photorealistic image.'
-      );
+  const slots = slotCount(template?.requiredInputType);
+  const basePhotoCost = template?.photoCost ?? 1;
+  const photoCost = resultQuality === '4k' ? basePhotoCost * 2 : basePhotoCost;
+  const balance = currentUser?.photoBalance ?? 0;
+  const hasEnough = balance >= photoCost;
+  const hasRequiredPhotos =
+    slots === 1 ? photos1.length >= 1 : photos1.length >= 1 && photos2.length >= 1;
 
-      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
+  const name = template?.name?.[language] || template?.name?.ro || template?.name?.en || '';
+  const description = template?.description?.[language] || template?.description?.ro || '';
+  const beforeUrl = template?.beforeImage || '';
+  const afterUrl = template?.previewImage || '';
 
-      // ========== SINGLE: PASS 2 ==========
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          progress: 70,
-          current_step_message: 'Pass 2/2: composite on masked scene (2K/4K)...'
-        })
-        .eq('id', jobId);
-
-      const pass2Input: any[] = [];
-      pushText(
-        pass2Input,
-        [
-          'Image 1 is the SCENE. The person\'s face and hair on it are covered by a mask.',
-          'Image 2 is a photograph of the person whose head must be used.',
-          '',
-          'Generate a photorealistic photo: keep the scene from Image 1 unchanged (background, pose, hands, clothing, props, light, camera angle) and replace the masked region with the head from Image 2: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to the pose on Image 1.',
-          '',
-          'Skin color: use the skin tone from the head in Image 2 everywhere it belongs on that person — face, ears, neck, and any visible skin that is part of the head/neck area. Do not use the skin tone of the original person in Image 1. The whole head-and-neck skin must match Image 2; do not leave a different skin tone on the neck or jawline.',
-          '',
-          `Facial expression: ${expressionText}. Do not change anything else about the face: do not add wrinkles or under-eye bags, do not age or de-age.`,
-          '',
-          'Do not retouch or beautify. Sharpness, grain and face color must match the rest of the frame.',
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
-      );
-      pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
-      await pushImageFromUrl(pass2Input, maskUrl);
-      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY source:');
-      pass2Input.push({
-        type: 'image',
-        mime_type: pass1.mimeType || 'image/png',
-        data: pass1.data
-      });
-      pushText(
-        pass2Input,
-        'FINAL: Composite the head from Image 2 onto the masked scene of Image 1. One photorealistic image. Skin tone of the head matches Image 2.'
-      );
-
-      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-single');
-      imageBase64Data = pass2.data;
-      mimeType = pass2.mimeType;
-    } else if (useTwoPass && effectiveMode === 'couple') {
-      // ========== COUPLE: PASS 1 (two identities) ==========
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          progress: 45,
-          current_step_message: 'Pass 1/2: two identities + scene (1K)...'
-        })
-        .eq('id', jobId);
-
-      const pass1Input: any[] = [];
-      pushText(
-        pass1Input,
-        [
-          'TASK: Create ONE photorealistic photo of TWO people together in the SCENE below.',
-          'PERSON A appears on the LEFT side of the frame. PERSON B appears on the RIGHT side of the frame.',
-          'Each face must match that person\'s IDENTITY photos only. Do not invent faces. Do not swap A and B.',
-          'Hair for each person: take color, length and texture only from that person\'s own IDENTITY photos; ignore any hair described in the scene text.',
-          'Follow the SCENE for environment, wardrobe, poses, camera angle, lighting, and framing.',
-          'Scene accuracy is secondary to correct, well-scaled faces and heads for both people.',
-          'SCENE:',
-          sceneText,
-          age1Line,
-          age2Line,
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
-      );
-      pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
-      await pushImageFromUrl(pass1Input, userPhotoUrl);
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
-      }
-      pushText(pass1Input, 'IDENTITY B (RIGHT) — photos of the person who must appear on the RIGHT:');
-      if (partnerPhotoUrl) await pushImageFromUrl(pass1Input, partnerPhotoUrl);
-      if (Array.isArray(partnerExtraPhotoUrls)) {
-        for (const u of partnerExtraPhotoUrls.slice(0, 4))
-          await pushImageFromUrl(pass1Input, u);
-      }
-      pushText(
-        pass1Input,
-        'FINAL: Two people in one image. Faces and hair from IDENTITY A and IDENTITY B only. Do not merge or swap them.'
-      );
-
-      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
-
-      // ========== COUPLE: PASS 2 (two masked heads) ==========
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          progress: 70,
-          current_step_message: 'Pass 2/2: composite both heads on masked scene (2K/4K)...'
-        })
-        .eq('id', jobId);
-
-      const pass2Input: any[] = [];
-      pushText(
-        pass2Input,
-        [
-          'Image 1 is the SCENE with TWO people. Both faces and both heads of hair are covered by masks.',
-          'Image 2 is a photograph of the SAME two people whose heads must be used (left person and right person already placed correctly in Image 2).',
-          '',
-          'Generate one photorealistic photo: keep the scene from Image 1 unchanged (background, both body poses, hands, clothing, props, light, camera angle). Replace EACH masked head with the matching head from Image 2.',
-          'Left masked person ← head of the left person in Image 2. Right masked person ← head of the right person in Image 2. Do not swap them. Do not put the same face on both. Do not invent a third person.',
-          'For each head: same face, same hair, beard or stubble if present, eye color. Match head size, rotation and tilt to each pose on Image 1.',
-          '',
-          'Skin color: for EACH person, use the skin tone from that person\'s head in Image 2 on their face, ears, neck, and any visible skin in the head/neck area. Do not use the skin tones of the original people in Image 1. Do not leave a different skin tone on the neck or jawline.',
-          '',
-          `Facial expressions: ${expressionText}. Apply a natural expression to each person. Do not add wrinkles or under-eye bags; do not age or de-age either person.`,
-          '',
-          'Do not retouch or beautify. Sharpness, grain and face colors must match the rest of the frame.',
-          avoidLine
-        ]
-          .filter(Boolean)
-          .join('\n')
-      );
-      pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
-      await pushImageFromUrl(pass2Input, maskUrl);
-      pushText(pass2Input, 'IMAGE 2 — both HEADS / IDENTITY sources (left and right as already composed):');
-      pass2Input.push({
-        type: 'image',
-        mime_type: pass1.mimeType || 'image/png',
-        data: pass1.data
-      });
-      pushText(
-        pass2Input,
-        'FINAL: Composite both heads from Image 2 onto the two masked people in Image 1. One photorealistic image. Do not swap left and right. Each person\'s skin tone matches their own head in Image 2.'
-      );
-
-      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-couple');
-      imageBase64Data = pass2.data;
-      mimeType = pass2.mimeType;
-    } else {
-      // ── SINGLE PASS (enhance / pinterest / no mask) ───────────────────
-      const interactionInput: any[] = [];
-      pushText(interactionInput, promptContext);
-
-      if (effectiveMode === 'enhance') {
-        pushText(interactionInput, 'PHOTO TO ENHANCE:');
-        await pushImageFromUrl(interactionInput, userPhotoUrl);
-      } else if (effectiveMode === 'couple') {
-        pushText(interactionInput, 'IDENTITY A (LEFT) — face source for the person on the LEFT:');
-        await pushImageFromUrl(interactionInput, userPhotoUrl);
-        if (Array.isArray(extraPhotoUrls)) {
-          for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u);
-        }
-        pushText(interactionInput, 'IDENTITY B (RIGHT) — face source for the person on the RIGHT:');
-        if (partnerPhotoUrl) await pushImageFromUrl(interactionInput, partnerPhotoUrl);
-        if (Array.isArray(partnerExtraPhotoUrls)) {
-          for (const u of partnerExtraPhotoUrls.slice(0, 4))
-            await pushImageFromUrl(interactionInput, u);
-        }
-      } else {
-        pushText(interactionInput, 'IDENTITY — the only face that must appear in the result:');
-        await pushImageFromUrl(interactionInput, userPhotoUrl);
-        if (Array.isArray(extraPhotoUrls)) {
-          for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u);
-        }
-      }
-
-      pushText(
-        interactionInput,
-        effectiveMode === 'enhance'
-          ? 'Output an enhanced version of the same photo.'
-          : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
-      );
-
-      const imageSize: '2K' | '4K' = quality4k ? '4K' : '2K';
-      const single = await runImagePass(interactionInput, imageSize, 'SINGLE');
-      imageBase64Data = single.data;
-      mimeType = single.mimeType;
+  const copy = {
+    ro: {
+      disclaimer: 'Rezultatul poate diferi ușor de referință.',
+      tipTitle: 'Cum obții fotografia ideală?',
+      tipBody: 'Apasă aici — de fotografiile de start depinde rezultatul',
+      photoYou: 'Fotografia ta',
+      photoPartner: 'Fotografia partenerului/ei',
+      upload: 'Încarcă foto',
+      age: 'Vârsta',
+      ageYou: 'Vârsta ta',
+      agePartner: 'Vârsta partenerului/ei',
+      ratio: 'Format foto',
+      needPhoto: 'Mai întâi încarcă o fotografie',
+      generate: (n: number) => `Generează · ${n} foto`,
+      hint: 'Trage ca să vezi „înainte”',
+      tryMore: 'Încearcă și',
+      support:
+        'Ceva nu a mers cum trebuia? Scrie în Telegram @aurastudio_help_bot — echipa AuraStudio te ajută.',
+      honest: 'Vrem un produs bun și onest — echipa AuraStudio',
+      tgBtn: 'Scrie în Telegram-suport',
+      uploadHint: 'Cel puțin 1 foto, ideal 2–3 din unghiuri diferite · JPEG, PNG, WEBP, HEIC până la 10MB',
+      loginTitle: 'Autentifică-te pentru a crea fotografii',
+      balance: 'Disponibil',
+      topUp: 'Completează balanța',
+      ageRequired: 'Indică vârsta',
+      tipModalTitle: 'Fă un selfie în același loc și cu aceeași coafură.',
+      tipModalBody:
+        'Fotografiază-te din față, 3/4 și profil la aceeași lumină. Așa rețeaua reține mai bine trăsăturile și rezultatul e mai precis.',
+      better: 'rezultat mai bun',
+      worse: 'rezultat mai slab',
+      continue: 'Continuă',
+      uploadSheetTitle: 'Foto — Prima fotografie',
+      uploadSheetTitle2: 'Foto — Partener',
+      uploadSheetHint:
+        'Încarcă până la 5 foto ale acestei persoane — poți selecta mai multe odată. Ideal din unghiuri diferite (față, 3/4, profil), lumină naturală, fără ochelari și filtre. Minim — 1 foto.',
+      loaded: (n: number) => `Încărcate ${n} din ${MAX_FACE_PHOTOS}`,
+      pickPhotos: 'Alege din încărcate'
+    },
+    ru: {
+      disclaimer: 'Обратите внимание, итог может немного отличаться от референса.',
+      tipTitle: 'Как получить идеальное фото?',
+      tipBody: 'Нажми сюда — от исходных фото зависит результат',
+      photoYou: 'Твоё фото',
+      photoPartner: 'Фото партнёра',
+      upload: 'Загрузить фото',
+      age: 'Возраст',
+      ageYou: 'Твой возраст',
+      agePartner: 'Возраст партнёра',
+      ratio: 'Формат фото',
+      needPhoto: 'Сначала загрузи фото',
+      generate: (n: number) => `Сгенерировать · ${n} фото`,
+      hint: 'Потяни, чтобы увидеть «до»',
+      tryMore: 'Попробуй ещё',
+      support:
+        'Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram @aurastudio_help_bot — команда AuraStudio поможет тебе.',
+      honest: 'Мы хотим создавать классный и честный продукт — команда AuraStudio',
+      tgBtn: 'Написать в Telegram-поддержку',
+      uploadHint: 'Хотя бы 1 фото, лучше 2–3 с разных ракурсов · JPEG, PNG, WEBP, HEIC до 10MB',
+      loginTitle: 'Войдите, чтобы создавать фотосессии',
+      balance: 'Доступно',
+      topUp: 'Пополнить баланс',
+      ageRequired: 'Укажи возраст',
+      tipModalTitle: 'Сделай селфи в одном месте и с одной причёской.',
+      tipModalBody:
+        'Сними себя в фас, вполоборота и профиль при одном освещении. Так нейросеть лучше запомнит черты лица и результат получится более точный.',
+      better: 'лучше результат',
+      worse: 'хуже результат',
+      continue: 'Продолжить',
+      uploadSheetTitle: 'Фото — Первое фото',
+      uploadSheetTitle2: 'Фото — Партнёр',
+      uploadSheetHint:
+        'Загрузи до 5 фото этого человека — можно выбрать сразу несколько. Лучше с разных ракурсов (фас, вполоборота, профиль), при дневном свете, без очков и фильтров. Чем больше ракурсов, тем точнее нейросеть поймёт черты. Минимум — 1 фото.',
+      loaded: (n: number) => `Загружено ${n} из ${MAX_FACE_PHOTOS}`,
+      pickPhotos: 'Выбрать из загруженных'
+    },
+    en: {
+      disclaimer: 'Note: the result may differ slightly from the reference.',
+      tipTitle: 'How to get the ideal photo?',
+      tipBody: 'Tap here — source photos determine the result',
+      photoYou: 'Your photo',
+      photoPartner: 'Partner photo',
+      upload: 'Upload photo',
+      age: 'Age',
+      ageYou: 'Your age',
+      agePartner: "Partner's age",
+      ratio: 'Photo format',
+      needPhoto: 'Upload a photo first',
+      generate: (n: number) => `Generate · ${n} photo${n === 1 ? '' : 's'}`,
+      hint: 'Drag to see “before”',
+      tryMore: 'Try also',
+      support:
+        'Something went wrong? Message Telegram @aurastudio_help_bot — the AuraStudio team will help.',
+      honest: 'We want a great and honest product — AuraStudio team',
+      tgBtn: 'Message Telegram support',
+      uploadHint: 'At least 1 photo, ideally 2–3 angles · JPEG, PNG, WEBP, HEIC up to 10MB',
+      loginTitle: 'Sign in to create photoshoots',
+      balance: 'Available',
+      topUp: 'Top up',
+      ageRequired: 'Enter age',
+      tipModalTitle: 'Take selfies in one place with the same hairstyle.',
+      tipModalBody:
+        'Shoot front, three-quarter and profile under the same lighting. The model remembers facial features better and the result is more accurate.',
+      better: 'better result',
+      worse: 'worse result',
+      continue: 'Continue',
+      uploadSheetTitle: 'Photo — First photo',
+      uploadSheetTitle2: 'Photo — Partner',
+      uploadSheetHint:
+        'Upload up to 5 photos of this person — you can select several at once. Prefer different angles (front, 3/4, profile), daylight, no glasses or filters. Minimum — 1 photo.',
+      loaded: (n: number) => `Uploaded ${n} of ${MAX_FACE_PHOTOS}`,
+      pickPhotos: 'Choose from uploaded'
     }
+  }[language];
 
-    if (!imageBase64Data) {
-      throw new Error('Model did not return image data.');
+  const ratioLabel = (opt: (typeof ASPECT_OPTIONS)[0]) =>
+    language === 'ru' ? opt.labelRu : language === 'en' ? opt.labelEn : opt.labelRo;
+
+  const openUpload = (target: 'p1' | 'p2') => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
     }
+    setUploadTarget(target);
+    setShowUploadSheet(true);
+  };
 
-        // 6. Save generated image to private Supabase Storage bucket 'generated-images'
-    const storagePath = `${userId}/${jobId}.jpg`;
-    const imageBuffer = Buffer.from(imageBase64Data, 'base64');
+  const triggerFilePick = () => {
+    fileInputRef.current?.click();
+  };
 
-    const { error: storageError } = await supabaseAdmin.storage
-      .from('generated-images')
-      .upload(storagePath, imageBuffer, {
-        contentType: mimeType,
-        upsert: true
-      });
+  /** Open library if user has uploaded photos, otherwise device files */
+  const openPhotoSource = () => {
+    // Always open library sheet so the button visibly reacts;
+    // device files are available from inside the sheet.
+    setShowLibraryPicker(true);
+  };
 
-    if (storageError) throw storageError;
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length || !currentUser) return;
 
-    // 7. Insert record in generated_images table
-    await supabaseAdmin
-      .from('generated_images')
-      .insert({
-        job_id: jobId,
-        user_id: userId,
-        storage_path: storagePath,
-        mime_type: mimeType
-      });
+    const current = uploadTarget === 'p1' ? photos1 : photos2;
+    const room = MAX_FACE_PHOTOS - current.length;
+    if (room <= 0) return;
+    const toLoad = files.slice(0, room);
 
-    // 8. Update job to completed
-    await supabaseAdmin
-      .from('generation_jobs')
-      .update({
-        status: 'completed',
-        progress: 100,
-        current_step_message: 'Portret finalizat cu succes!',
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
-
-    // 9. Generate secure signed URL for frontend
-    const { data: signedData } = await supabaseAdmin.storage
-      .from('generated-images')
-      .createSignedUrl(storagePath, 7200);
-
-    return res.json({
-      jobId,
-      status: 'completed',
-      resultImageUrl: signedData?.signedUrl || '',
-      newBalance
-    });
-
-  } catch (genErr: any) {
-    console.error('Generation error:', genErr);
-
-    // 10. ATOMIC REFUND ON FAILURE (Refunds photos exactly once!)
-    if (jobId) {
-      try {
-        await supabaseAdmin.rpc('refund_photos_for_failed_job', {
-          p_job_id: jobId,
-          p_error_message: genErr?.message || 'Eroare necunoscută la generare.'
+    setIsUploading(true);
+    setErrorMessage(null);
+    try {
+      const uploaded: FacePhoto[] = [];
+      for (const file of toLoad) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result as string);
+          r.onerror = () => reject(new Error('read failed'));
+          r.readAsDataURL(file);
         });
-      } catch (refundErr) {
-        console.error('Refund procedure notice:', refundErr);
+        const res = await uploadPhoto(dataUrl, file.name);
+        uploaded.push({ url: res.url, id: res.id });
       }
+      if (uploadTarget === 'p1') setPhotos1((prev) => [...prev, ...uploaded].slice(0, MAX_FACE_PHOTOS));
+      else setPhotos2((prev) => [...prev, ...uploaded].slice(0, MAX_FACE_PHOTOS));
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Upload error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removePhoto = (target: 'p1' | 'p2', index: number) => {
+    if (target === 'p1') setPhotos1((p) => p.filter((_, i) => i !== index));
+    else setPhotos2((p) => p.filter((_, i) => i !== index));
+  };
+
+  const selectFromLibrary = (photo: { id: string; url: string }) => {
+    const current = uploadTarget === 'p1' ? photos1 : photos2;
+    if (current.length >= MAX_FACE_PHOTOS) return;
+    if (current.some((p) => p.id === photo.id || p.url === photo.url)) return;
+    const entry = { url: photo.url, id: photo.id };
+    if (uploadTarget === 'p1') setPhotos1((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
+    else setPhotos2((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
+  };
+
+
+  const clearProgressTimers = () => {
+    progressTimers.current.forEach(clearTimeout);
+    progressTimers.current = [];
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  };
+
+  const startProgressUI = (
+    mode: 'template' | 'pinterest' | 'couple' | 'enhance',
+    twoPassHint?: boolean
+  ) => {
+    clearProgressTimers();
+    const L = (ro: string, ru: string, en: string) =>
+      language === 'ru' ? ru : language === 'en' ? en : ro;
+
+    type Stage = { id: string; label: string; sec: number };
+    let stages: Stage[] = [];
+
+    if (mode === 'pinterest') {
+      stages = [
+        { id: 'ref', label: L('Analizăm scena din referință…', 'Разбираем сцену на референсе…', 'Analyzing reference scene…'), sec: 12 },
+        { id: 'id', label: L('Potrivim chipul tău…', 'Подбираем твоё лицо…', 'Matching your face…'), sec: 18 },
+        { id: 'compose', label: L('Asamblăm scena și lumina…', 'Собираем сцену и свет…', 'Building scene and light…'), sec: 25 },
+        { id: 'finish', label: L('Finalizăm fotografia…', 'Финальная обработка…', 'Finishing photo…'), sec: 10 }
+      ];
+    } else if (mode === 'couple') {
+      stages = [
+        { id: 'faces', label: L('Analizăm ambele chipuri…', 'Разбираем оба лица…', 'Analyzing both faces…'), sec: 10 },
+        { id: 'pass1', label: L('Generăm portretele (pas 1)…', 'Генерируем портреты (проход 1)…', 'Generating portraits (pass 1)…'), sec: 28 },
+        { id: 'pass2', label: L('Compoziție pe scenă (pas 2)…', 'Композиция на сцене (проход 2)…', 'Scene composite (pass 2)…'), sec: 32 },
+        { id: 'finish', label: L('Salvăm rezultatul…', 'Сохраняем результат…', 'Saving result…'), sec: 8 }
+      ];
+    } else if (mode === 'enhance') {
+      stages = [
+        { id: 'scan', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+        { id: 'enhance', label: L('Îmbunătățim detaliile…', 'Улучшаем детали…', 'Enhancing details…'), sec: 22 },
+        { id: 'finish', label: L('Finalizăm…', 'Финиш…', 'Finishing…'), sec: 8 }
+      ];
+    } else {
+      stages = twoPassHint
+        ? [
+            { id: 'analyze', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+            { id: 'pass1', label: L('Chip + scenă (pas 1)…', 'Лицо + сцена (проход 1)…', 'Face + scene (pass 1)…'), sec: 26 },
+            { id: 'pass2', label: L('Compoziție pe mască (pas 2)…', 'Композиция на маске (проход 2)…', 'Mask composite (pass 2)…'), sec: 30 },
+            { id: 'finish', label: L('Salvăm fotografia…', 'Сохраняем фото…', 'Saving photo…'), sec: 8 }
+          ]
+        : [
+            { id: 'analyze', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
+            { id: 'light', label: L('Scenă, lumină și poză…', 'Сцена, свет и поза…', 'Scene, light and pose…'), sec: 18 },
+            { id: 'face', label: L('Potrivim chipul…', 'Подбираем лицо…', 'Matching face…'), sec: 16 },
+            { id: 'finish', label: L('Finalizăm fotografia…', 'Финальная обработка…', 'Finishing photo…'), sec: 10 }
+          ];
     }
 
-    return res.status(500).json({
-      error: 'Generarea a eșuat. Foto au fost restituite automat pe contul tău: ' + (genErr?.message || '')
-    });
-  }
-});
-
-// List generation jobs for current user
-
-// Delete a generation job + storage object
-app.delete('/api/generations/:id', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data: job, error: fetchError } = await supabaseAdmin
-      .from('generation_jobs')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (fetchError || !job) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-
-    if (job.result_storage_path) {
-      await supabaseAdmin.storage.from('generated-images').remove([job.result_storage_path]);
-    }
-
-    await supabaseAdmin
-      .from('generation_jobs')
-      .delete()
-      .eq('id', job.id)
-      .eq('user_id', req.user!.id);
-
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data: jobs, error } = await supabaseAdmin
-      .from('generation_jobs')
-      .select('*, templates(name_ro, preview_image_url)')
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Resolve signed URLs for generated images
-    const jobsWithSignedUrls = await Promise.all(
-      (jobs || []).map(async (job) => {
-        let resultImageUrl: string | undefined = undefined;
-        if (job.status === 'completed') {
-          const storagePath = `${job.user_id}/${job.id}.jpg`;
-          const { data: signed } = await supabaseAdmin.storage
-            .from('generated-images')
-            .createSignedUrl(storagePath, 3600);
-          resultImageUrl = signed?.signedUrl;
-        }
-
-        return {
-          id: job.id,
-          userId: job.user_id,
-          templateId: job.template_id,
-          templateName: job.templates?.name_ro || 'Șablon',
-          templatePreview: job.templates?.preview_image_url || '',
-          userPhotoId: job.user_photo_id || '',
-          userPhotoUrl: '',
-          status: job.status,
-          progress: job.progress,
-          currentStepMessage: job.current_step_message,
-          resultImageUrl,
-          errorMessage: job.error_message,
-          providerId: job.provider_id,
-          photoCost: job.photo_cost,
-          aspectRatio: job.aspect_ratio,
-          createdAt: job.created_at,
-          completedAt: job.completed_at
-        };
-      })
+    const total = stages.reduce((s, x) => s + x.sec, 0);
+    setSecondsLeft(total);
+    setProgressSteps(
+      stages.map((s, i) => ({
+        id: s.id,
+        label: s.label,
+        status: (i === 0 ? 'active' : 'pending') as 'pending' | 'active' | 'done'
+      }))
     );
 
-    res.json(jobsWithSignedUrls);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Retry a failed job
-app.post('/api/generations/:id/retry', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data: job, error } = await supabaseAdmin
-      .from('generation_jobs')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (error || !job) {
-      return res.status(404).json({ error: 'Jobul nu a fost găsit.' });
+    let elapsed = 0;
+    for (let idx = 1; idx < stages.length; idx++) {
+      elapsed += stages[idx - 1].sec;
+      const stageIndex = idx;
+      const tmr = setTimeout(() => {
+        setProgressSteps((prev) =>
+          prev.map((p, i) => {
+            if (i < stageIndex) return { ...p, status: 'done' };
+            if (i === stageIndex) return { ...p, status: 'active' };
+            return p;
+          })
+        );
+      }, elapsed * 1000);
+      progressTimers.current.push(tmr);
     }
 
-    // Trigger new generation
-    res.json({ message: 'Reîncearcă din interfață cu șablonul selectat', templateId: job.template_id });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    const started = Date.now();
+    countdownRef.current = setInterval(() => {
+      const left = Math.max(0, total - Math.floor((Date.now() - started) / 1000));
+      setSecondsLeft(left);
+    }, 400);
+  };
 
-// User Photo Transactions Ledger
-app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('photo_transactions')
-      .select('*')
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
+  const finishProgressUI = () => {
+    clearProgressTimers();
+    setProgressSteps((prev) => prev.map((p) => ({ ...p, status: 'done' as const })));
+    setSecondsLeft(0);
+  };
 
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-// ====================================================================
-// PAYMENTS ENDPOINTS
-// Fulfill path: checkout → provider → confirm/webhook → grant photos + level spend
-// ====================================================================
-
-/**
- * Idempotent fulfillment after successful payment.
- * 1) grant_photos_from_purchase
- * 2) record_purchase_spend (levels by EUR total)
- */
-async function fulfillPhotoPurchase(opts: {
-  userId: string;
-  packageId: string;
-  photos: number;
-  amountEur: number;
-  externalId: string;
-  provider?: string;
-}): Promise<{ ok: boolean; balance?: number; level?: any; error?: string }> {
-  const { userId, packageId, photos, amountEur, externalId, provider = 'standard-gateway' } = opts;
-
-  // Idempotency: skip if this external payment already completed
-  const { data: existing } = await supabaseAdmin
-    .from('payment_transactions')
-    .select('id, status')
-    .eq('external_id', externalId)
-    .maybeSingle();
-
-  if (existing?.status === 'completed') {
-    const { data: prof } = await supabaseAdmin
-      .from('profiles')
-      .select('photo_balance')
-      .eq('id', userId)
-      .single();
-    return { ok: true, balance: prof?.photo_balance };
-  }
-
-  // Upsert pending/completed row
-  await supabaseAdmin.from('payment_transactions').upsert(
-    {
-      user_id: userId,
-      package_id: packageId,
-      amount_eur: amountEur,
-      photos,
-      external_id: externalId,
-      provider,
-      status: 'processing',
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: 'external_id' }
-  );
-
-  const { data: newBalance, error: grantErr } = await supabaseAdmin.rpc('grant_photos_from_purchase', {
-    p_user_id: userId,
-    p_amount: photos,
-    p_package_id: packageId,
-    p_payment_ref: externalId
-  });
-
-  if (grantErr) {
-    await supabaseAdmin
-      .from('payment_transactions')
-      .update({ status: 'failed', error_message: grantErr.message })
-      .eq('external_id', externalId);
-    return { ok: false, error: grantErr.message };
-  }
-
-  // Levels: add EUR spend + one-time level bonuses
-  let levelResult: any = null;
-  try {
-    const { data: lvl } = await supabaseAdmin.rpc('record_purchase_spend', {
-      p_user_id: userId,
-      p_amount_eur: amountEur
-    });
-    levelResult = lvl;
-  } catch (e: any) {
-    console.error('record_purchase_spend failed (photos already granted):', e?.message || e);
-  }
-
-  await supabaseAdmin
-    .from('payment_transactions')
-    .update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      error_message: null
-    })
-    .eq('external_id', externalId);
-
-  return { ok: true, balance: newBalance as number, level: levelResult };
-}
-
-// Start checkout — package price from DB, amount always EUR
-app.post('/api/payments/checkout', requireAuth, async (req: AuthRequest, res) => {
-  const { packageId } = req.body;
-  const userId = req.user!.id;
-
-  if (!packageId) {
-    return res.status(400).json({ error: 'packageId is required' });
-  }
-
-  try {
-    const { data: pkg, error: pkgErr } = await supabaseAdmin
-      .from('photo_packages')
-      .select('*')
-      .eq('id', packageId)
-      .eq('is_active', true)
-      .single();
-
-    if (pkgErr || !pkg) {
-      return res.status(404).json({ error: 'Package not found' });
+  const handleGenerate = async () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
     }
-
-    const amountEur = Number(pkg.price_eur ?? pkg.priceEUR ?? 0);
-    const photos = Number(pkg.photos ?? 0);
-    if (amountEur <= 0 || photos <= 0) {
-      return res.status(400).json({ error: 'Invalid package pricing' });
+    if (!hasRequiredPhotos) {
+      setErrorMessage(copy.needPhoto);
+      return;
     }
-
-    const externalId = `pay_${userId.slice(0, 8)}_${packageId}_${Date.now()}`;
-
-    // Record pending payment
-    await supabaseAdmin.from('payment_transactions').insert({
-      user_id: userId,
-      package_id: packageId,
-      amount_eur: amountEur,
-      photos,
-      external_id: externalId,
-      provider: 'standard-gateway',
-      status: 'pending'
-    });
-
-    if (!paymentGateway.isConfigured()) {
-      return res.status(400).json({
-        isConfigured: false,
-        message:
-          'Modulul de plată online este în curs de configurare. Pentru adăugare foto de test, folosește panoul de administrare.'
-      });
+    if (!hasEnough) {
+      setIsPhotoModalOpen(true);
+      return;
     }
+    if (!template) return;
 
-    const result = await paymentGateway.createCheckout({
-      packageId,
-      userId,
-      userEmail: req.user!.email,
-      amount: amountEur,
-      currency: 'EUR',
-      returnUrl: `${process.env.APP_URL || 'https://studio.labupgrade.ai'}/app/profile?payment=${externalId}`
-    });
+    setIsGenerating(true);
+    setErrorMessage(null);
+    setResultUrl(null);
+    setRating(null);
+    setEditText('');
+    const mode = slots === 2 ? 'couple' : 'template';
+    setResultSource(mode);
+    // twoPass if template has maskImageUrl
+    startProgressUI(mode, Boolean(template.maskImageUrl));
 
-    // Attach our external id for confirm step
-    res.json({
-      ...result,
-      externalId,
-      amountEur,
-      photos
-    });
-  } catch (err: any) {
-    console.error('checkout error', err);
-    res.status(500).json({ error: err.message });
+    try {
+      const extraUrls = photos1.slice(1).map((p) => p.url);
+      const job = await createGenerationJob(template.id, photos1[0].url, photos1[0].id, {
+        mode,
+        partnerPhotoUrl: slots === 2 ? photos2[0]?.url : undefined,
+        aspectRatio: selectedAspectRatio,
+        age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
+        age2: slots === 2 && typeof age2 === 'number' && age2 >= 1 && age2 <= 120 ? age2 : undefined,
+        extraPhotoUrls: extraUrls.length ? extraUrls : undefined,
+        partnerExtraPhotoUrls:
+          slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined,
+        quality4k: resultQuality === '4k'
+      } as any);
+
+      finishProgressUI();
+      setStepText(t.completed);
+      setResultUrl(job.resultImageUrl || null);
+    } catch (err: any) {
+      clearProgressTimers();
+      setIsGenerating(false);
+      setProgressSteps([]);
+      setSecondsLeft(null);
+      setErrorMessage(err?.message || 'Error');
+    }
+  };
+
+  const moreTemplates = templates
+    .filter((x) => x.id !== template?.id && x.isActive !== false)
+    .slice(0, 8);
+
+  const selectOther = (tmpl: PhotoTemplate) => {
+    setTemplate(tmpl);
+    setSelectedAspectRatio(tmpl.aspectRatio || '3:4');
+    setSliderPct(8);
+    setHintVisible(true);
+    setResultUrl(null);
+    setIsGenerating(false);
+    setPhotos1([]);
+    setPhotos2([]);
+  };
+
+  const startDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    onPointerMove(e.clientX);
+  };
+
+  const sheetPhotos = uploadTarget === 'p1' ? photos1 : photos2;
+
+  // —— RESULT ——
+  if (isGenerating && resultUrl) {
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14]">
+        <div className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
+          <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          {/* Result image with badges */}
+          <div
+            ref={heroRef}
+            className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 select-none touch-none"
+            onPointerDown={(e) => {
+              dragging.current = true;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+              setSliderPct(pct);
+              setHintVisible(false);
+            }}
+          >
+            <img src={resultUrl || ''} alt="After" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 overflow-hidden" style={{ width: `${sliderPct}%` }}>
+              <img
+                src={photos1[0]?.url || ''}
+                alt="Before"
+                className="h-full object-cover max-w-none"
+                style={{ width: heroWidth ? `${heroWidth}px` : '100%' }}
+              />
+            </div>
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg z-10"
+              style={{ left: `${sliderPct}%`, transform: 'translateX(-50%)' }}
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white shadow-md flex items-center justify-center">
+                <span className="text-[10px] font-bold text-slate-700">⇆</span>
+              </div>
+            </div>
+            {/* Badges */}
+            <div className="absolute top-3 left-3 z-20">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 shadow">
+                <Sparkles className="h-3 w-3" />
+                {language === 'ru' ? 'готово' : language === 'en' ? 'done' : 'gata'}
+              </span>
+            </div>
+            {resultSource === 'pinterest' && (
+              <div className="absolute top-3 right-3 z-20">
+                <span className="inline-flex items-center rounded-full bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 shadow">
+                  P · Pinterest
+                </span>
+              </div>
+            )}
+            {hintVisible && (
+              <div className="absolute bottom-3 inset-x-0 text-center text-[11px] text-white/90 drop-shadow z-20">
+                {copy.hint}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
+              className="absolute bottom-3 right-3 z-20 rounded-full bg-black/50 text-white p-2"
+              aria-label="Fullscreen"
+            >
+              <span className="text-xs">⛶</span>
+            </button>
+          </div>
+
+          {/* Save — centered primary */}
+          <button
+            type="button"
+            onClick={async () => {
+              if (!resultUrl) return;
+              try {
+                const res = await fetch(resultUrl);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `aurastudio-${Date.now()}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+              } catch {
+                window.open(resultUrl, '_blank');
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white active:scale-[0.98] transition shadow-md"
+          >
+            <Download className="h-4 w-4" />
+            {language === 'ru' ? 'Сохранить фото' : language === 'en' ? 'Save photo' : 'Salvează foto'}
+          </button>
+
+          {/* Rating */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#12141c] p-4">
+            <p className="text-center text-sm font-semibold text-slate-800 dark:text-white mb-3">
+              {language === 'ru' ? 'Оцени полученное фото' : language === 'en' ? 'Rate this photo' : 'Evaluează fotografia'}
+            </p>
+            <div className="flex justify-between gap-1">
+              {(
+                language === 'ru'
+                  ? [
+                      { v: 1, e: '😞', l: 'Совсем плохо' },
+                      { v: 2, e: '😐', l: 'Плохо' },
+                      { v: 3, e: '🙂', l: 'Нормально' },
+                      { v: 4, e: '😊', l: 'Хорошо' },
+                      { v: 5, e: '😍', l: 'Отлично' }
+                    ]
+                  : language === 'en'
+                    ? [
+                        { v: 1, e: '😞', l: 'Awful' },
+                        { v: 2, e: '😐', l: 'Bad' },
+                        { v: 3, e: '🙂', l: 'OK' },
+                        { v: 4, e: '😊', l: 'Good' },
+                        { v: 5, e: '😍', l: 'Great' }
+                      ]
+                    : [
+                        { v: 1, e: '😞', l: 'Foarte rău' },
+                        { v: 2, e: '😐', l: 'Rău' },
+                        { v: 3, e: '🙂', l: 'OK' },
+                        { v: 4, e: '😊', l: 'Bine' },
+                        { v: 5, e: '😍', l: 'Excelent' }
+                      ]
+              ).map((item) => (
+                <button
+                  key={item.v}
+                  type="button"
+                  onClick={() => setRating(item.v)}
+                  className={`flex flex-col items-center gap-1 flex-1 rounded-xl py-2 transition ${
+                    rating === item.v ? 'bg-violet-100 dark:bg-violet-500/20' : 'hover:bg-slate-50 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <span className="text-2xl leading-none">{item.e}</span>
+                  <span className="text-[9px] text-slate-500 text-center leading-tight">{item.l}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Edit / refine */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#12141c] p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
+              <Sparkles className="h-4 w-4 text-violet-500" />
+              {language === 'ru' ? 'Хочешь что-то изменить?' : language === 'en' ? 'Want to change something?' : 'Vrei să schimbi ceva?'}
+            </div>
+            <p className="text-xs text-slate-500">
+              {language === 'ru'
+                ? 'Опиши что поправить — изменим только это, остальное сохраним как есть.'
+                : language === 'en'
+                  ? 'Describe what to fix — we change only that, keep the rest.'
+                  : 'Descrie ce să corectăm — schimbăm doar asta, restul rămâne.'}
+            </p>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={3}
+              placeholder={
+                language === 'ru'
+                  ? 'Например: сделай улыбку шире, добавь очки, поменяй фон на закат…'
+                  : language === 'en'
+                    ? 'e.g. wider smile, add glasses, sunset background…'
+                    : 'ex: zâmbet mai larg, ochelari, fundal apus…'
+              }
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0c0e14] px-3 py-2 text-sm text-slate-800 dark:text-white placeholder:text-slate-400"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-400">
+                {language === 'ru' ? 'потратит 1 фото с баланса' : language === 'en' ? 'uses 1 photo from balance' : 'costă 1 foto din balanță'}
+              </span>
+              <button
+                type="button"
+                disabled={!editText.trim() || isRefining}
+                onClick={async () => {
+                  if (!resultUrl || !editText.trim() || !currentUser) return;
+                  if ((currentUser.photoBalance ?? 0) < 1) {
+                    setIsPhotoModalOpen(true);
+                    return;
+                  }
+                  setIsRefining(true);
+                  setErrorMessage(null);
+                  try {
+                    // Refine: treat as enhance-like edit on current result (server prompt for edit TBD)
+                    setIsGenerating(true);
+                    setResultUrl(null);
+                    setResultSource(resultSource);
+                    startProgressUI('enhance');
+                    const job = await createGenerationJob('refine-edit', resultUrl, undefined, {
+                      mode: 'enhance' as any,
+                      aspectRatio: selectedAspectRatio,
+                      // custom instruction passed if API supports — stored in heightCm slot temporarily not ideal
+                    } as any);
+                    // Prefer a dedicated refine endpoint later; for now user sees enhance-style pass
+                    finishProgressUI();
+                    setResultUrl(job.resultImageUrl || resultUrl);
+                    setEditText('');
+                  } catch (err: any) {
+                    clearProgressTimers();
+                    setErrorMessage(err?.message || 'Error');
+                    setResultUrl(resultUrl);
+                  } finally {
+                    setIsRefining(false);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 disabled:bg-violet-300 px-4 py-2 text-xs font-bold text-white"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {language === 'ru' ? 'Поправить' : language === 'en' ? 'Fix' : 'Corectează'}
+              </button>
+            </div>
+          </div>
+
+          <button type="button" onClick={() => { setIsGenerating(false); setResultUrl(null); clearProgressTimers(); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <RefreshCw className="h-4 w-4" />
+            {language === 'ru' ? 'Сделать ещё' : language === 'en' ? 'Create more' : 'Mai departe'}
+          </button>
+          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500">
+            <FolderHeart className="h-4 w-4" />
+            {t.myGallery}
+          </button>
+        </div>
+
+        {fullscreenOpen && resultUrl && (          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
+            <FolderHeart className="h-4 w-4" />
+            {t.myGallery}
+          </button>
+        </div>
+
+        {fullscreenOpen && resultUrl && (
+          <div className="fixed inset-0 z-[280] bg-black flex flex-col">
+            <div className="flex items-center justify-between p-3">
+              <button
+                type="button"
+                onClick={() => setFullscreenOpen(false)}
+                className="h-10 w-10 rounded-full bg-white/10 text-white flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(resultUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `AuraStudio_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    window.open(resultUrl, '_blank');
+                  }
+                }}
+                className="rounded-full bg-white/10 text-white px-4 py-2 text-sm font-semibold flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-2">
+              <img src={resultUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
-});
 
-/**
- * Confirm payment after return from gateway (or manual/test confirm with admin).
- * Body: { externalId } — must belong to current user and be paid at provider OR
- * when PAYMENT_TEST_MODE=1 allows complete without provider.
- */
-app.post('/api/payments/confirm', requireAuth, async (req: AuthRequest, res) => {
-  const externalId = String(req.body?.externalId || '').trim();
-  if (!externalId) {
-    return res.status(400).json({ error: 'externalId required' });
+  if (isGenerating && !resultUrl) {
+    const leftLabel =
+      language === 'ru'
+        ? `Осталось ~${secondsLeft ?? '…'} сек`
+        : language === 'en'
+          ? `~${secondsLeft ?? '…'} sec left`
+          : `Au rămas ~${secondsLeft ?? '…'} sec`;
+    return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center px-6 pb-24">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="space-y-3">
+            {progressSteps.map((step) => (
+              <div key={step.id} className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
+                  {step.status === 'done' ? (
+                    <CheckCircle className="h-5 w-5 text-emerald-500" />
+                  ) : step.status === 'active' ? (
+                    <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+                  )}
+                </div>
+                <p
+                  className={`text-sm leading-snug ${
+                    step.status === 'done'
+                      ? 'text-slate-500'
+                      : step.status === 'active'
+                        ? 'text-slate-900 dark:text-white font-medium'
+                        : 'text-slate-400'
+                  }`}
+                >
+                  {step.label}
+                </p>
+              </div>
+            ))}
+          </div>
+          {secondsLeft !== null && (
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                {leftLabel}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
-  try {
-    const { data: tx, error } = await supabaseAdmin
-      .from('payment_transactions')
-      .select('*')
-      .eq('external_id', externalId)
-      .eq('user_id', req.user!.id)
-      .single();
 
-    if (error || !tx) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    if (tx.status === 'completed') {
-      return res.json({ success: true, alreadyCompleted: true });
-    }
-
-    // Verify with provider when configured
-    if (paymentGateway.isConfigured() && process.env.PAYMENT_TEST_MODE !== '1') {
-      const verification = await paymentGateway.verifyPayment(externalId);
-      if (!verification.isSuccess || verification.status !== 'paid') {
-        return res.status(402).json({
-          error: verification.error || 'Payment not confirmed by provider',
-          status: verification.status
+  // ─── PINTEREST MODE ───────────────────────────────────────────
+  if (studioMode === 'pinterest') {
+    const canGen = Boolean(refUrl && photos1[0]);
+    const cost = 1;
+    const handlePinGen = async () => {
+      if (!currentUser) { setIsAuthModalOpen(true); return; }
+      if (!refUrl) { setErrorMessage(language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first'); return; }
+      if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
+      if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
+      setIsGenerating(true);
+      setStepText(t.progressStepAnalyze);
+      setErrorMessage(null);
+      try {
+        const job = await createGenerationJob('custom-pinterest', photos1[0].url, photos1[0].id, {
+          mode: 'pinterest',
+          customReferenceUrl: refUrl,
+          aspectRatio: selectedAspectRatio,
+          age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
+          heightCm: heightCm || undefined,
+          weightKg: weightKg || undefined,
+          extraPhotoUrls: photos1.slice(1).map((x) => x.url)
+        } as any);
+        setResultUrl(job.resultImageUrl || null);
+        setStepText(t.completed);
+      } catch (err: any) {
+        setIsGenerating(false);
+        setErrorMessage(err?.message || 'Error');
+      }
+    };
+    const onRefFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !currentUser) { if (!currentUser) setIsAuthModalOpen(true); return; }
+      setIsUploading(true);
+      try {
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = () => rej(new Error('read'));
+          r.readAsDataURL(file);
         });
+        // store as data URL / upload
+        const up = await uploadPhoto(dataUrl, `ref_${file.name}`);
+        setRefUrl(up.url);
+      } catch (err: any) {
+        setErrorMessage(err?.message || 'Upload error');
+      } finally {
+        setIsUploading(false);
       }
-    } else if (process.env.PAYMENT_TEST_MODE !== '1' && !paymentGateway.isConfigured()) {
-      return res.status(400).json({
-        error: 'Payment gateway not configured. Set PAYMENT_TEST_MODE=1 only for staging tests.'
-      });
-    }
+    };
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-[#f4f5f9] dark:bg-[#0c0e14]">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+          <div className="mb-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
+            </button>
+            <img src={logoImg} alt="AuraStudio" className="h-10 object-contain dark:brightness-110" />
+          </div>
 
-    const result = await fulfillPhotoPurchase({
-      userId: req.user!.id,
-      packageId: tx.package_id,
-      photos: Number(tx.photos),
-      amountEur: Number(tx.amount_eur),
-      externalId: tx.external_id,
-      provider: tx.provider || 'standard-gateway'
-    });
+          <div className="rounded-3xl bg-gradient-to-br from-violet-500 to-blue-700 text-white p-5 shadow-lg">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
+              {language === 'ru' ? 'Повтор по референсу' : language === 'en' ? 'Reference replay' : 'Replay pe referință'}
+            </p>
+            <h1 className="mt-1 text-2xl font-extrabold leading-tight">
+              {language === 'ru' ? 'Повтори фото с Pinterest' : language === 'en' ? 'Replay a Pinterest photo' : 'Refă o foto din Pinterest'}
+            </h1>
+            <p className="mt-2 text-sm text-white/90 leading-relaxed">
+              {language === 'ru'
+                ? 'Понравилось фото? Сделаем тебя в нём — без билетов в Италию и нового гардероба.'
+                : language === 'en'
+                  ? 'Like a photo? We put you in it — no trip or new wardrobe needed.'
+                  : 'Ți-a plăcut o poză? Te punem în ea — fără bilet și garderoba nouă.'}
+            </p>
+          </div>
 
-    if (!result.ok) {
-      return res.status(500).json({ error: result.error || 'Fulfillment failed' });
-    }
+          <button type="button" onClick={() => setShowTipModal(true)} className="mt-4 w-full text-left rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 flex gap-3 items-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Camera className="h-5 w-5" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-900">{copy.tipTitle}</p>
+              <p className="text-xs text-amber-800/80 mt-0.5">{copy.tipBody}</p>
+            </div>
+            <span className="text-amber-600">›</span>
+          </button>
 
-    res.json({
-      success: true,
-      newBalance: result.balance,
-      level: result.level
-    });
-  } catch (err: any) {
-    console.error('confirm payment', err);
-    res.status(500).json({ error: err.message });
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                {language === 'ru' ? 'Референс' : language === 'en' ? 'Reference' : 'Referință'}{' '}
+                <span className="normal-case font-medium text-violet-500">{language === 'ru' ? 'откуда' : language === 'en' ? 'from' : 'de unde'}</span>
+              </p>
+              <label className="flex aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white cursor-pointer overflow-hidden">
+                {refUrl ? <img src={refUrl} alt="" className="h-full w-full object-cover" /> : (<><Plus className="h-6 w-6 text-slate-400" /><span className="text-sm font-semibold text-slate-500 mt-1">{language === 'ru' ? 'Загрузить' : 'Upload'}</span></>)}
+                <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
+              </label>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                {language === 'ru' ? 'Ты' : language === 'en' ? 'You' : 'Tu'}{' '}
+                <span className="normal-case font-medium text-violet-500">{language === 'ru' ? 'кого вставляем' : language === 'en' ? 'who we insert' : 'pe cine inserăm'}</span>
+              </p>
+              <button type="button" onClick={() => openUpload('p1')} className="flex w-full aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden">
+                {photos1[0] ? <img src={photos1[0].url} alt="" className="h-full w-full object-cover" /> : (<><Plus className="h-6 w-6 text-slate-400" /><span className="text-sm font-semibold text-slate-500 mt-1">{language === 'ru' ? 'Загрузить' : 'Upload'}</span></>)}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowPinHelp(true)}
+            className="mt-5 w-full text-left rounded-2xl bg-white border border-slate-200 px-4 py-3.5 flex gap-3 items-center shadow-sm"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e60023]/10 text-[#e60023] text-lg font-black">
+              P
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900">
+                {language === 'ru'
+                  ? 'Как сохранить картинку из Pinterest'
+                  : language === 'en'
+                    ? 'How to save an image from Pinterest'
+                    : 'Cum salvezi o imagine din Pinterest'}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {language === 'ru'
+                  ? 'Нажми сюда — два простых шага, затем загрузи файл в «Референс»'
+                  : language === 'en'
+                    ? 'Tap here — two simple steps, then upload the file as Reference'
+                    : 'Apasă aici — doi pași simpli, apoi încarcă fișierul la Referință'}
+              </p>
+            </div>
+            <span className="text-slate-400 text-lg">›</span>
+          </button>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Рост · опц.' : 'Height · opt.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
+                <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="165" />
+                <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'см' : 'cm'}</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Вес · опц.' : language === 'en' ? 'Weight · opt.' : 'Greutate · opț.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
+                <input value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="48" />
+                <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'кг' : 'kg'}</span>
+              </div>
+            </div>
+          </div>
+
+          {errorMessage && (
+            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />{errorMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handlePinGen}
+            disabled={isUploading || isGenerating}
+            className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 disabled:bg-violet-300"
+          >
+            {!refUrl
+              ? (language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first')
+              : !photos1[0]
+                ? copy.needPhoto
+                : (language === 'ru' ? `Сгенерировать · ${cost} фото` : `Generate · ${cost} photo`)}
+          </button>
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            {language === 'ru' ? 'формат наследуется с референса · 1 фото с баланса' : 'format follows reference · 1 photo from balance'}
+          </p>
+        </div>
+
+
+        {showPinHelp && (
+          <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto">
+              <div className="flex justify-between items-start gap-3 mb-2">
+                <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-2">
+                  {language === 'ru'
+                    ? 'Как сохранить картинку из Pinterest'
+                    : language === 'en'
+                      ? 'How to save an image from Pinterest'
+                      : 'Cum salvezi o imagine din Pinterest'}
+                </h2>
+                <button type="button" onClick={() => setShowPinHelp(false)} className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                {language === 'ru'
+                  ? 'Два шага в приложении Pinterest — картинка сохранится в галерею телефона.'
+                  : language === 'en'
+                    ? 'Two steps in the Pinterest app — the image is saved to your phone gallery.'
+                    : 'Doi pași în aplicația Pinterest — imaginea se salvează în galeria telefonului.'}
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">1</p>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-[9/16]">
+                    <img
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-1.png"
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600 leading-snug font-medium">
+                    {language === 'ru'
+                      ? 'Открой пин и нажми «⋯» внизу экрана'
+                      : language === 'en'
+                        ? 'Open the pin and tap “⋯” at the bottom'
+                        : 'Deschide pinul și apasă „⋯” jos pe ecran'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 mb-1.5">2</p>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-[9/16]">
+                    <img
+                      src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/pin-help-2.png"
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600 leading-snug font-medium">
+                    {language === 'ru'
+                      ? 'Выбери «Download image» / «Скачать изображение»'
+                      : language === 'en'
+                        ? 'Tap “Download image”'
+                        : 'Alege „Download image” / „Descarcă imaginea”'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPinHelp(false)}
+                className="mt-6 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white"
+              >
+                {copy.continue}
+              </button>
+            </div>
+          </div>
+        )}
+{showTipModal && (
+          <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+            <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-end mb-2">
+                <button type="button" onClick={() => setShowTipModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-2">{copy.tipModalTitle}</h2>
+              <p className="mt-3 text-sm text-slate-500 leading-relaxed">{copy.tipModalBody}</p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-600 mb-1.5">✓ {copy.better}</p>
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-rose-500 mb-1.5">✕ {copy.worse}</p>
+                  <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  </div>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">
+                {copy.continue}
+              </button>
+            </div>
+          </div>
+        )}
+        {showUploadSheet && (
+          <div className="fixed inset-0 z-[260] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {Array.from({ length: MAX_FACE_PHOTOS }).map((_, i) => {
+                  const ph = photos1[i];
+                  return ph ? (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button key={i} type="button" onClick={openPhotoSource} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-center text-xs text-slate-400">{copy.loaded(photos1.length)}</p>
+              <button type="button" onClick={() => setShowUploadSheet(false)} className="mt-3 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+
+        {showLibraryPicker &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55" onClick={() => setShowLibraryPicker(false)}>
+              <div
+                className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white dark:bg-[#12141c] p-5 pb-8 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                    {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                  </h2>
+                  <button type="button" onClick={() => setShowLibraryPicker(false)} className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {(!userPhotos || userPhotos.length === 0) ? (
+                  <div className="py-10 text-center text-sm text-slate-500">
+                    {language === 'ru' ? 'Пока нет загруженных фото' : language === 'en' ? 'No uploaded photos yet' : 'Încă nu sunt fotografii'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                    {userPhotos.map((ph) => (
+                      <button
+                        key={ph.id}
+                        type="button"
+                        onClick={() => {
+                          selectFromLibrary({ id: ph.id, url: ph.url });
+                          setShowLibraryPicker(false);
+                        }}
+                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-95 transition"
+                      >
+                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLibraryPicker(false);
+                    setTimeout(() => triggerFilePick(), 50);
+                  }}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
+                </button>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {fullscreenOpen && resultUrl && (
+          <div className="fixed inset-0 z-[280] bg-black flex flex-col">
+            <div className="flex items-center justify-between p-3">
+              <button
+                type="button"
+                onClick={() => setFullscreenOpen(false)}
+                className="h-10 w-10 rounded-full bg-white/10 text-white flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(resultUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `AuraStudio_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    window.open(resultUrl, '_blank');
+                  }
+                }}
+                className="rounded-full bg-white/10 text-white px-4 py-2 text-sm font-semibold flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto'}
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-2">
+              <img src={resultUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
-});
 
-/**
- * Provider webhook — signature checked inside paymentGateway.handleWebhook.
- * Expects payload to identify externalId / package / user after provider adapter parses it.
- * For now: body.externalId + body.status === 'paid' (adapter can normalize).
- */
-app.post('/api/payments/webhook', async (req, res) => {
-  try {
-    const signature = String(req.headers['x-payment-signature'] || req.headers['stripe-signature'] || '');
-    const handled = await paymentGateway.handleWebhook(req.body, signature);
-
-    if (handled.error && !handled.handled) {
-      return res.status(400).json({ error: handled.error });
-    }
-
-    const externalId = String(req.body?.externalId || req.body?.sessionId || '').trim();
-    const status = String(req.body?.status || '').toLowerCase();
-
-    if (!externalId || (status && status !== 'paid' && status !== 'completed' && status !== 'success')) {
-      return res.json({ received: true, fulfilled: false });
-    }
-
-    const { data: tx } = await supabaseAdmin
-      .from('payment_transactions')
-      .select('*')
-      .eq('external_id', externalId)
-      .maybeSingle();
-
-    if (!tx) {
-      return res.status(404).json({ error: 'Unknown payment' });
-    }
-
-    if (tx.status === 'completed') {
-      return res.json({ received: true, fulfilled: true, alreadyCompleted: true });
-    }
-
-    const result = await fulfillPhotoPurchase({
-      userId: tx.user_id,
-      packageId: tx.package_id,
-      photos: Number(tx.photos),
-      amountEur: Number(tx.amount_eur),
-      externalId: tx.external_id,
-      provider: tx.provider || 'standard-gateway'
-    });
-
-    res.json({ received: true, fulfilled: result.ok, error: result.error });
-  } catch (err: any) {
-    console.error('webhook', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ====================================================================
-// ADMIN ENDPOINTS (Role = 'admin' strictly verified)
-// ====================================================================
-
-// List all users
-app.get('/api/admin/users', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin adjust photos
-app.post('/api/admin/photos/adjust', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  const { targetUserId, amount, reason } = req.body;
-
-  if (!targetUserId || typeof amount !== 'number') {
-    return res.status(400).json({ error: 'targetUserId și amount sunt obligatorii.' });
-  }
-
-  try {
-    const { data: newBalance, error } = await supabaseAdmin.rpc('admin_adjust_photos', {
-      p_admin_id: req.user!.id,
-      p_target_user_id: targetUserId,
-      p_amount: amount,
-      p_reason: reason || 'Ajustare administrator'
-    });
-
-    if (error) throw error;
-    res.json({ success: true, newBalance });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin change user role (Enforced through protected server procedure)
-app.post('/api/admin/users/:id/role', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  const { role } = req.body;
-  const targetUserId = req.params.id;
-
-  if (!role || (role !== 'user' && role !== 'admin')) {
-    return res.status(400).json({ error: 'Rol invalid. Valori acceptate: user sau admin.' });
-  }
-
-  // Prevent admin from accidentally demoting themselves
-  if (targetUserId === req.user!.id && role !== 'admin') {
-    return res.status(400).json({ error: 'Nu vă puteți retrage propriul rol de administrator.' });
-  }
-
-  try {
-    const { data: updatedRole, error } = await supabaseAdmin.rpc('admin_set_user_role', {
-      p_admin_id: req.user!.id,
-      p_target_user_id: targetUserId,
-      p_new_role: role
-    });
-
-    if (error) throw error;
-    res.json({ success: true, role: updatedRole });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin list all jobs
-app.get('/api/admin/jobs', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('generation_jobs')
-      .select('*, templates(name_ro), profiles(email, name)')
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin list all transactions
-app.get('/api/admin/transactions', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('photo_transactions')
-      .select('*, profiles(email, name)')
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin manage templates
-app.post('/api/admin/templates', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('templates')
-      .insert(req.body)
-      .select('*')
-      .single();
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.patch('/api/admin/templates/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('templates')
-      .update(req.body)
-      .eq('id', req.params.id)
-      .select('*')
-      .single();
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/admin/templates/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { error } = await supabaseAdmin
-      .from('templates')
-      .delete()
-      .eq('id', req.params.id);
-
-    if (error) throw error;
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin list providers
-app.get('/api/admin/providers', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('ai_providers')
-      .select('*')
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-// User level (spend-based)
-app.get('/api/me/levels', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('profiles')
-      .select('level, total_spent_eur, level_rewards_claimed')
-      .eq('id', req.user!.id)
-      .single();
-    if (error) throw error;
-    res.json({
-      level: data?.level ?? 1,
-      totalSpentEur: Number(data?.total_spent_eur) || 0,
-      rewardsClaimed: data?.level_rewards_claimed || []
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ====================================================================
-// ACCOUNT: delete, referral, profile extras
-// ====================================================================
-
-// Extended /api/me already returns profile columns (level, referral_code, etc.)
-
-app.get('/api/me/referral', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user!.id;
-    const { data: profile, error } = await supabaseAdmin
-      .from('profiles')
-      .select('referral_code, referral_photos_earned, level, completed_generations, photo_balance')
-      .eq('id', userId)
-      .single();
-    if (error) throw error;
-
-    const { count: invitedCount } = await supabaseAdmin
-      .from('referrals')
-      .select('*', { count: 'exact', head: true })
-      .eq('referrer_id', userId);
-
-    res.json({
-      referralCode: profile?.referral_code,
-      invited: invitedCount || 0,
-      photosEarned: profile?.referral_photos_earned || 0,
-      level: profile?.level || 1,
-      completedGenerations: profile?.completed_generations || 0,
-      photoBalance: profile?.photo_balance || 0
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/me/referral', requireAuth, async (req: AuthRequest, res) => {
-  const code = String(req.body?.code || '').trim();
-  if (!code) {
-    return res.status(400).json({ error: 'Missing referral code' });
-  }
-  try {
-    const { data, error } = await supabaseAdmin.rpc('apply_referral', {
-      p_referred_id: req.user!.id,
-      p_code: code
-    });
-    if (error) throw error;
-    if (data && data.ok === false) {
-      return res.status(400).json({ error: data.error || 'referral_failed', data });
-    }
-    res.json(data);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/account/delete', requireAuth, async (req: AuthRequest, res) => {
-  const userId = req.user!.id;
-  try {
-    // 1. List and remove storage objects
-    for (const bucket of ['user-photos', 'generated-images'] as const) {
-      const { data: files } = await supabaseAdmin.storage.from(bucket).list(userId, { limit: 1000 });
-      if (files && files.length > 0) {
-        const paths = files.map((f) => `${userId}/${f.name}`);
-        await supabaseAdmin.storage.from(bucket).remove(paths);
+  // ─── ENHANCE / 4K MODE ────────────────────────────────────────
+  if (studioMode === 'enhance') {
+    const cost = enhanceRes === '4k' ? 2 : 1;
+    const handleEnhance = async () => {
+      if (!currentUser) { setIsAuthModalOpen(true); return; }
+      if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
+      if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
+      setIsGenerating(true);
+      setStepText(t.progressStepAnalyze);
+      setErrorMessage(null);
+      try {
+        const job = await createGenerationJob('enhance-quality', photos1[0].url, photos1[0].id, {
+          mode: 'enhance' as any,
+          aspectRatio: selectedAspectRatio,
+          quality4k: enhanceRes === '4k'
+        } as any);
+        setResultUrl(job.resultImageUrl || null);
+        setStepText(t.completed);
+      } catch (err: any) {
+        setIsGenerating(false);
+        setErrorMessage(err?.message || 'Error');
       }
-    }
+    };
+  return portal(
+      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-[#f4f5f9] dark:bg-[#0c0e14]">
+        <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-2xl">
+          <div className="mb-5 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-6 w-6 text-slate-900 dark:text-white" strokeWidth={2.5} />
+            </button>
+            <img src={logoImg} alt="AuraStudio" className="h-10 object-contain dark:brightness-110" />
+          </div>
 
-    // 2. DB wipe via RPC
-    const { data: delResult, error: delErr } = await supabaseAdmin.rpc('delete_user_account', {
-      p_user_id: userId
-    });
-    if (delErr) throw delErr;
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
+            {language === 'ru' ? 'Улучшить качество' : language === 'en' ? 'Enhance quality' : 'Îmbunătățește calitatea'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            {language === 'ru'
+              ? 'Загрузи фото и выбери разрешение — вернём резкий HD-кадр за пару минут.'
+              : language === 'en'
+                ? 'Upload a photo and pick resolution — get a sharp HD frame in a couple of minutes.'
+                : 'Încarcă o poză și alege rezoluția — primești un cadru HD clar în câteva minute.'}
+          </p>
 
-    // 3. Auth user
-    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (authErr) {
-      console.error('Auth deleteUser:', authErr);
-      // profile already gone; report partial
-      return res.status(200).json({ success: true, warning: authErr.message, db: delResult });
-    }
+          <button
+            type="button"
+            onClick={() => openUpload('p1')}
+            className="mt-6 w-full aspect-[4/5] max-h-[320px] rounded-3xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center gap-2 overflow-hidden"
+          >
+            {photos1[0] ? (
+              <img src={photos1[0].url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+                  <Plus className="h-7 w-7" />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">{language === 'ru' ? 'Загрузить фото' : 'Upload photo'}</span>
+                <span className="text-xs text-slate-400">jpg, png или webp</span>
+              </>
+            )}
+          </button>
 
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Account delete error:', err);
-    res.status(500).json({ error: err.message });
+          <p className="mt-6 text-sm font-semibold text-slate-700">
+            {language === 'ru' ? 'Разрешение' : language === 'en' ? 'Resolution' : 'Rezoluție'}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setEnhanceRes('2k')}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${enhanceRes === '2k' ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-extrabold">2K</span>
+                <Sparkles className="h-4 w-4 text-slate-400" />
+              </div>
+              <p className="mt-1 text-xs text-slate-500 leading-snug">
+                {language === 'ru' ? 'Резче и крупнее — для сторис и печати.' : 'Sharper — for stories and print.'}
+              </p>
+              <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">✦ 1 {language === 'en' ? 'photo' : 'фото'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnhanceRes('4k')}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${enhanceRes === '4k' ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-extrabold">4K</span>
+                <Sparkles className="h-4 w-4 text-violet-500" />
+              </div>
+              <p className="mt-1 text-xs text-slate-500 leading-snug">
+                {language === 'ru' ? 'Максимум чёткости для большого экрана.' : 'Max clarity for large screens.'}
+              </p>
+              <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">✦ 2 {language === 'en' ? 'photos' : 'фото'}</span>
+            </button>
+          </div>
+
+          {errorMessage && (
+            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />{errorMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleEnhance}
+            disabled={isUploading || isGenerating}
+            className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 disabled:bg-violet-300 flex items-center justify-center gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            {!photos1[0]
+              ? copy.needPhoto
+              : language === 'ru'
+                ? `Улучшить за ${cost} фото`
+                : language === 'en'
+                  ? `Enhance for ${cost} photo${cost > 1 ? 's' : ''}`
+                  : `Îmbunătățește · ${cost} foto`}
+          </button>
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            {language === 'ru' ? '≈ 2 минуты · без водяного знака · вернём фото при сбое' : '≈ 2 min · no watermark · refund on failure'}
+          </p>
+        </div>
+        {showUploadSheet && (
+          <div className="fixed inset-0 z-[260] flex items-end justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8">
+              <div className="flex justify-between"><h2 className="text-xl font-extrabold">{copy.uploadSheetTitle}</h2><button type="button" onClick={() => setShowUploadSheet(false)}><X className="h-5 w-5" /></button></div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {Array.from({ length: MAX_FACE_PHOTOS }).map((_, i) => {
+                  const ph = photos1[i];
+                  return ph ? (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
+                      <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removePhoto('p1', i)} className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button key={i} type="button" onClick={openPhotoSource} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center"><Plus className="h-6 w-6 text-slate-400" /></button>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={() => setShowUploadSheet(false)} className="mt-4 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">{copy.continue}</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+      </div>
+    );
   }
-});
+
+  return portal(
+    <div ref={modalScrollRef} className="aura-modal-backdrop aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain">
+      <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-start bg-white dark:bg-[#0c0e14] shadow-2xl">
+      {/* HERO */}
+      <div ref={heroRef} className="relative w-full aspect-[3/4] max-h-[58vh] bg-slate-200 select-none touch-none overflow-hidden shrink-0">
+        {afterUrl && (
+          <img src={afterUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover pointer-events-none" draggable={false} />
+        )}
+        {beforeUrl && (
+          <div className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none" style={{ width: `${sliderPct}%` }}>
+            <img src={beforeUrl} alt="" referrerPolicy="no-referrer" className="h-full object-cover max-w-none" style={{ width: heroWidth || '100vw' }} draggable={false} />
+          </div>
+        )}
+        {beforeUrl && (
+          <div className="absolute inset-y-0 z-10" style={{ left: `${sliderPct}%`, transform: 'translateX(-50%)' }}>
+            <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-white/90 shadow" />
+            <button type="button" onPointerDown={startDrag} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-800 shadow-lg border border-slate-200 cursor-ew-resize" aria-label="Compare">
+              <span className="text-sm font-bold tracking-tighter select-none">↔</span>
+            </button>
+          </div>
+        )}
+        <button type="button" onClick={onClose} className="absolute top-14 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg ring-1 ring-black/10" aria-label="Back">
+          <ChevronLeft className="h-6 w-6 text-slate-900" strokeWidth={2.5} />
+        </button>
+        {hintVisible && beforeUrl && (
+          <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
+            <div className="rounded-full bg-slate-900/80 text-white text-xs font-medium px-4 py-2 whitespace-nowrap">↔ {copy.hint}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="relative -mt-4 rounded-t-3xl bg-white dark:bg-[#0c0e14] px-4 pt-3 pb-10 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+
+        {moreTemplates.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{copy.tryMore}</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {moreTemplates.map((tmpl) => (
+                <button key={tmpl.id} type="button" onClick={() => selectOther(tmpl)} className="shrink-0 h-[4.5rem] w-[4.5rem] rounded-2xl overflow-hidden border border-slate-100">
+                  <img src={tmpl.previewImage} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{name}</h1>
+        <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+          {copy.disclaimer}
+          {description ? ` ${description}` : ''}
+        </p>
+
+        {/* Tip → modal */}
+        <button
+          type="button"
+          onClick={() => setShowTipModal(true)}
+          className="mt-4 w-full text-left rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 flex gap-3 items-center"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <Camera className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">{copy.tipTitle}</p>
+            <p className="text-xs text-amber-800/80 mt-0.5">{copy.tipBody}</p>
+          </div>
+          <span className="text-amber-600 text-lg">›</span>
+        </button>
+
+        {/* Upload slots (preview of first face only) */}
+        <div className={`mt-6 grid gap-4 ${slots === 2 ? 'grid-cols-2' : 'grid-cols-1 max-w-xs mx-auto'}`}>
+          <FaceSlot
+            label={copy.photoYou}
+            photos={photos1}
+            uploadLabel={copy.upload}
+            onClick={() => openUpload('p1')}
+          />
+          {slots === 2 && (
+            <FaceSlot
+              label={copy.photoPartner}
+              photos={photos2}
+              uploadLabel={copy.upload}
+              onClick={() => openUpload('p2')}
+            />
+          )}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">{copy.uploadHint}</p>
+
+        {/* Age — one or two */}
+        {slots === 2 ? (
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.ageYou}</p>
+              <div className="flex justify-center">
+                <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.agePartner}</p>
+              <div className="flex justify-center">
+                <input type="number" min={1} max={120} value={age2} onChange={(e) => { const v = e.target.value; setAge2(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.age}</p>
+            <div className="flex justify-center">
+              <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{copy.ratio}</p>
+          <div className="grid grid-cols-4 gap-2">
+            {ASPECT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setSelectedAspectRatio(opt.value)}
+                className={`rounded-2xl py-3 text-center ${
+                  selectedAspectRatio === opt.value
+                    ? 'bg-violet-50 ring-2 ring-violet-500 text-violet-700'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                <div className="text-sm font-bold">{opt.value}</div>
+                <div className="text-[10px] opacity-80 mt-0.5">{ratioLabel(opt)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {errorMessage && (
+          <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="mt-5 space-y-2">
+          {currentUser && (
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                {copy.balance}: <strong className="text-slate-800">{balance} {language === 'en' ? 'photo' : 'фото'}</strong>
+              </span>
+              {!hasEnough && (
+                <button type="button" onClick={() => setIsPhotoModalOpen(true)} className="text-violet-600 font-semibold underline">
+                  {copy.topUp}
+                </button>
+              )}
+            </div>
+          )}
+          {!currentUser ? (
+            <button type="button" onClick={() => setIsAuthModalOpen(true)} className="w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-500 flex items-center justify-center gap-2">
+              <LogIn className="h-4 w-4" />
+              {copy.loginTitle}
+            </button>
+          ) : (
+            <>
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResultQuality('2k')}
+                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                    resultQuality === '2k'
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  }`}
+                >
+                  2K · {basePhotoCost} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResultQuality('4k')}
+                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                    resultQuality === '4k'
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  }`}
+                >
+                  4K · {basePhotoCost * 2} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={isUploading || !hasRequiredPhotos}
+                className="w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 hover:bg-violet-500 disabled:bg-violet-300 disabled:cursor-not-allowed"
+              >
+                {!hasRequiredPhotos ? copy.needPhoto : copy.generate(photoCost)}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-3 pb-2">
+          <div className="-rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 leading-relaxed shadow-sm">
+            {language === 'ru' ? (
+              <>
+                Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>{' '}
+                — команда AuraStudio поможет тебе.
+              </>
+            ) : language === 'en' ? (
+              <>
+                Something went wrong? Message Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>{' '}
+                — the AuraStudio team will help.
+              </>
+            ) : (
+              <>
+                Ceva nu a mers? Scrie în Telegram{' '}
+                <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline underline-offset-2">
+                  @aurastudio_help_bot
+                </a>{' '}
+                — echipa AuraStudio te ajută.
+              </>
+            )}
+          </div>
+          <div className="rotate-[1.5deg] origin-left rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3.5 text-sm text-slate-600 shadow-sm">
+            {copy.honest} ❤️
+          </div>
+          <a href="https://t.me/aurastudio_help_bot" target="_blank" rel="noreferrer" className="mt-5 flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600 text-white font-semibold py-3.5 text-sm shadow-lg shadow-blue-600/20">
+            <Send className="h-4 w-4" />
+            {copy.tgBtn}
+          </a>
+        </div>
+      </div>
+
+      {/* TIP MODAL */}
+      {showTipModal && (
+        <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-3">
+              <div className="mx-auto sm:mx-0 h-1 w-10 rounded-full bg-slate-200 sm:hidden absolute left-1/2 -translate-x-1/2 top-2" />
+              <button type="button" onClick={() => setShowTipModal(false)} className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 leading-snug pr-6">{copy.tipModalTitle}</h2>
+            <p className="mt-3 text-sm text-slate-500 leading-relaxed">{copy.tipModalBody}</p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-semibold text-emerald-600 mb-1.5">✓ {copy.better}</p>
+                <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                                    <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-good-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-rose-500 mb-1.5">✕ {copy.worse}</p>
+                <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 p-1.5 grid grid-cols-2 gap-1.5">
+                                    <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-1.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-2.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-3.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                  <div className="aspect-square overflow-hidden rounded-lg bg-slate-100"><img src="https://zjshigepycaaqbqyuztk.supabase.co/storage/v1/object/public/template-previews/tip-bad-4.jpeg" alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" /></div>
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={() => setShowTipModal(false)} className="mt-5 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white">
+              {copy.continue}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MULTI-UPLOAD SHEET */}
+      {showUploadSheet && (
+        <div className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="flex justify-between items-start">
+              <h2 className="text-xl font-extrabold text-slate-900 pr-8">
+                {uploadTarget === 'p1' ? copy.uploadSheetTitle : copy.uploadSheetTitle2}
+              </h2>
+              <button type="button" onClick={() => setShowUploadSheet(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600 leading-relaxed">
+              {copy.uploadSheetHint}
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {Array.from({ length: MAX_FACE_PHOTOS }).map((_, i) => {
+                const ph = sheetPhotos[i];
+                return ph ? (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
+                    <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(uploadTarget, i)}
+                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={openPhotoSource}
+                    disabled={isUploading}
+                    className="aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400"
+                  >
+                    <Plus className="h-6 w-6" />
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-center text-xs text-slate-400">{copy.loaded(sheetPhotos.length)}</p>
+            <button
+              type="button"
+              onClick={openPhotoSource}
+              disabled={isUploading || sheetPhotos.length >= MAX_FACE_PHOTOS}
+              className="mt-3 w-full rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-800 disabled:opacity-50"
+            >
+              {isUploading ? '…' : copy.pickPhotos}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowUploadSheet(false)}
+              className="mt-2 w-full rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white"
+            >
+              {copy.continue}
+            </button>
+          </div>
+        </div>
+      )}
 
 
-// ====================================================================
-// STATIC & VITE MIDDLEWARE
-// ====================================================================
-async function startServer() {
-  const isProd = process.env.NODE_ENV === 'production';
+        {showLibraryPicker &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55" onClick={() => setShowLibraryPicker(false)}>
+              <div
+                className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white dark:bg-[#12141c] p-5 pb-8 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                    {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
+                  </h2>
+                  <button type="button" onClick={() => setShowLibraryPicker(false)} className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {(!userPhotos || userPhotos.length === 0) ? (
+                  <div className="py-10 text-center text-sm text-slate-500">
+                    {language === 'ru' ? 'Пока нет загруженных фото' : language === 'en' ? 'No uploaded photos yet' : 'Încă nu sunt fotografii'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 overflow-y-auto">
+                    {userPhotos.map((ph) => (
+                      <button
+                        key={ph.id}
+                        type="button"
+                        onClick={() => {
+                          selectFromLibrary({ id: ph.id, url: ph.url });
+                          setShowLibraryPicker(false);
+                        }}
+                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-95 transition"
+                      >
+                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLibraryPicker(false);
+                    setTimeout(() => triggerFilePick(), 50);
+                  }}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
+                </button>
+              </div>
+            </div>,
+            document.body
+          )}
 
-  if (!isProd) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
-  }
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
+      </div>
+    </div>
+  );
+};
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`AuraStudio server listening on http://0.0.0.0:${PORT}`);
-  });
+function FaceSlot({
+  label,
+  photos,
+  uploadLabel,
+  onClick
+}: {
+  label: string;
+  photos: FacePhoto[];
+  uploadLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{label}</p>
+      {photos[0] ? (
+        <button type="button" onClick={onClick} className="relative w-full aspect-square rounded-2xl overflow-hidden border border-slate-200">
+          <img src={photos[0].url} alt="" className="h-full w-full object-cover" />
+          {photos.length > 1 && (
+            <span className="absolute bottom-2 right-2 rounded-full bg-black/70 text-white text-[10px] font-bold px-2 py-0.5">
+              +{photos.length - 1}
+            </span>
+          )}
+        </button>
+      ) : (
+        <button type="button" onClick={onClick} className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-500">
+          <Upload className="h-6 w-6" />
+          <span className="text-sm font-semibold">{uploadLabel}</span>
+        </button>
+      )}
+    </div>
+  );
 }
-
-startServer();
