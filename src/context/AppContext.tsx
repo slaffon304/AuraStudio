@@ -86,6 +86,7 @@ interface AppContextType {
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
       quality?: '1K' | '2K' | '4K' | '1k' | '2k' | '4k';
+      editInstruction?: string;
     }
   ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
@@ -696,6 +697,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
       quality?: '1K' | '2K' | '4K' | '1k' | '2k' | '4k';
+      editInstruction?: string;
     }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
@@ -745,7 +747,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quality4k: is4k,
         quality: q === '1K' || q === '2K' || q === '4K' ? q : (is4k ? '4K' : '2K'),
         heightCm: options?.heightCm,
-        weightKg: options?.weightKg
+        weightKg: options?.weightKg,
+        editInstruction: options?.editInstruction
       })
     });
 
