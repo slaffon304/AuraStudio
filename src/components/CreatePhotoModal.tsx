@@ -436,8 +436,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     } else if (mode === 'couple') {
       stages = [
         { id: 'faces', label: L('Analizăm ambele chipuri…', 'Разбираем оба лица…', 'Analyzing both faces…'), sec: 10 },
-        { id: 'pass1', label: L('Generăm portretele (pas 1)…', 'Генерируем портреты (проход 1)…', 'Generating portraits (pass 1)…'), sec: 28 },
-        { id: 'pass2', label: L('Compoziție pe scenă (pas 2)…', 'Композиция на сцене (проход 2)…', 'Scene composite (pass 2)…'), sec: 32 },
+        { id: 'pass1', label: L('Generăm portretele', 'Генерируем портреты', 'Generating portraits'), sec: 28 },
+        { id: 'pass2', label: L('Asamblăm scena comună', 'Собираем общую сцену', 'Building shared scene'), sec: 32 },
         { id: 'finish', label: L('Salvăm rezultatul…', 'Сохраняем результат…', 'Saving result…'), sec: 8 }
       ];
     } else if (mode === 'enhance') {
@@ -450,8 +450,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       stages = twoPassHint
         ? [
             { id: 'analyze', label: L('Analizăm fotografia…', 'Анализируем фото…', 'Analyzing photo…'), sec: 8 },
-            { id: 'pass1', label: L('Chip + scenă (pas 1)…', 'Лицо + сцена (проход 1)…', 'Face + scene (pass 1)…'), sec: 26 },
-            { id: 'pass2', label: L('Compoziție pe mască (pas 2)…', 'Композиция на маске (проход 2)…', 'Mask composite (pass 2)…'), sec: 30 },
+            { id: 'pass1', label: L('Potrivim chipul pe scenă', 'Подбираем лицо на сцену', 'Matching face to scene'), sec: 26 },
+            { id: 'pass2', label: L('Asamblăm fotografia', 'Собираем фотографию', 'Composing the photo'), sec: 30 },
             { id: 'finish', label: L('Salvăm fotografia…', 'Сохраняем фото…', 'Saving photo…'), sec: 8 }
           ]
         : [
@@ -839,54 +839,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     );
   }
 
-  if (isGenerating && !resultUrl) {
-    const leftLabel =
-      language === 'ru'
-        ? `Осталось ~${secondsLeft ?? '…'} сек`
-        : language === 'en'
-          ? `~${secondsLeft ?? '…'} sec left`
-          : `Au rămas ~${secondsLeft ?? '…'} sec`;
-    return portal(
-      <div className="aura-modal-root fixed inset-0 z-[250] overflow-y-auto overscroll-contain bg-white dark:bg-[#0c0e14] flex flex-col items-center justify-center px-6 pb-24">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="space-y-3">
-            {progressSteps.map((step) => (
-              <div key={step.id} className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
-                  {step.status === 'done' ? (
-                    <CheckCircle className="h-5 w-5 text-emerald-500" />
-                  ) : step.status === 'active' ? (
-                    <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-                  ) : (
-                    <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
-                  )}
-                </div>
-                <p
-                  className={`text-sm leading-snug ${
-                    step.status === 'done'
-                      ? 'text-slate-500'
-                      : step.status === 'active'
-                        ? 'text-slate-900 dark:text-white font-medium'
-                        : 'text-slate-400'
-                  }`}
-                >
-                  {step.label}
-                </p>
-              </div>
-            ))}
-          </div>
-          {secondsLeft !== null && (
-            <div className="flex justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
-                <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                {leftLabel}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // generating progress shown inline on form (see progressSteps panel)
 
 
   // ─── PINTEREST MODE ───────────────────────────────────────────
@@ -1051,7 +1004,37 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </div>
           )}
 
-          <button
+          
+          {isGenerating && !resultUrl && (
+            <div className="mt-4 mb-3 space-y-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#12141c] p-4">
+              {progressSteps.map((step) => (
+                <div key={step.id} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+                    {step.status === 'done' ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-500" />
+                    ) : step.status === 'active' ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+                    )}
+                  </div>
+                  <p className={`text-sm leading-snug ${
+                    step.status === 'done' ? 'text-slate-500' :
+                    step.status === 'active' ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-400'
+                  }`}>{step.label}</p>
+                </div>
+              ))}
+              {secondsLeft !== null && (
+                <div className="flex justify-center pt-1">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    {language === 'ru' ? `Осталось ~${secondsLeft} сек` : language === 'en' ? `~${secondsLeft} sec left` : `Au rămas ~${secondsLeft} sec`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+<button
             type="button"
             onClick={handlePinGen}
             disabled={isUploading || isGenerating}
@@ -1400,7 +1383,37 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </div>
           )}
 
-          <button
+          
+          {isGenerating && !resultUrl && (
+            <div className="mt-4 mb-3 space-y-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#12141c] p-4">
+              {progressSteps.map((step) => (
+                <div key={step.id} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+                    {step.status === 'done' ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-500" />
+                    ) : step.status === 'active' ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+                    )}
+                  </div>
+                  <p className={`text-sm leading-snug ${
+                    step.status === 'done' ? 'text-slate-500' :
+                    step.status === 'active' ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-400'
+                  }`}>{step.label}</p>
+                </div>
+              ))}
+              {secondsLeft !== null && (
+                <div className="flex justify-center pt-1">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    {language === 'ru' ? `Осталось ~${secondsLeft} сек` : language === 'en' ? `~${secondsLeft} sec left` : `Au rămas ~${secondsLeft} sec`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+<button
             type="button"
             onClick={handleEnhance}
             disabled={isUploading || isGenerating}
@@ -1630,7 +1643,37 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   4K · {basePhotoCost * 2} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
                 </button>
               </div>
-              <button
+              
+          {isGenerating && !resultUrl && (
+            <div className="mt-4 mb-3 space-y-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#12141c] p-4">
+              {progressSteps.map((step) => (
+                <div key={step.id} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+                    {step.status === 'done' ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-500" />
+                    ) : step.status === 'active' ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-slate-200 dark:border-slate-600" />
+                    )}
+                  </div>
+                  <p className={`text-sm leading-snug ${
+                    step.status === 'done' ? 'text-slate-500' :
+                    step.status === 'active' ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-400'
+                  }`}>{step.label}</p>
+                </div>
+              ))}
+              {secondsLeft !== null && (
+                <div className="flex justify-center pt-1">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-lg">
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    {language === 'ru' ? `Осталось ~${secondsLeft} сек` : language === 'en' ? `~${secondsLeft} sec left` : `Au rămas ~${secondsLeft} sec`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+<button
                 type="button"
                 onClick={handleGenerate}
                 disabled={isUploading || !hasRequiredPhotos}
