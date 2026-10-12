@@ -948,7 +948,6 @@ STRICT RULES:
         );
         pushText(pass2Input, p2);
       }
-      );
       pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
       pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY source:');
@@ -991,7 +990,6 @@ STRICT RULES:
         );
         pushText(pass1Input, p1);
       }
-      );
       pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
       await pushImageFromUrl(pass1Input, userPhotoUrl);
       if (Array.isArray(extraPhotoUrls)) {
@@ -1032,7 +1030,6 @@ STRICT RULES:
         );
         pushText(pass2Input, p2);
       }
-      );
       pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
       pushText(pass2Input, 'IMAGE 2 — both HEADS / IDENTITY sources (left and right as already composed):');
