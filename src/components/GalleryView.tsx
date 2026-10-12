@@ -111,7 +111,28 @@ export const GalleryView: React.FC = () => {
           : 'Ex: zâmbet mai larg, adaugă ochelari...',
     fixBtn: language === 'ru' ? 'Поправить' : language === 'en' ? 'Fix' : 'Corectează',
     costNote: language === 'ru' ? 'потратит 1 фото с баланса' : language === 'en' ? 'uses 1 photo from balance' : 'folosește 1 foto din balanță',
-    save: language === 'ru' ? 'Сохранить фото' : language === 'en' ? 'Save photo' : 'Salvează foto'
+    save: language === 'ru' ? 'Сохранить фото' : language === 'en' ? 'Save photo' : 'Salvează foto',
+    makeMore: language === 'ru' ? 'Сделать ещё' : language === 'en' ? 'Create more' : 'Mai departe',
+    deletePhoto: language === 'ru' ? 'Удалить фото' : language === 'en' ? 'Delete photo' : 'Șterge foto',
+    support:
+      language === 'ru'
+        ? 'Что-то сломалось или вышло не так, как хотелось? Пиши в Telegram'
+        : language === 'en'
+          ? 'Something went wrong? Message us on Telegram'
+          : 'Ceva nu a mers cum trebuia? Scrie pe Telegram',
+    supportTeam:
+      language === 'ru'
+        ? '— команда AuraStudio поможет тебе.'
+        : language === 'en'
+          ? '— the AuraStudio team will help.'
+          : '— echipa AuraStudio te ajută.',
+    honest:
+      language === 'ru'
+        ? 'Мы хотим создавать классный и честный продукт — команда AuraStudio ❤️'
+        : language === 'en'
+          ? 'We want to build a great, honest product — AuraStudio team ❤️'
+          : 'Vrem un produs bun și onest — echipa AuraStudio ❤️',
+    tgBtn: language === 'ru' ? 'Написать в Telegram-поддержку' : language === 'en' ? 'Message Telegram support' : 'Scrie în Telegram-suport'
   };
 
   const goHome = () => {
@@ -491,6 +512,58 @@ export const GalleryView: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Make more / Delete */}
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewUrl(null);
+                  setPreviewJobId(null);
+                  setCurrentView('explore');
+                  window.history.pushState({}, '', '/app');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                {copy.makeMore}
+              </button>
+              {previewJobId && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(previewJobId)}
+                  disabled={busyId === previewJobId}
+                  className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {copy.deletePhoto}
+                </button>
+              )}
+
+              {/* Support block */}
+              <div className="rounded-2xl bg-white dark:bg-white/5 border border-slate-100 dark:border-white/10 px-4 py-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                {copy.support}{' '}
+                <a
+                  href="https://t.me/aurastudio_help_bot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-blue-600 underline-offset-2 hover:underline"
+                >
+                  @aurastudio_help_bot
+                </a>{' '}
+                {copy.supportTeam}
+              </div>
+              <div className="rounded-2xl bg-white dark:bg-white/5 border border-slate-100 dark:border-white/10 px-4 py-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                {copy.honest}
+              </div>
+              <a
+                href="https://t.me/aurastudio_help_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-700 py-3.5 text-sm font-bold text-white shadow-sm"
+              >
+                {copy.tgBtn}
+              </a>
             </div>
           </div>
         </div>
