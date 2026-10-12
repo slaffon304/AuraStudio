@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, Download, LogIn, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Download, LogIn, Trash2, X, Sparkles } from 'lucide-react';
 import { viewToPath } from '../lib/navigation';
 
 type Tab = 'photos' | 'videos';
@@ -12,7 +12,8 @@ export const GalleryView: React.FC = () => {
     language,
     setIsAuthModalOpen,
     setCurrentView,
-    authToken
+    authToken,
+    createGenerationJob
   } = useApp() as any;
 
   const [tab, setTab] = useState<Tab>('photos');
@@ -20,10 +21,22 @@ export const GalleryView: React.FC = () => {
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [localJobs, setLocalJobs] = useState(jobs || []);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalJobs(jobs || []);
   }, [jobs]);
+
+  // Reset refine UI when switching preview
+  useEffect(() => {
+    setRating(null);
+    setEditText('');
+    setIsRefining(false);
+    setRefineError(null);
+  }, [previewJobId]);
 
   // Lock body scroll while preview is open
   useEffect(() => {
@@ -75,7 +88,30 @@ export const GalleryView: React.FC = () => {
     download: language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto',
     delete: language === 'ru' ? 'Удалить' : language === 'en' ? 'Delete' : 'Șterge',
     confirmDelete:
-      language === 'ru' ? 'Удалить это фото из галереи?' : language === 'en' ? 'Delete this photo from gallery?' : 'Ștergi această foto din galerie?'
+      language === 'ru' ? 'Удалить это фото из галереи?' : language === 'en' ? 'Delete this photo from gallery?' : 'Ștergi această foto din galerie?',
+    rateTitle: language === 'ru' ? 'Оцени полученное фото' : language === 'en' ? 'Rate this photo' : 'Evaluează foto',
+    rateLabels:
+      language === 'ru'
+        ? ['Совсем плохо', 'Плохо', 'Нормально', 'Хорошо', 'Отлично']
+        : language === 'en'
+          ? ['Terrible', 'Bad', 'OK', 'Good', 'Excellent']
+          : ['Foarte rău', 'Rău', 'OK', 'Bine', 'Excelent'],
+    editTitle: language === 'ru' ? 'Хочешь что-то изменить?' : language === 'en' ? 'Want to change something?' : 'Vrei să schimbi ceva?',
+    editHint:
+      language === 'ru'
+        ? 'Опиши что поправить — изменим только это, остальное сохраним как есть.'
+        : language === 'en'
+          ? 'Describe what to fix — we change only that, keep the rest.'
+          : 'Descrie ce să corectăm — schimbăm doar asta.',
+    editPlaceholder:
+      language === 'ru'
+        ? 'Например: сделай улыбку шире, добавь очки, поменяй фон на закат...'
+        : language === 'en'
+          ? 'E.g. wider smile, add glasses, change background to sunset...'
+          : 'Ex: zâmbet mai larg, adaugă ochelari...',
+    fixBtn: language === 'ru' ? 'Поправить' : language === 'en' ? 'Fix' : 'Corectează',
+    costNote: language === 'ru' ? 'потратит 1 фото с баланса' : language === 'en' ? 'uses 1 photo from balance' : 'folosește 1 foto din balanță',
+    save: language === 'ru' ? 'Сохранить фото' : language === 'en' ? 'Save photo' : 'Salvează foto'
   };
 
   const goHome = () => {
@@ -130,7 +166,6 @@ export const GalleryView: React.FC = () => {
           setPreviewJobId(null);
         }
       } else {
-        // optimistic local remove even if API missing
         setLocalJobs((prev: any[]) => prev.filter((j) => j.id !== jobId));
         if (previewJobId === jobId) {
           setPreviewUrl(null);
@@ -145,6 +180,65 @@ export const GalleryView: React.FC = () => {
       }
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleRefine = async () => {
+    if (!previewUrl || !editText.trim() || isRefining) return;
+    setIsRefining(true);
+    setRefineError(null);
+    try {
+      // Re-generate from current result as user photo with enhance mode + edit instruction
+      // Prefer a dedicated refine endpoint later; for now use enhance path if available
+      if (typeof createGenerationJob === 'function') {
+        const job = await createGenerationJob(
+          'custom-pinterest',
+          previewUrl,
+          undefined,
+          {
+            mode: 'enhance',
+            customReferenceUrl: undefined,
+            quality4k: false,
+            // pass edit instruction via extra field if backend supports it later
+          } as any
+        );
+        const newUrl = job?.resultImageUrl || job?.result_image_url;
+        if (newUrl) {
+          setPreviewUrl(newUrl);
+          if (job?.id) {
+            setLocalJobs((prev: any[]) => [job, ...prev.filter((j) => j.id !== job.id)]);
+            setPreviewJobId(job.id);
+          }
+          setEditText('');
+        } else {
+          setRefineError(language === 'ru' ? 'Не удалось обновить фото' : 'Could not update photo');
+        }
+      } else {
+        // Fallback: POST enhance with instruction in body
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const res = await fetch('/api/generations', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            mode: 'enhance',
+            userPhotoUrl: previewUrl,
+            quality: '2K',
+            editInstruction: editText.trim()
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Error');
+        if (data.resultImageUrl) {
+          setPreviewUrl(data.resultImageUrl);
+          setEditText('');
+          if (data.jobId) setPreviewJobId(data.jobId);
+        }
+      }
+    } catch (err: any) {
+      setRefineError(err?.message || 'Error');
+    } finally {
+      setIsRefining(false);
     }
   };
 
@@ -246,6 +340,8 @@ export const GalleryView: React.FC = () => {
                     src={url}
                     alt=""
                     className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                   />
                 </button>
@@ -282,59 +378,120 @@ export const GalleryView: React.FC = () => {
 
       {previewUrl && (
         <div
-          className="fixed inset-0 z-[300] flex flex-col bg-black overscroll-none"
+          className="fixed inset-0 z-[300] flex flex-col bg-slate-50 dark:bg-[#0b0d12] overscroll-none overflow-y-auto"
           onClick={() => {
             setPreviewUrl(null);
             setPreviewJobId(null);
           }}
-          onTouchMove={(e) => e.preventDefault()}
         >
-          {/* Below app header / burger */}
-          <div className="flex items-center justify-between px-3 pb-2 pt-[calc(3.75rem+env(safe-area-inset-top,0px))]">
-            <button
-              type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
-              onClick={() => {
-                setPreviewUrl(null);
-                setPreviewJobId(null);
-              }}
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              {previewJobId && (
-                <button
-                  type="button"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(previewJobId);
-                  }}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
-              )}
+          <div
+            className="mx-auto w-full max-w-lg flex flex-col min-h-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-3 pb-2 pt-[calc(3.75rem+env(safe-area-inset-top,0px))] sticky top-0 z-10 bg-slate-50/95 dark:bg-[#0b0d12]/95 backdrop-blur">
               <button
                 type="button"
-                className="flex items-center gap-2 rounded-full bg-white/10 text-white px-4 py-2 text-sm font-semibold"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownload(previewUrl);
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-black/10 dark:bg-white/15 text-slate-800 dark:text-white"
+                onClick={() => {
+                  setPreviewUrl(null);
+                  setPreviewJobId(null);
                 }}
               >
-                <Download className="h-4 w-4" />
-                {copy.download}
+                <X className="h-5 w-5" />
               </button>
+              <div className="flex items-center gap-2">
+                {previewJobId && (
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/10 dark:bg-white/10 text-slate-800 dark:text-white"
+                    onClick={() => handleDelete(previewJobId)}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="flex-1 flex items-center justify-center p-2 min-h-0">
-            <img
-              src={previewUrl}
-              alt=""
-              className="max-h-full max-w-full object-contain"
-              referrerPolicy="no-referrer"
-              onClick={(e) => e.stopPropagation()}
-            />
+
+            {/* Image */}
+            <div className="px-3 flex justify-center">
+              <img
+                src={previewUrl}
+                alt=""
+                className="max-h-[55vh] w-full object-contain rounded-2xl shadow-lg"
+                referrerPolicy="no-referrer"
+                decoding="async"
+              />
+            </div>
+
+            {/* Actions panel — same as post-generation result screen */}
+            <div className="px-4 pt-4 pb-28 space-y-4">
+              <button
+                type="button"
+                onClick={() => handleDownload(previewUrl)}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-sm active:scale-[0.99]"
+              >
+                <Download className="h-4 w-4" />
+                {copy.save}
+              </button>
+
+              {/* Rating */}
+              <div className="rounded-2xl bg-white dark:bg-white/5 border border-slate-100 dark:border-white/10 p-4">
+                <p className="text-center text-sm font-bold text-slate-900 dark:text-white mb-3">{copy.rateTitle}</p>
+                <div className="flex justify-between gap-1">
+                  {(['😢', '🙁', '😐', '🙂', '😍'] as const).map((emoji, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setRating(i + 1)}
+                      className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium transition ${
+                        rating === i + 1
+                          ? 'bg-violet-50 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 scale-105'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      <span className="text-2xl leading-none">{emoji}</span>
+                      <span className="leading-tight text-center">{copy.rateLabels[i]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edit / refine */}
+              <div className="rounded-2xl bg-violet-50/80 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-600" />
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{copy.editTitle}</p>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{copy.editHint}</p>
+                <textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  placeholder={copy.editPlaceholder}
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-black/20 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-violet-400"
+                />
+                {refineError && <p className="text-xs text-red-500">{refineError}</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-slate-400">{copy.costNote}</span>
+                  <button
+                    type="button"
+                    disabled={!editText.trim() || isRefining}
+                    onClick={handleRefine}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 disabled:bg-violet-300 px-4 py-2 text-xs font-bold text-white"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {isRefining
+                      ? language === 'ru'
+                        ? 'Генерация…'
+                        : language === 'en'
+                          ? 'Generating…'
+                          : 'Se generează…'
+                      : copy.fixBtn}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
