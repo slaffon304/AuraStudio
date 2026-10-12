@@ -85,6 +85,7 @@ interface AppContextType {
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
+      quality?: '1K' | '2K' | '4K' | '1k' | '2k' | '4k';
     }
   ) => Promise<GenerationJob>;
   retryJob: (jobId: string) => Promise<void>;
@@ -694,6 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       extraPhotoUrls?: string[];
       partnerExtraPhotoUrls?: string[];
       quality4k?: boolean;
+      quality?: '1K' | '2K' | '4K' | '1k' | '2k' | '4k';
     }
   ): Promise<GenerationJob> => {
     if (!session || !currentUser) {
@@ -714,7 +716,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aspectRatio: options?.aspectRatio || '3:4'
     };
 
-    const cost = options?.quality4k ? 2 : options?.isPack ? Math.max(3, (template.photoCost || 1) + 2) : (template.photoCost || 1);
+    const q = String(options?.quality || '').toUpperCase();
+    const is4k = options?.quality4k || q === '4K';
+    const cost = is4k ? 2 : options?.isPack ? Math.max(3, (template.photoCost || 1) + 2) : (template.photoCost || 1);
 
     if (currentUser.photoBalance < cost) {
       setIsPhotoModalOpen(true);
@@ -738,7 +742,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         age2: options?.age2,
         extraPhotoUrls: options?.extraPhotoUrls,
         partnerExtraPhotoUrls: options?.partnerExtraPhotoUrls,
-        quality4k: options?.quality4k,
+        quality4k: is4k,
+        quality: q === '1K' || q === '2K' || q === '4K' ? q : (is4k ? '4K' : '2K'),
         heightCm: options?.heightCm,
         weightKg: options?.weightKg
       })
