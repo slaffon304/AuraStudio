@@ -68,6 +68,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [photos2, setPhotos2] = useState<FacePhoto[]>([]);
   /** Pinterest reference image (not a face pack) */
   const [refUrl, setRefUrl] = useState('');
+  /** Pinterest: reference has a second person */
+  const [pinHasSecond, setPinHasSecond] = useState(false);
   const [pinLink, setPinLink] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [weightKg, setWeightKg] = useState('');
@@ -154,6 +156,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
     setPhotos1([]);
     setPhotos2([]);
     setRefUrl('');
+    setPinHasSecond(false);
     setPinLink('');
     setHeightCm('');
     setWeightKg('');
@@ -850,6 +853,16 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       if (!currentUser) { setIsAuthModalOpen(true); return; }
       if (!refUrl) { setErrorMessage(language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first'); return; }
       if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
+      if (pinHasSecond && !photos2[0]) {
+        setErrorMessage(
+          language === 'ru'
+            ? 'Загрузи фото второго персонажа'
+            : language === 'en'
+              ? 'Upload the second person’s photo'
+              : 'Încarcă foto pentru al doilea personaj'
+        );
+        return;
+      }
       if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
       setIsGenerating(true);
       setStepText(t.progressStepAnalyze);
@@ -860,9 +873,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           customReferenceUrl: refUrl,
           aspectRatio: selectedAspectRatio,
           age: typeof age1 === 'number' && age1 >= 1 && age1 <= 120 ? age1 : undefined,
+          age2: pinHasSecond && typeof age2 === 'number' && age2 >= 1 && age2 <= 120 ? age2 : undefined,
           heightCm: heightCm || undefined,
           weightKg: weightKg || undefined,
-          extraPhotoUrls: photos1.slice(1).map((x) => x.url)
+          extraPhotoUrls: photos1.slice(1).map((x) => x.url),
+          partnerPhotoUrl: pinHasSecond && photos2[0] ? photos2[0].url : undefined,
+          partnerExtraPhotoUrls:
+            pinHasSecond && photos2.length > 1 ? photos2.slice(1).map((x) => x.url) : undefined
         } as any);
         setResultUrl(job.resultImageUrl || null);
         setStepText(t.completed);
@@ -954,6 +971,71 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </div>
           </div>
 
+          <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 cursor-pointer dark:border-white/10 dark:bg-white/5">
+            <input
+              type="checkbox"
+              checked={pinHasSecond}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setPinHasSecond(on);
+                if (!on) {
+                  setPhotos2([]);
+                  setAge2('');
+                }
+              }}
+              className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            />
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {language === 'ru'
+                ? 'Есть второй персонаж?'
+                : language === 'en'
+                  ? 'Is there a second character?'
+                  : 'Există un al doilea personaj?'}
+            </span>
+          </label>
+
+          {pinHasSecond && (
+            <div className="mt-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                {language === 'ru' ? 'Второй персонаж' : language === 'en' ? 'Second person' : 'Al doilea personaj'}{' '}
+                <span className="normal-case font-medium text-violet-500">
+                  {language === 'ru' ? 'кого вставляем' : language === 'en' ? 'who we insert' : 'pe cine inserăm'}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => openUpload('p2')}
+                className="flex w-full max-w-[50%] aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden dark:border-white/15 dark:bg-white/5"
+              >
+                {photos2[0] ? (
+                  <img src={photos2[0].url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <>
+                    <Plus className="h-6 w-6 text-slate-400" />
+                    <span className="text-sm font-semibold text-slate-500 mt-1">
+                      {language === 'ru' ? 'Загрузить' : language === 'en' ? 'Upload' : 'Încarcă'}
+                    </span>
+                  </>
+                )}
+              </button>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-slate-500">{copy.agePartner}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={age2}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAge2(v === '' ? '' : Number(v));
+                  }}
+                  placeholder="—"
+                  className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2 text-sm font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setShowPinHelp(true)}
@@ -1044,7 +1126,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               ? (language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first')
               : !photos1[0]
                 ? copy.needPhoto
-                : (language === 'ru' ? `Сгенерировать · ${cost} фото` : `Generate · ${cost} photo`)}
+                : pinHasSecond && !photos2[0]
+                  ? (language === 'ru'
+                      ? 'Загрузи фото второго персонажа'
+                      : language === 'en'
+                        ? 'Upload second person photo'
+                        : 'Încarcă foto al doilea personaj')
+                  : (language === 'ru' ? `Сгенерировать · ${cost} фото` : `Generate · ${cost} photo`)}
           </button>
           <p className="mt-2 text-center text-[11px] text-slate-400">
             {language === 'ru' ? 'формат наследуется с референса · 1 фото с баланса' : 'format follows reference · 1 photo from balance'}
