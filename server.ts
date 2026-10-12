@@ -350,10 +350,18 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     };
   }
 
-  const quality4k = Boolean(req.body.quality4k);
+  // Resolution: accept quality ('1K'|'2K'|'4K') or legacy quality4k boolean
+  const rawQuality = String(req.body.quality || '').toUpperCase();
+  let imageQuality: '1K' | '2K' | '4K' =
+    rawQuality === '1K' || rawQuality === '2K' || rawQuality === '4K'
+      ? (rawQuality as '1K' | '2K' | '4K')
+      : Boolean(req.body.quality4k)
+        ? '4K'
+        : '2K';
+  const quality4k = imageQuality === '4K';
   const baseCost = Number(template.photo_cost ?? template.credit_cost ?? 1) || 1;
-  // 1 photo standard; 2 photos for 4K upgrade (video = 8 later)
-  const effectivePhotoCost = quality4k ? 2 : baseCost;
+  // 1 photo for 1K/2K; 2 photos for 4K upgrade
+  const effectivePhotoCost = imageQuality === '4K' ? Math.max(2, baseCost * 2) : baseCost;
 
   // Check if AI provider is configured
   if (!process.env.GEMINI_API_KEY || !aiClient) {
@@ -809,7 +817,7 @@ STRICT RULES:
         'FINAL: Composite the head from Image 2 onto the masked scene of Image 1. One photorealistic image. Skin tone of the head matches Image 2.'
       );
 
-      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-single');
+      const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
       imageBase64Data = pass2.data;
       mimeType = pass2.mimeType;
     } else if (useTwoPass && effectiveMode === 'couple') {
@@ -902,7 +910,7 @@ STRICT RULES:
         'FINAL: Composite both heads from Image 2 onto the two masked people in Image 1. One photorealistic image. Do not swap left and right. Each person\'s skin tone matches their own head in Image 2.'
       );
 
-      const pass2 = await runImagePass(pass2Input, quality4k ? '4K' : '2K', 'PASS2-couple');
+      const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
       imageBase64Data = pass2.data;
       mimeType = pass2.mimeType;
     } else {
@@ -940,7 +948,7 @@ STRICT RULES:
           : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
       );
 
-      const imageSize: '2K' | '4K' = quality4k ? '4K' : '2K';
+      const imageSize: '1K' | '2K' | '4K' = imageQuality;
       const single = await runImagePass(interactionInput, imageSize, 'SINGLE');
       imageBase64Data = single.data;
       mimeType = single.mimeType;
@@ -973,14 +981,15 @@ STRICT RULES:
         mime_type: mimeType
       });
 
-    // 8. Update job to completed
+    // 8. Update job to completed (persist storage path so DELETE can clean the bucket)
     await supabaseAdmin
       .from('generation_jobs')
       .update({
         status: 'completed',
         progress: 100,
         current_step_message: 'Portret finalizat cu succes!',
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        result_storage_path: storagePath
       })
       .eq('id', jobId);
 
@@ -1033,9 +1042,25 @@ app.delete('/api/generations/:id', requireAuth, async (req: AuthRequest, res) =>
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.result_storage_path) {
-      await supabaseAdmin.storage.from('generated-images').remove([job.result_storage_path]);
+    // Collect all storage paths for this job (column + generated_images table + fallback path)
+    const paths = new Set<string>();
+    if (job.result_storage_path) paths.add(job.result_storage_path);
+    const fallbackPath = `${job.user_id}/${job.id}.jpg`;
+    paths.add(fallbackPath);
+
+    const { data: genRows } = await supabaseAdmin
+      .from('generated_images')
+      .select('storage_path')
+      .eq('job_id', job.id);
+    for (const row of genRows || []) {
+      if (row.storage_path) paths.add(row.storage_path);
     }
+
+    if (paths.size > 0) {
+      await supabaseAdmin.storage.from('generated-images').remove([...paths]);
+    }
+
+    await supabaseAdmin.from('generated_images').delete().eq('job_id', job.id);
 
     await supabaseAdmin
       .from('generation_jobs')
