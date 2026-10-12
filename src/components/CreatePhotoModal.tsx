@@ -796,12 +796,6 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </button>
         </div>
 
-        {fullscreenOpen && resultUrl && (          <button type="button" onClick={() => { onClose(); setCurrentView('gallery'); }} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-semibold">
-            <FolderHeart className="h-4 w-4" />
-            {t.myGallery}
-          </button>
-        </div>
-
         {fullscreenOpen && resultUrl && (
           <div className="fixed inset-0 z-[280] bg-black flex flex-col">
             <div className="flex items-center justify-between p-3">
