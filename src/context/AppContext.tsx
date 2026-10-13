@@ -761,9 +761,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error(data.error || 'Generarea a eșuat pe server.');
     }
 
-    // Refresh profile balance, transactions, and jobs
-    await Promise.all([fetchUserProfile(), fetchJobs(), fetchTransactions()]);
-
     const createdJob: GenerationJob = {
       id: data.jobId,
       userId: currentUser.id,
@@ -778,7 +775,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'completed',
       progress: 100,
       currentStepMessage: t.completed,
-      resultImageUrl: data.resultImageUrl,
+      resultImageUrl: data.resultImageUrl || '',
       providerId: 'gemini-genai',
       providerName: 'Google Gemini Image',
       photoCost: cost,
@@ -787,7 +784,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedAt: new Date().toISOString()
     };
 
+    // Immediately show in gallery even if subsequent fetch is slow/fails
+    setJobs((prev) => {
+      const rest = (prev || []).filter((j) => j.id !== createdJob.id);
+      return [createdJob, ...rest];
+    });
     setActiveJob(createdJob);
+
+    // Refresh profile balance, transactions, and jobs
+    await Promise.all([fetchUserProfile(), fetchJobs(), fetchTransactions()]);
+
     return createdJob;
   };
 
