@@ -510,73 +510,108 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     // 5. Execute REAL server-side AI generation with Gemini SDK
     let imageBase64Data: string | null = null;
     let mimeType = 'image/jpeg';
+    /** Intermediate PASS1 (1K) — saved for debugging / gallery inspection */
+    let pass1Base64: string | null = null;
+    let pass1Mime = 'image/jpeg';
+    let pass1SignedUrl: string | null = null;
+
+    async function savePass1Intermediate(data: string, mime: string, label: string) {
+      pass1Base64 = data;
+      pass1Mime = mime || 'image/jpeg';
+      if (!jobId) return;
+      const p1Path = `${userId}/${jobId}_pass1.jpg`;
+      try {
+        const buf = Buffer.from(data, 'base64');
+        const { error: upErr } = await supabaseAdmin.storage
+          .from('generated-images')
+          .upload(p1Path, buf, { contentType: pass1Mime, upsert: true });
+        if (upErr) {
+          console.warn('[generate] pass1 upload', label, upErr.message);
+          return;
+        }
+        console.log('[generate] pass1 saved', p1Path, 'bytes', buf.length, label);
+        // Optional column pass1_storage_path — ignore if missing
+        const { error: colErr } = await supabaseAdmin
+          .from('generation_jobs')
+          .update({ pass1_storage_path: p1Path } as any)
+          .eq('id', jobId);
+        if (colErr) {
+          console.warn('[generate] pass1_storage_path column?', colErr.message);
+        }
+        const { data: signed } = await supabaseAdmin.storage
+          .from('generated-images')
+          .createSignedUrl(p1Path, 7200);
+        pass1SignedUrl = signed?.signedUrl || null;
+      } catch (e: any) {
+        console.warn('[generate] pass1 save exception', e?.message || e);
+      }
+    }
 
     // ── Prompt + images: IDENTITY selfies + SCENE TEXT (no style image) ──
     // Templates: scene from templates.prompt
     // Pinterest: scene from on-the-fly vision analysis of the reference
     // Blur / style-image face transfer removed on purpose.
 
-    async function analyzeSceneFromImage(url: string): Promise<string> {
-      // Prompt lives in generation_prompts.key = 'scene_analyze' (editable in DB)
-      const sceneAnalyzePrompt = await loadPromptFromDb('scene_analyze');
-      if (!sceneAnalyzePrompt || sceneAnalyzePrompt.trim().length < 40) {
-        throw new Error(
-          "Промпт «scene_analyze» отсутствует в generation_prompts. Добавьте запись в БД."
-        );
-      }
+    const SCENE_ANALYZE_PROMPT = `You are a photography director writing a scene brief for an AI image generator.
 
+Analyze the reference photograph in extreme detail. Output ONLY a single dense English paragraph (no bullet lists, no markdown, no preamble).
+
+Describe the COMPLETE scene so another model can recreate the same shot WITHOUT seeing this image and WITHOUT copying any person's face:
+- Camera: exact framing (head-and-shoulders / waist-up / full body), camera height, angle (eye-level / slight low / high), approximate focal length feel (e.g. 35mm, 50mm, 85mm), depth of field
+- Pose: body orientation, head turn, gaze direction, arm and hand placement, weight distribution
+- Wardrobe: garments, colors, fabrics, fit, accessories, shoes if visible
+- Environment: location type, architecture, furniture, props, what is left/right/behind the subject
+- Lighting: key light direction and quality (soft/hard), fill, rim, color temperature, time of day, reflections
+- Color grade and mood: overall palette, contrast, atmosphere
+- Composition: subject placement in frame, leading lines, background blur amount
+
+STRICT RULES:
+- Do NOT describe facial features, age, gender presentation, skin, hair style/color, or identity of any person.
+- Do NOT invent objects that are not visible.
+- Prefer concrete visual facts over vague adjectives.
+- Write as an executable scene prompt for photorealistic generation.`;
+
+    async function analyzeSceneFromImage(url: string): Promise<string> {
       const part = await urlToGenerativePart(url);
       if (!part?.inlineData?.data) {
         throw new Error('Nu s-a putut încărca imaginea de referință pentru analiză.');
       }
-      // Primary 3.8, then fallbacks 3.7 → 3.6 → 3.5 if the model is down / unavailable
-      const analysisModels = [
-        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3.8-flash',
-        'gemini-3.7-flash',
-        'gemini-3.6-flash',
-        'gemini-3.5-flash'
-      ].filter((m, i, arr) => arr.indexOf(m) === i);
-
-      const parts = [
-        { text: sceneAnalyzePrompt.trim() },
-        {
-          inlineData: {
-            mimeType: part.inlineData.mimeType || 'image/jpeg',
-            data: part.inlineData.data
+      // Text+vision model for scene breakdown (not the image generator)
+      const analysisModel =
+        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
+      try {
+        const resp = await aiClient!.models.generateContent({
+          model: analysisModel,
+          contents: {
+            parts: [
+              { text: SCENE_ANALYZE_PROMPT },
+              {
+                inlineData: {
+                  mimeType: part.inlineData.mimeType || 'image/jpeg',
+                  data: part.inlineData.data
+                }
+              }
+            ]
           }
+        });
+        const text =
+          (resp as any)?.text ||
+          (resp as any)?.candidates?.[0]?.content?.parts
+            ?.map((p: any) => p.text)
+            .filter(Boolean)
+            .join(' ') ||
+          '';
+        const cleaned = String(text).trim().replace(/\s+/g, ' ');
+        if (cleaned.length < 40) {
+          throw new Error('Analiza scenei a returnat un text prea scurt.');
         }
-      ];
-
-      let lastErr: any = null;
-      for (const model of analysisModels) {
-        try {
-          console.log('[scene-analyze] trying model', model);
-          const resp = await aiClient!.models.generateContent({
-            model,
-            contents: { parts }
-          });
-          const text =
-            (resp as any)?.text ||
-            (resp as any)?.candidates?.[0]?.content?.parts
-              ?.map((p: any) => p.text)
-              .filter(Boolean)
-              .join(' ') ||
-            '';
-          const cleaned = String(text).trim().replace(/\s+/g, ' ');
-          if (cleaned.length < 40) {
-            throw new Error('Analiza scenei a returnat un text prea scurt.');
-          }
-          console.log('[scene-analyze] ok model=', model, 'chars=', cleaned.length);
-          return cleaned.slice(0, 2500);
-        } catch (err: any) {
-          lastErr = err;
-          console.warn('[scene-analyze] model failed', model, err?.message || err);
-        }
+        return cleaned.slice(0, 2500);
+      } catch (err: any) {
+        console.error('[scene-analyze]', err?.message || err);
+        throw new Error(
+          'Nu s-a putut analiza referința Pinterest: ' + (err?.message || 'unknown')
+        );
       }
-      console.error('[scene-analyze] all models failed', lastErr?.message || lastErr);
-      throw new Error(
-        'Nu s-a putut analiza referința Pinterest: ' + (lastErr?.message || 'unknown')
-      );
     }
 
     const ageProvided = age !== undefined && age !== null && age !== '';
@@ -614,7 +649,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         ? (avoidDefault.trim().startsWith('Avoid') || avoidDefault.trim().startsWith('Избег')
             ? avoidDefault.trim()
             : `Avoid: ${avoidDefault.trim()}`)
-: '';
+        : 'Avoid: distorted anatomy, extra fingers, unnatural hands, plastic over-smoothed skin, watermarks, logos, random text overlays, and any face that does not match the IDENTITY photos.';
     }
 
     const expressionRaw = String(template.expression || template.expression_text || '').trim();
@@ -673,34 +708,84 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       quality: qualityLine || ''
     };
 
-    /** Generation prompts live only in generation_prompts — no code fallbacks. */
-    async function requirePrompt(key: string): Promise<string> {
+    async function promptOrFallback(key: string, fallback: string): Promise<string> {
       const fromDb = await loadPromptFromDb(key);
-      if (!fromDb) {
-        throw new Error(
-          `Промпт «${key}» отсутствует в generation_prompts. Добавьте запись в БД.`
-        );
+      if (fromDb) {
+        console.log('[prompt] using DB key=', key, 'chars=', fromDb.length);
+        return fillPrompt(fromDb, promptVars);
       }
-      console.log('[prompt] DB key=', key, 'chars=', fromDb.length);
-      return fillPrompt(fromDb, promptVars);
+      console.warn('[prompt] missing DB key=', key, '— using code fallback');
+      return fillPrompt(fallback, promptVars);
     }
 
     let promptContext = '';
     if (effectiveMode === 'enhance') {
-      promptContext = await requirePrompt('pass1_enhance');
+      promptContext = await promptOrFallback(
+        'pass1_enhance',
+        [
+          'ЗАДАЧА: Улучши только техническое качество присланного фото.',
+          'СОХРАНИ: личность, лицо, выражение, позу, одежду, композицию, фон.',
+          'УЛУЧШИ: резкость, чистоту, шум/сжатие, естественный цвет.',
+          'НЕЛЬЗЯ: переделывать сцену, менять возраст или структуру лица, превращать в другого человека.',
+          '{{quality}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else if (effectiveMode === 'refine') {
       if (!editText) {
         throw new Error('editInstruction is required for refine mode.');
       }
-      promptContext = await requirePrompt('refine');
+      promptContext = await promptOrFallback(
+        'refine',
+        [
+          'ЗАДАЧА: Отредактируй присланное фото строго по инструкции пользователя.',
+          'Меняй ТОЛЬКО то, о чём просят. Личность и композицию сохраняй, если инструкция явно этого не меняет.',
+          'ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ:',
+          '{{edit}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else if (effectiveMode === 'pinterest') {
-      promptContext = await requirePrompt('pass1_pinterest');
+      promptContext = await promptOrFallback(
+        'pass1_pinterest',
+        [
+          'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
+          'IDENTITY — кто должен получиться (лицо только с этих фото).',
+          'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{body}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else if (effectiveMode === 'couple') {
       // single-pass couple (no mask) — still use pass1_couple text
-      promptContext = await requirePrompt('pass1_couple');
+      promptContext = await promptOrFallback(
+        'pass1_couple',
+        [
+          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе.',
+          'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{age2}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     } else {
       // template single-pass fallback text
-      promptContext = await requirePrompt('pass1_template');
+      promptContext = await promptOrFallback(
+        'pass1_template',
+        [
+          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ.',
+          'СЦЕНА:',
+          '{{scene}}',
+          '{{age1}}',
+          '{{body}}',
+          '{{avoid}}'
+        ].join('\n')
+      );
     }
 
     const targetRatio =
@@ -839,7 +924,17 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
       const pass1Input: any[] = [];
       {
-        const p1 = await requirePrompt('pass1_template');
+        const p1 = await promptOrFallback(
+          'pass1_template',
+          [
+            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ ниже.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{body}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass1Input, p1);
       }
       pushText(pass1Input, 'IDENTITY — the only face that must appear:');
@@ -847,8 +942,13 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
       }
+      pushText(
+        pass1Input,
+        'FINAL: Face and hair from IDENTITY only. Output a single photorealistic image.'
+      );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
+      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-single');
 
       // ========== SINGLE: PASS 2 ==========
       await supabaseAdmin
@@ -861,9 +961,19 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
       const pass2Input: any[] = [];
       {
-        const p2 = await requirePrompt('pass2_template');
+        const p2 = await promptOrFallback(
+          'pass2_template',
+          [
+            'Image 1 — СЦЕНА с маской на лице/волосах.',
+            'Image 2 — IDENTITY (голова).',
+            'Сцену с Image 1 сохрани. Голову возьми с Image 2.',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass2Input, p2);
       }
+      );
       pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
       pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY source:');
@@ -872,6 +982,10 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         mime_type: pass1.mimeType || 'image/png',
         data: pass1.data
       });
+      pushText(
+        pass2Input,
+        'FINAL: Composite the head from Image 2 onto the masked scene of Image 1. One photorealistic image. Skin tone of the head matches Image 2.'
+      );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
       imageBase64Data = pass2.data;
@@ -888,9 +1002,21 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
       const pass1Input: any[] = [];
       {
-        const p1 = await requirePrompt('pass1_couple');
+        const p1 = await promptOrFallback(
+          'pass1_couple',
+          [
+            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе в СЦЕНЕ.',
+            'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{age2}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass1Input, p1);
       }
+      );
       pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
       await pushImageFromUrl(pass1Input, userPhotoUrl);
       if (Array.isArray(extraPhotoUrls)) {
@@ -902,8 +1028,13 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         for (const u of partnerExtraPhotoUrls.slice(0, 4))
           await pushImageFromUrl(pass1Input, u);
       }
+      pushText(
+        pass1Input,
+        'FINAL: Two people in one image. Faces and hair from IDENTITY A and IDENTITY B only. Do not merge or swap them.'
+      );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
+      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-couple');
 
       // ========== COUPLE: PASS 2 (two masked heads) ==========
       await supabaseAdmin
@@ -916,9 +1047,18 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
       const pass2Input: any[] = [];
       {
-        const p2 = await requirePrompt('pass2_couple');
+        const p2 = await promptOrFallback(
+          'pass2_couple',
+          [
+            'Image 1 — СЦЕНА с ДВУМЯ людьми, лица под масками.',
+            'Image 2 — оба человека (лево/право).',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass2Input, p2);
       }
+      );
       pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
       await pushImageFromUrl(pass2Input, maskUrl);
       pushText(pass2Input, 'IMAGE 2 — both HEADS / IDENTITY sources (left and right as already composed):');
@@ -937,135 +1077,131 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       mimeType = pass2.mimeType;
     } else if (effectiveMode === 'pinterest') {
       // ========== PINTEREST multi-pass ==========
-      // 1) sceneText already from analyzeSceneFromImage(ref)
-      // 2) PASS1 1K: identity (+ partner if two people) + scene text
-      // 3) MASK 1K: reference — all faces/hair covered
-      // 4) PASS2 user quality: mask + PASS1 heads
+      // 1) sceneText already from analyzeSceneFromImage(ref) — «атомы»
+      // 2) PASS1 1K: IDENTITY selfies + scene text
+      // 3) MASK 1K: reference with faces/hair covered
+      // 4) PASS2 user quality: mask + PASS1 result
       const refUrl = String(customReferenceUrl || '').trim();
       if (!refUrl) {
         throw new Error('Referința Pinterest lipsește.');
       }
-      const pinTwoPeople = Boolean(partnerPhotoUrl);
 
       await supabaseAdmin
         .from('generation_jobs')
         .update({
           progress: 40,
-          current_step_message: pinTwoPeople
-            ? 'Pinterest 1/4: PASS1 два персонажа (1K)...'
-            : 'Pinterest 1/4: сцена разобрана, генерируем PASS1 (1K)...'
+          current_step_message: 'Pinterest 1/4: сцена разобрана, генерируем PASS1 (1K)...'
         })
         .eq('id', jobId);
 
       const pass1Input: any[] = [];
-      if (pinTwoPeople) {
-        const p1 = await requirePrompt('pass1_pinterest_couple');
+      {
+        const p1 = await promptOrFallback(
+          'pass1_pinterest',
+          [
+            'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
+            'IDENTITY — кто должен получиться (лицо только с этих фото).',
+            'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
+            'СЦЕНА:',
+            '{{scene}}',
+            '{{age1}}',
+            '{{body}}',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass1Input, p1);
-        pushText(pass1Input, 'IDENTITY A (LEFT / first person) — face source only for person A:');
-        await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity A');
-        if (Array.isArray(extraPhotoUrls)) {
-          for (const u of extraPhotoUrls.slice(0, 4)) {
-            await pushImageFromUrl(pass1Input, u, 'pinterest identity A extra');
-          }
+      }
+      pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
+      await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity');
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 4)) {
+          await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
         }
-        pushText(pass1Input, 'IDENTITY B (RIGHT / second person) — face source only for person B:');
+      }
+      // optional second person on reference
+      if (partnerPhotoUrl) {
+        pushText(pass1Input, 'IDENTITY B (второй персонаж на референсе), если нужен:');
         await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
         if (Array.isArray(partnerExtraPhotoUrls)) {
           for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
             await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
           }
         }
-      } else {
-        const p1 = await requirePrompt('pass1_pinterest');
-        pushText(pass1Input, p1);
-        pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
-        await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity');
-        if (Array.isArray(extraPhotoUrls)) {
-          for (const u of extraPhotoUrls.slice(0, 4)) {
-            await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
-          }
-        }
       }
-
-      const pass1 = await runImagePass(
+      pushText(
         pass1Input,
-        '1K',
-        pinTwoPeople ? 'PASS1-pinterest-couple' : 'PASS1-pinterest'
+        'ФИНАЛ: лицо с IDENTITY, сцена из текста. Один фотореалистичный кадр.'
       );
 
-      // --- MASK reference faces/hair at 1K ---
+      const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-pinterest');
+      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-pinterest');
+
+      // --- 3) MASK reference faces/hair at 1K ---
       await supabaseAdmin
         .from('generation_jobs')
         .update({
-          progress: 58,
-          current_step_message: pinTwoPeople
-            ? 'Pinterest 2/4: маска обоих лиц на референсе...'
-            : 'Pinterest 2/4: маска лица/волос на референсе...'
+          progress: 60,
+          current_step_message: 'Pinterest 2/4: маска лиц/волос на референсе (1K)...'
         })
         .eq('id', jobId);
 
       const maskInput: any[] = [];
-      {
-        const maskBody = await requirePrompt(
-          pinTwoPeople ? 'mask_pinterest_couple' : 'mask_pinterest'
-        );
-        pushText(maskInput, maskBody);
-      }
+      pushText(
+        maskInput,
+        [
+          'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
+          'Полностью закрась (сплошной нейтральной заливкой, например светло-серой) ВСЕ лица и ВСЕ волосы всех людей на кадре.',
+          'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
+          'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.'
+        ].join('\n')
+      );
       pushText(maskInput, 'ИСХОДНЫЙ РЕФЕРЕНС:');
       await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
+      pushText(maskInput, 'ФИНАЛ: тот же кадр, лица и волосы замазаны.');
 
-      const maskPass = await runImagePass(
-        maskInput,
-        '1K',
-        pinTwoPeople ? 'MASK-pinterest-couple' : 'MASK-pinterest'
-      );
+      const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
 
-      // --- PASS2 composite at user quality ---
+      // --- 4) PASS2 composite at user quality ---
       await supabaseAdmin
         .from('generation_jobs')
         .update({
           progress: 78,
-          current_step_message: pinTwoPeople
-            ? 'Pinterest 3/4: композит двух голов + маска...'
-            : 'Pinterest 3/4: композит маска + PASS1...'
+          current_step_message: 'Pinterest 3/4: композит маска + PASS1...'
         })
         .eq('id', jobId);
 
       const pass2Input: any[] = [];
-      if (pinTwoPeople) {
-        const p2 = await requirePrompt('pass2_pinterest_couple');
-        pushText(pass2Input, p2);
-      } else {
-        const p2 = await requirePrompt('pass2_pinterest');
+      {
+        const p2 = await promptOrFallback(
+          'pass2_pinterest',
+          [
+            'Image 1 — СЦЕНА с маской на лице/волосах (референс).',
+            'Image 2 — IDENTITY / результат прохода с лицом пользователя.',
+            'Сцену с Image 1 сохрани. Голову(ы) возьми с Image 2.',
+            'Выражение: {{expression}}.',
+            '{{avoid}}'
+          ].join('\n')
+        );
         pushText(pass2Input, p2);
       }
-      pushText(
-        pass2Input,
-        pinTwoPeople
-          ? 'IMAGE 1 — SCENE (оба лица и волосы под маской):'
-          : 'IMAGE 1 — SCENE (лица и волосы под маской):'
-      );
+      pushText(pass2Input, 'IMAGE 1 — SCENE (лица и волосы под маской):');
       pass2Input.push({
         type: 'image',
         mime_type: maskPass.mimeType || 'image/jpeg',
         data: maskPass.data
       });
-      pushText(
-        pass2Input,
-        pinTwoPeople
-          ? 'IMAGE 2 — TWO HEADS / IDENTITY A+B (результат PASS1):'
-          : 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):'
-      );
+      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/jpeg',
         data: pass1.data
       });
-      const pass2 = await runImagePass(
+      pushText(
         pass2Input,
-        imageQuality,
-        pinTwoPeople ? 'PASS2-pinterest-couple' : 'PASS2-pinterest'
+        'ФИНАЛ: голова(ы) с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр.'
       );
+
+      const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
       imageBase64Data = pass2.data;
       mimeType = pass2.mimeType;
     } else {
@@ -1079,6 +1215,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       } else if (effectiveMode === 'refine') {
         pushText(interactionInput, 'PHOTO TO EDIT (base image):');
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'refine base');
+        pushText(interactionInput, 'Apply the USER INSTRUCTION only. Output one edited photorealistic image.');
       } else if (effectiveMode === 'couple') {
         pushText(interactionInput, 'IDENTITY A (LEFT) — face source for the person on the LEFT:');
         await pushImageFromUrl(interactionInput, userPhotoUrl);
@@ -1099,6 +1236,15 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         }
       }
 
+      pushText(
+        interactionInput,
+        effectiveMode === 'enhance'
+          ? 'Output an enhanced version of the same photo.'
+          : effectiveMode === 'refine'
+            ? 'Output one edited photorealistic image following the USER INSTRUCTION.'
+            : 'FINAL: Face from IDENTITY photos only. Scene from the SCENE text only. No other face.'
+      );
+
       const imageSize: '1K' | '2K' | '4K' = imageQuality;
       const single = await runImagePass(interactionInput, imageSize, 'SINGLE');
       imageBase64Data = single.data;
@@ -1109,70 +1255,72 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       throw new Error('Model did not return image data.');
     }
 
-    // 6. Save generated image to private Supabase Storage bucket 'generated-images'
+        // 6. Save FINAL image to private bucket 'generated-images'
+    // Path convention used by GET /api/generations: `${userId}/${jobId}.jpg`
     const storagePath = `${userId}/${jobId}.jpg`;
     const imageBuffer = Buffer.from(imageBase64Data, 'base64');
-    const uploadMime = (mimeType || 'image/jpeg').split(';')[0].trim() || 'image/jpeg';
 
     const { error: storageError } = await supabaseAdmin.storage
       .from('generated-images')
       .upload(storagePath, imageBuffer, {
-        contentType: uploadMime,
+        contentType: mimeType || 'image/jpeg',
         upsert: true
       });
 
-    if (storageError) {
-      console.error('[generate] storage upload failed', storageError);
-      throw storageError;
-    }
+    if (storageError) throw storageError;
     console.log('[generate] saved', storagePath, 'bytes', imageBuffer.length);
 
-    // 7. Insert record in generated_images table (ignore duplicate if re-run)
-    const { error: giError } = await supabaseAdmin
-      .from('generated_images')
-      .upsert(
-        {
-          job_id: jobId,
-          user_id: userId,
-          storage_path: storagePath,
-          mime_type: uploadMime
-        },
-        { onConflict: 'job_id' }
-      );
-    if (giError) {
-      console.warn('[generate] generated_images upsert', giError.message || giError);
-      // still continue — file is in storage, job path is enough for gallery
+    // 7. generated_images row — optional metadata; must NOT fail the job
+    try {
+      const { error: giErr } = await supabaseAdmin.from('generated_images').insert({
+        job_id: jobId,
+        user_id: userId,
+        storage_path: storagePath,
+        mime_type: mimeType || 'image/jpeg'
+      });
+      if (giErr) {
+        console.warn('[generate] generated_images insert:', giErr.message || giErr);
+      }
+    } catch (e: any) {
+      console.warn('[generate] generated_images insert exception:', e?.message || e);
     }
 
-    // 8. Update job to completed (persist storage path so DELETE can clean the bucket)
-    const { error: jobUpdErr } = await supabaseAdmin
+    // 8. Mark job completed — only columns that exist in production schema
+    // (result_storage_path may be missing until migration; never block completion)
+    const completedPayload: Record<string, unknown> = {
+      status: 'completed',
+      progress: 100,
+      current_step_message: 'Portret finalizat cu succes!',
+      completed_at: new Date().toISOString()
+    };
+    // Try with optional path columns; fall back without them if PostgREST schema cache rejects
+    let jobUpdate = await supabaseAdmin
       .from('generation_jobs')
-      .update({
-        status: 'completed',
-        progress: 100,
-        current_step_message: 'Portret finalizat cu succes!',
-        completed_at: new Date().toISOString(),
-        result_storage_path: storagePath
-      })
+      .update({ ...completedPayload, result_storage_path: storagePath })
       .eq('id', jobId);
-    if (jobUpdErr) {
-      console.error('[generate] job complete update failed', jobUpdErr);
-      throw jobUpdErr;
+    if (jobUpdate.error) {
+      console.warn('[generate] job complete with result_storage_path failed:', jobUpdate.error.message);
+      jobUpdate = await supabaseAdmin
+        .from('generation_jobs')
+        .update(completedPayload)
+        .eq('id', jobId);
+      if (jobUpdate.error) {
+        console.error('[generate] job complete update failed', jobUpdate.error);
+        // File is already in storage; still return success URL so client/gallery can show it
+      }
     }
 
-    // 9. Generate secure signed URL for frontend
-    const { data: signedData, error: signErr } = await supabaseAdmin.storage
+    // 9. Signed URL for frontend
+    const { data: signedData } = await supabaseAdmin.storage
       .from('generated-images')
       .createSignedUrl(storagePath, 7200);
-    if (signErr) {
-      console.error('[generate] signed URL failed', signErr);
-    }
 
     return res.json({
       jobId,
       status: 'completed',
       resultImageUrl: signedData?.signedUrl || '',
-      newBalance
+      newBalance,
+      pass1ImageUrl: pass1SignedUrl || undefined
     });
 
   } catch (genErr: any) {
@@ -1258,16 +1406,22 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     const jobsWithSignedUrls = await Promise.all(
       (jobs || []).map(async (job) => {
         let resultImageUrl: string | undefined = undefined;
-        if (job.status === 'completed') {
-          const storagePath =
-            job.result_storage_path || `${job.user_id}/${job.id}.jpg`;
-          const { data: signed, error: signErr } = await supabaseAdmin.storage
+        let pass1ImageUrl: string | undefined = undefined;
+        // Always try final path if status completed OR file may exist after partial success
+        const storagePath = `${job.user_id}/${job.id}.jpg`;
+        const pass1Path = `${job.user_id}/${job.id}_pass1.jpg`;
+        if (job.status === 'completed' || job.status === 'failed') {
+          const { data: signed } = await supabaseAdmin.storage
             .from('generated-images')
             .createSignedUrl(storagePath, 3600);
-          if (signErr) {
-            console.warn('[generations] sign fail', job.id, signErr.message || signErr);
-          }
-          resultImageUrl = signed?.signedUrl;
+          if (signed?.signedUrl) resultImageUrl = signed.signedUrl;
+        }
+        if (job.status === 'completed') {
+          const { data: signedP1 } = await supabaseAdmin.storage
+            .from('generated-images')
+            .createSignedUrl(pass1Path, 3600);
+          // only expose if object exists (signed URL may still be returned for missing — client 404 handles)
+          pass1ImageUrl = signedP1?.signedUrl;
         }
 
         return {
@@ -1282,6 +1436,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           progress: job.progress,
           currentStepMessage: job.current_step_message,
           resultImageUrl,
+          pass1ImageUrl,
           errorMessage: job.error_message,
           providerId: job.provider_id,
           photoCost: job.photo_cost,
