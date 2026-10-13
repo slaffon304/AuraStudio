@@ -1405,7 +1405,6 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
     if (error) throw error;
 
-    const SIGNED_TTL = 60 * 60 * 24 * 7;
     const refreshBeforeMs = 60 * 60 * 1000; // refresh if < 1h left
 
     const jobsOut = await Promise.all(
