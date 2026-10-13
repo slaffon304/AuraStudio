@@ -229,12 +229,12 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       disclaimer: 'Rezultatul poate diferi ușor de referință.',
       tipTitle: 'Cum obții fotografia ideală?',
       tipBody: 'Apasă aici — de fotografiile de start depinde rezultatul',
-      photoYou: 'Fotografia ta',
-      photoPartner: 'Fotografia partenerului/ei',
+      photoYou: 'Tu',
+      photoPartner: 'Partener',
       upload: 'Încarcă foto',
-      age: 'Vârsta',
+      age: 'Vârstă',
       ageYou: 'Vârsta ta',
-      agePartner: 'Vârsta partenerului/ei',
+      agePartner: 'Vârstă partener',
       ratio: 'Format foto',
       needPhoto: 'Mai întâi încarcă o fotografie',
       generate: (n: number) => `Generează · ${n} foto`,
@@ -266,8 +266,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       disclaimer: 'Обратите внимание, итог может немного отличаться от референса.',
       tipTitle: 'Как получить идеальное фото?',
       tipBody: 'Нажми сюда — от исходных фото зависит результат',
-      photoYou: 'Твоё фото',
-      photoPartner: 'Фото партнёра',
+      photoYou: 'Ты',
+      photoPartner: 'Партнёр',
       upload: 'Загрузить фото',
       age: 'Возраст',
       ageYou: 'Твой возраст',
@@ -303,8 +303,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       disclaimer: 'Note: the result may differ slightly from the reference.',
       tipTitle: 'How to get the ideal photo?',
       tipBody: 'Tap here — source photos determine the result',
-      photoYou: 'Your photo',
-      photoPartner: 'Partner photo',
+      photoYou: 'You',
+      photoPartner: 'Partner',
       upload: 'Upload photo',
       age: 'Age',
       ageYou: 'Your age',
@@ -849,10 +849,10 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   // ─── PINTEREST MODE ───────────────────────────────────────────
   if (studioMode === 'pinterest') {
     const canGen = Boolean(refUrl && photos1[0]);
-    const cost = 1;
+    const pinCost = resultQuality === '4k' ? 2 : 1;
     const handlePinGen = async () => {
       if (!currentUser) { setIsAuthModalOpen(true); return; }
-      if (!refUrl) { setErrorMessage(language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first'); return; }
+      if (!refUrl) { setErrorMessage(language === 'ru' ? 'Сначала загрузи референс' : language === 'en' ? 'Upload reference first' : 'Încarcă mai întâi referința'); return; }
       if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
       if (pinHasSecond && !photos2[0]) {
         setErrorMessage(
@@ -864,7 +864,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         );
         return;
       }
-      if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
+      if ((currentUser.photoBalance ?? 0) < pinCost) { setIsPhotoModalOpen(true); return; }
       setIsGenerating(true);
       setStepText(t.progressStepAnalyze);
       setErrorMessage(null);
@@ -880,7 +880,9 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           extraPhotoUrls: photos1.slice(1).map((x) => x.url),
           partnerPhotoUrl: pinHasSecond && photos2[0] ? photos2[0].url : undefined,
           partnerExtraPhotoUrls:
-            pinHasSecond && photos2.length > 1 ? photos2.slice(1).map((x) => x.url) : undefined
+            pinHasSecond && photos2.length > 1 ? photos2.slice(1).map((x) => x.url) : undefined,
+          quality: (resultQuality === '4k' ? '4K' : resultQuality === '1k' ? '1K' : '2K') as any,
+          quality4k: resultQuality === '4k'
         } as any);
         setResultUrl(job.resultImageUrl || null);
         setStepText(t.completed);
@@ -1064,18 +1066,35 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             <span className="text-slate-400 text-lg">›</span>
           </button>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 grid grid-cols-3 gap-2">
             <div>
-              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Рост · опц.' : 'Height · opt.'}</p>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Возраст' : language === 'en' ? 'Age' : 'Vârstă'}</p>
               <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
-                <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="165" />
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={age1}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAge1(v === '' ? '' : Number(v));
+                  }}
+                  className="w-full py-3 text-sm outline-none bg-transparent text-center font-semibold text-slate-800 dark:text-white"
+                  placeholder="—"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Рост · опц.' : language === 'en' ? 'Height · opt.' : 'Înălțime · opț.'}</p>
+              <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
+                <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent text-center text-slate-800 dark:text-white" placeholder="165" />
                 <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'см' : 'cm'}</span>
               </div>
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase text-slate-400 mb-1.5">{language === 'ru' ? 'Вес · опц.' : language === 'en' ? 'Weight · opt.' : 'Greutate · opț.'}</p>
               <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-3 dark:bg-white/5 dark:border-white/10">
-                <input value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent" placeholder="48" />
+                <input value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/\D/g, ''))} className="w-full py-3 text-sm outline-none bg-transparent text-center text-slate-800 dark:text-white" placeholder="48" />
                 <span className="text-xs text-slate-400 font-semibold">{language === 'ru' ? 'кг' : 'kg'}</span>
               </div>
             </div>
@@ -1117,14 +1136,67 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               )}
             </div>
           )}
-<button
+          {/* Quality selector for Pinterest */}
+          <div className="mt-5">
+            {currentUser && (
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  {copy.balance}: <strong className="text-slate-800 dark:text-slate-100">{balance} {language === 'en' ? 'photo' : 'фото'}</strong>
+                </span>
+                {balance < pinCost && (
+                  <button type="button" onClick={() => setIsPhotoModalOpen(true)} className="text-violet-600 font-semibold underline">
+                    {copy.topUp}
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setResultQuality('1k')}
+                className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                  resultQuality === '1k'
+                    ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 ring-1 ring-violet-500'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'
+                }`}
+              >
+                1K · 1 {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultQuality('2k')}
+                className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                  resultQuality === '2k'
+                    ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 ring-1 ring-violet-500'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'
+                }`}
+              >
+                2K · 1 {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultQuality('4k')}
+                className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                  resultQuality === '4k'
+                    ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 ring-1 ring-violet-500'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'
+                }`}
+              >
+                4K · 2 {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+              </button>
+            </div>
+          </div>
+
+          <button
             type="button"
             onClick={handlePinGen}
             disabled={isUploading || isGenerating}
-            className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white bg-violet-400 disabled:bg-violet-300"
+            className={`mt-2 w-full rounded-2xl py-3.5 text-sm font-bold text-white transition ${
+              !canGen ? 'bg-violet-400/80 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700 active:scale-[0.99] shadow-lg shadow-violet-500/25'
+            }`}
           >
             {!refUrl
-              ? (language === 'ru' ? 'Сначала загрузи референс' : 'Upload reference first')
+              ? (language === 'ru' ? 'Сначала загрузи референс' : language === 'en' ? 'Upload reference first' : 'Încarcă mai întâi referința')
               : !photos1[0]
                 ? copy.needPhoto
                 : pinHasSecond && !photos2[0]
@@ -1133,10 +1205,14 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                       : language === 'en'
                         ? 'Upload second person photo'
                         : 'Încarcă foto al doilea personaj')
-                  : (language === 'ru' ? `Сгенерировать · ${cost} фото` : `Generate · ${cost} photo`)}
+                  : (language === 'ru' ? `Сгенерировать · ${pinCost} фото` : language === 'en' ? `Generate · ${pinCost} photo${pinCost > 1 ? 's' : ''}` : `Generează · ${pinCost} foto`)}
           </button>
           <p className="mt-2 text-center text-[11px] text-slate-400">
-            {language === 'ru' ? 'формат наследуется с референса · 1 фото с баланса' : 'format follows reference · 1 photo from balance'}
+            {language === 'ru'
+              ? `формат наследуется с референса · ${pinCost} фото с баланса`
+              : language === 'en'
+                ? `format follows reference · ${pinCost} photo${pinCost > 1 ? 's' : ''} from balance`
+                : `formatul este preluat din referință · ${pinCost} foto din balanță`}
           </p>
         </div>
 
@@ -1637,25 +1713,70 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
         {/* Age — one or two */}
         {slots === 2 ? (
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.ageYou}</p>
+          <div className="mt-5 grid grid-cols-2 gap-4 items-start">
+            <div className="flex flex-col">
+              <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
+                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight line-clamp-2">
+                  {copy.ageYou}
+                </p>
+              </div>
               <div className="flex justify-center">
-                <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={age1}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAge1(v === '' ? '' : Number(v));
+                  }}
+                  placeholder="—"
+                  className="w-24 rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400"
+                />
               </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.agePartner}</p>
+            <div className="flex flex-col">
+              <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
+                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight line-clamp-2">
+                  {copy.agePartner}
+                </p>
+              </div>
               <div className="flex justify-center">
-                <input type="number" min={1} max={120} value={age2} onChange={(e) => { const v = e.target.value; setAge2(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={age2}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAge2(v === '' ? '' : Number(v));
+                  }}
+                  placeholder="—"
+                  className="w-24 rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400"
+                />
               </div>
             </div>
           </div>
         ) : (
           <div className="mt-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{copy.age}</p>
+            <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight">
+                {copy.age}
+              </p>
+            </div>
             <div className="flex justify-center">
-              <input type="number" min={1} max={120} value={age1} onChange={(e) => { const v = e.target.value; setAge1(v === '' ? '' : Number(v)); }} className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400" />
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={age1}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAge1(v === '' ? '' : Number(v));
+                }}
+                placeholder="—"
+                className="w-[96px] rounded-2xl bg-slate-100 dark:bg-white/10 border-0 px-3 py-2.5 text-base font-semibold text-center outline-none focus:ring-2 focus:ring-violet-400"
+              />
             </div>
           </div>
         )}
@@ -2001,23 +2122,37 @@ function FaceSlot({
   onClick: () => void;
 }) {
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 text-center">{label}</p>
-      {photos[0] ? (
-        <button type="button" onClick={onClick} className="relative w-full aspect-square rounded-2xl overflow-hidden border border-slate-200">
-          <img src={photos[0].url} alt="" className="h-full w-full object-cover" />
-          {photos.length > 1 && (
-            <span className="absolute bottom-2 right-2 rounded-full bg-black/70 text-white text-[10px] font-bold px-2 py-0.5">
-              +{photos.length - 1}
-            </span>
-          )}
-        </button>
-      ) : (
-        <button type="button" onClick={onClick} className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-500">
-          <Upload className="h-6 w-6" />
-          <span className="text-sm font-semibold">{uploadLabel}</span>
-        </button>
-      )}
+    <div className="flex flex-col h-full">
+      <div className="h-10 flex items-center justify-center text-center px-1 mb-2">
+        <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight line-clamp-2">
+          {label}
+        </p>
+      </div>
+      <div className="flex-1 w-full">
+        {photos[0] ? (
+          <button
+            type="button"
+            onClick={onClick}
+            className="relative w-full aspect-square rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm"
+          >
+            <img src={photos[0].url} alt="" className="h-full w-full object-cover" />
+            {photos.length > 1 && (
+              <span className="absolute bottom-2 right-2 rounded-full bg-black/70 text-white text-[10px] font-bold px-2 py-0.5">
+                +{photos.length - 1}
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onClick}
+            className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-white/5 flex flex-col items-center justify-center gap-2 text-slate-500 hover:border-violet-400 hover:bg-violet-50/50 transition-colors"
+          >
+            <Upload className="h-6 w-6 text-slate-400" />
+            <span className="text-sm font-semibold">{uploadLabel}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

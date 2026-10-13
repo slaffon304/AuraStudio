@@ -61,7 +61,7 @@ export class StandardPaymentGateway implements IPaymentProvider {
     };
   }
 
-  async verifyPayment(): Promise<PaymentVerificationResult> {
+  async verifyPayment(_transactionId?: string): Promise<PaymentVerificationResult> {
     if (!this.isConfigured()) {
       return {
         isSuccess: false,
@@ -76,7 +76,7 @@ export class StandardPaymentGateway implements IPaymentProvider {
     };
   }
 
-  async handleWebhook(): Promise<{ handled: boolean; error?: string }> {
+  async handleWebhook(_payload?: any, _signature?: string): Promise<{ handled: boolean; error?: string }> {
     return { handled: false, error: 'Payment gateway webhook not configured.' };
   }
 }

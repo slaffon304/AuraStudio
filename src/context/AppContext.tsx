@@ -267,12 +267,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await authFetch('/api/me');
       if (res.ok) {
         const profile = await res.json();
-        if (profile) {
+        if (profile && profile.id) {
           const preferredCurrency = (profile.preferred_currency || 'MDL') as Currency;
           const preferredLanguage = (profile.preferred_language || 'ro') as Language;
           setCurrentUser({
             id: profile.id,
-            name: profile.name,
+            name: profile.name || (profile.email || 'User').split('@')[0],
             email: profile.email,
             avatar: profile.avatar_url || '',
             role: profile.role,
@@ -288,7 +288,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Language: localStorage wins. Only apply profile language if user never chose one locally.
           const localLang = localStorage.getItem('aurastudio_lang');
           if (localLang === 'ro' || localLang === 'ru' || localLang === 'en') {
-            // keep local choice; optionally sync to profile if mismatch
             if (preferredLanguage !== localLang && profile.id) {
               supabase
                 .from('profiles')
@@ -300,80 +299,192 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setLanguageState(preferredLanguage);
             localStorage.setItem('aurastudio_lang', preferredLanguage);
           }
+          return;
         }
       }
     } catch (err) {
       console.warn('Notice: Could not load user profile from server:', err);
     }
 
-    // If still no currentUser but JWT is valid — minimal profile so UI treats user as logged in
-    const { data: userData } = await supabase.auth.getUser();
-    const u = userData?.user;
-    if (u) {
-      setCurrentUser((prev) => prev || {
-        id: u.id,
-        name: (u.user_metadata?.name as string) || (u.email || 'User').split('@')[0],
-        email: u.email || '',
-        avatar: (u.user_metadata?.avatar_url as string) || '',
-        role: 'user',
-        photoBalance: 0,
-        preferredLanguage: language,
-        preferredCurrency: currency,
-        country: 'Moldova',
-        createdAt: u.created_at || new Date().toISOString()
-      });
+    // Direct Supabase fallback if server /api/me returned error
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const u = userData?.user;
+      if (u) {
+        const { data: directProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', u.id)
+          .single();
+
+        if (directProfile) {
+          const prefCurr = (directProfile.preferred_currency || currency) as Currency;
+          const prefLang = (directProfile.preferred_language || language) as Language;
+          setCurrentUser({
+            id: directProfile.id,
+            name: directProfile.name || (directProfile.email || 'User').split('@')[0],
+            email: directProfile.email,
+            avatar: directProfile.avatar_url || '',
+            role: directProfile.role,
+            photoBalance: directProfile.photo_balance ?? directProfile.credit_balance ?? 0,
+            preferredLanguage: prefLang,
+            preferredCurrency: prefCurr,
+            country: directProfile.country || 'Moldova',
+            createdAt: directProfile.created_at || u.created_at || new Date().toISOString()
+          });
+          return;
+        }
+
+        setCurrentUser((prev) => prev || {
+          id: u.id,
+          name: (u.user_metadata?.name as string) || (u.email || 'User').split('@')[0],
+          email: u.email || '',
+          avatar: (u.user_metadata?.avatar_url as string) || '',
+          role: 'user',
+          photoBalance: 0,
+          preferredLanguage: language,
+          preferredCurrency: currency,
+          country: 'Moldova',
+          createdAt: u.created_at || new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('Notice: Could not load direct Supabase profile:', err);
     }
   }, [authToken, authFetch, language, currency]);
 
   // Fetch User Photos from Storage / DB
   const fetchUserPhotos = useCallback(async () => {
-    if (!authToken) {
+    if (!authToken && !session?.user?.id) {
       setUserPhotos([]);
       return;
     }
+    const uid = session?.user?.id;
     try {
       const res = await authFetch('/api/photos');
       if (res.ok) {
         const photos = await res.json();
-        if (Array.isArray(photos)) {
+        if (Array.isArray(photos) && photos.length > 0) {
           setUserPhotos(photos);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Notice: Could not fetch user photos:', err);
+      console.warn('Notice: Could not fetch user photos from server:', err);
     }
-  }, [authToken, authFetch]);
+
+    // Direct Supabase fallback
+    if (uid) {
+      try {
+        const { data: dbPhotos } = await supabase
+          .from('user_photos')
+          .select('*')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false });
+
+        if (Array.isArray(dbPhotos) && dbPhotos.length > 0) {
+          const mapped = dbPhotos.map((photo: any) => {
+            const { data: pubData } = supabase.storage
+              .from('user-photos')
+              .getPublicUrl(photo.storage_path);
+            return {
+              id: photo.id,
+              userId: photo.user_id,
+              url: pubData?.publicUrl || '',
+              filename: photo.filename,
+              uploadedAt: photo.created_at,
+              storagePath: photo.storage_path
+            };
+          });
+          setUserPhotos(mapped);
+        }
+      } catch (err) {
+        console.warn('Notice: Direct user photos query failed:', err);
+      }
+    }
+  }, [authToken, authFetch, session?.user?.id]);
 
   // Fetch Generation Jobs
   const fetchJobs = useCallback(async () => {
-    if (!authToken) {
+    if (!authToken && !session?.user?.id) {
       setJobs([]);
       return;
     }
+    const uid = session?.user?.id;
     try {
       const res = await authFetch('/api/generations');
       if (res.ok) {
         const dbJobs = await res.json();
-        if (Array.isArray(dbJobs)) {
+        if (Array.isArray(dbJobs) && dbJobs.length > 0) {
           setJobs(dbJobs);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Notice: Could not fetch generation jobs:', err);
+      console.warn('Notice: Could not fetch generation jobs from server:', err);
     }
-  }, [authToken, authFetch]);
+
+    // Direct Supabase fallback
+    if (uid) {
+      try {
+        const { data: dbJobs } = await supabase
+          .from('generation_jobs')
+          .select('*, templates(name_ro, preview_image_url)')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false });
+
+        if (Array.isArray(dbJobs) && dbJobs.length > 0) {
+          const mapped = dbJobs.map((job: any) => {
+            const storagePath =
+              job.result_storage_path ||
+              (job.status === 'completed' ? `${job.user_id}/${job.id}.jpg` : null);
+            let resultImageUrl = job.result_signed_url as string | undefined;
+            if (!resultImageUrl && storagePath) {
+              const { data: pubData } = supabase.storage
+                .from('generated-images')
+                .getPublicUrl(storagePath);
+              resultImageUrl = pubData?.publicUrl;
+            }
+            return {
+              id: job.id,
+              userId: job.user_id,
+              templateId: job.template_id,
+              templateName: job.templates?.name_ro || 'Șablon',
+              templatePreview: job.templates?.preview_image_url || '',
+              userPhotoId: job.user_photo_id || '',
+              userPhotoUrl: '',
+              status: job.status,
+              progress: job.progress,
+              currentStepMessage: job.current_step_message,
+              resultImageUrl,
+              aspectRatio: job.aspect_ratio || '1:1',
+              createdAt: job.created_at,
+              errorMessage: job.error_message,
+              providerId: job.provider_id || 'gemini',
+              providerName: 'Google Gemini',
+              photoCost: job.photo_cost ?? 1
+            };
+          });
+          setJobs(mapped);
+        }
+      } catch (err) {
+        console.warn('Notice: Direct jobs query failed:', err);
+      }
+    }
+  }, [authToken, authFetch, session?.user?.id]);
 
   // Fetch Transactions
   const fetchTransactions = useCallback(async () => {
-    if (!authToken) {
+    if (!authToken && !session?.user?.id) {
       setPhotoTransactions([]);
       return;
     }
+    const uid = session?.user?.id;
     try {
       const res = await authFetch('/api/photo-transactions');
       if (res.ok) {
         const txs = await res.json();
-        if (Array.isArray(txs)) {
+        if (Array.isArray(txs) && txs.length > 0) {
           setPhotoTransactions(
             txs.map((t: any) => ({
               id: t.id,
@@ -386,12 +497,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               createdAt: t.created_at
             }))
           );
+          return;
         }
       }
     } catch (err) {
-      console.warn('Notice: Could not fetch photo transactions:', err);
+      console.warn('Notice: Could not fetch photo transactions from server:', err);
     }
-  }, [authToken, authFetch]);
+
+    if (uid) {
+      try {
+        const { data: dbTxs } = await supabase
+          .from('photo_transactions')
+          .select('*')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false });
+
+        if (Array.isArray(dbTxs) && dbTxs.length > 0) {
+          setPhotoTransactions(
+            dbTxs.map((t: any) => ({
+              id: t.id,
+              userId: t.user_id,
+              type: t.type,
+              amount: t.amount,
+              balanceAfter: t.balance_after,
+              description: t.description,
+              referenceId: t.reference_id,
+              createdAt: t.created_at
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('Notice: Direct transactions query failed:', err);
+      }
+    }
+  }, [authToken, authFetch, session?.user?.id]);
 
   // Load Admin Data (If admin)
   const fetchAdminData = useCallback(async () => {
@@ -532,7 +671,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string,
     name: string,
     country: string = 'MDL'
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }> => {
     if (!isBackendConnected) {
       return {
         success: false,
@@ -724,7 +863,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (currentUser.photoBalance < cost) {
       setIsPhotoModalOpen(true);
-      throw new Error(t.insufficientPhotos || t.insufficientCredits || 'Foto insuficiente');
+      throw new Error((t as any).insufficientPhotos || (t as any).insufficientCredits || 'Foto insuficiente');
     }
 
     // Call secure backend endpoint

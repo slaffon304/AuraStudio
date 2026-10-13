@@ -10,9 +10,10 @@ import {
   isServerSupabaseConfigured,
   AuthenticatedUser
 } from './src/lib/supabase-server.js';
+import { pool } from './src/lib/db.js';
 import { paymentGateway } from './src/services/payments/index.js';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -128,18 +129,93 @@ app.get('/api/photo-packages', async (req, res) => {
 // Get current profile
 app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   try {
+    try {
+      const { rows } = await pool.query(
+        'SELECT id, email, name, avatar_url, role, photo_balance, credit_balance, country, preferred_language, preferred_currency, created_at FROM public.profiles WHERE id = $1',
+        [req.user!.id]
+      );
+      if (rows && rows.length > 0) {
+        const p = rows[0];
+        return res.json({
+          id: p.id,
+          email: p.email || req.user!.email,
+          name: p.name || (p.email || 'User').split('@')[0],
+          avatar_url: p.avatar_url || '',
+          role: p.role || 'user',
+          photo_balance: p.photo_balance ?? p.credit_balance ?? 0,
+          credit_balance: p.photo_balance ?? p.credit_balance ?? 0,
+          country: p.country || 'Moldova',
+          preferred_language: p.preferred_language || 'ru',
+          preferred_currency: p.preferred_currency || 'EUR',
+          created_at: p.created_at
+        });
+      }
+    } catch (dbErr) {
+      console.warn('[api/me] direct db query failed, falling back to supabaseAdmin:', dbErr);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', req.user!.id)
       .single();
 
-    if (error) throw error;
+    if (error || !data) {
+      return res.json({
+        id: req.user!.id,
+        email: req.user!.email,
+        role: req.user!.role,
+        photo_balance: req.user!.creditBalance,
+        credit_balance: req.user!.creditBalance,
+        country: 'Moldova',
+        preferred_language: 'ru',
+        preferred_currency: 'EUR'
+      });
+    }
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Uploads a buffer to Supabase Storage with automatic retry and exponential backoff.
+ */
+async function uploadToStorageWithRetry(
+  bucket: string,
+  storagePath: string,
+  buffer: Buffer,
+  contentType: string,
+  maxRetries = 3
+): Promise<{ success: boolean; error?: string }> {
+  let lastError = '';
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { error } = await supabaseAdmin.storage
+        .from(bucket)
+        .upload(storagePath, buffer, {
+          contentType: contentType || 'image/jpeg',
+          upsert: true
+        });
+
+      if (!error) {
+        console.log(`[storage] Successfully uploaded ${storagePath} to ${bucket} on attempt ${attempt}`);
+        return { success: true };
+      }
+      lastError = error.message;
+      console.warn(`[storage] Upload attempt ${attempt}/${maxRetries} failed for ${storagePath}: ${error.message}`);
+    } catch (err: any) {
+      lastError = err?.message || String(err);
+      console.warn(`[storage] Upload attempt ${attempt}/${maxRetries} exception for ${storagePath}: ${lastError}`);
+    }
+
+    if (attempt < maxRetries) {
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
+
+  return { success: false, error: lastError };
+}
 
 // Upload a user photo (to 'user-photos' storage bucket)
 app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
@@ -157,39 +233,65 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
     const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // 1. Upload to Supabase Storage 'user-photos' bucket
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('user-photos')
-      .upload(storagePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-      });
+    // 1. Upload to Supabase Storage 'user-photos' bucket with retry
+    const uploadRes = await uploadToStorageWithRetry(
+      'user-photos',
+      storagePath,
+      buffer,
+      'image/jpeg',
+      3
+    );
 
-    if (uploadError) throw uploadError;
+    if (!uploadRes.success) {
+      throw new Error(uploadRes.error || 'Upload error');
+    }
 
     // 2. Insert metadata record in user_photos
-    const { data: record, error: dbError } = await supabaseAdmin
-      .from('user_photos')
-      .insert({
-        user_id: userId,
-        storage_path: storagePath,
-        filename: filename || 'my_photo.jpg',
-        mime_type: 'image/jpeg',
-        file_size: buffer.length
-      })
-      .select('*')
-      .single();
+    let record: any = null;
+    try {
+      const { data, error: dbError } = await supabaseAdmin
+        .from('user_photos')
+        .insert({
+          user_id: userId,
+          storage_path: storagePath,
+          filename: filename || 'my_photo.jpg',
+          mime_type: 'image/jpeg',
+          file_size: buffer.length
+        })
+        .select('*')
+        .single();
 
-    if (dbError) throw dbError;
+      if (!dbError && data) {
+        record = data;
+      }
+    } catch {}
 
-    // 3. Create signed URL for frontend display
-    const { data: signedData } = await supabaseAdmin.storage
-      .from('user-photos')
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (!record) {
+      const { rows } = await pool.query(
+        'INSERT INTO public.user_photos (user_id, storage_path, filename, mime_type, file_size) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [userId, storagePath, filename || 'my_photo.jpg', 'image/jpeg', buffer.length]
+      );
+      record = rows[0];
+    }
+
+    // 3. Create URL for frontend display
+    let url = '';
+    try {
+      const { data: signedData } = await supabaseAdmin.storage
+        .from('user-photos')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+      url = signedData?.signedUrl || '';
+    } catch {}
+    if (!url) {
+      const { data: pubData } = supabaseAdmin.storage
+        .from('user-photos')
+        .getPublicUrl(storagePath);
+      url = pubData.publicUrl;
+    }
 
     res.json({
       ...record,
-      url: signedData?.signedUrl || ''
+      url
     });
   } catch (err: any) {
     console.error('Error uploading photo:', err);
@@ -200,24 +302,44 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
 // List user photos
 app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { data: photos, error } = await supabaseAdmin
-      .from('user_photos')
-      .select('*')
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
+    let photos: any[] = [];
+    try {
+      const { rows } = await pool.query(
+        'SELECT * FROM public.user_photos WHERE user_id = $1 ORDER BY created_at DESC',
+        [req.user!.id]
+      );
+      photos = rows || [];
+    } catch (dbErr) {
+      console.warn('[api/photos] direct db query failed, falling back to supabaseAdmin:', dbErr);
+      const { data, error } = await supabaseAdmin
+        .from('user_photos')
+        .select('*')
+        .eq('user_id', req.user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      photos = data || [];
+    }
 
-    if (error) throw error;
-
-    // Generate signed URLs for private images
+    // Generate URLs for images
     const photosWithUrls = await Promise.all(
-      (photos || []).map(async (photo) => {
-        const { data: signedData } = await supabaseAdmin.storage
-          .from('user-photos')
-          .createSignedUrl(photo.storage_path, 60 * 60 * 24 * 7);
+      photos.map(async (photo) => {
+        let url = '';
+        try {
+          const { data: signedData } = await supabaseAdmin.storage
+            .from('user-photos')
+            .createSignedUrl(photo.storage_path, 60 * 60 * 24 * 7);
+          url = signedData?.signedUrl || '';
+        } catch {}
+        if (!url) {
+          const { data: pubData } = supabaseAdmin.storage
+            .from('user-photos')
+            .getPublicUrl(photo.storage_path);
+          url = pubData.publicUrl;
+        }
         return {
           id: photo.id,
           userId: photo.user_id,
-          url: signedData?.signedUrl || '',
+          url,
           filename: photo.filename,
           uploadedAt: photo.created_at,
           storagePath: photo.storage_path
@@ -519,36 +641,10 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     let pass1Mime = 'image/jpeg';
     let pass1SignedUrl: string | null = null;
 
-    async function savePass1Intermediate(data: string, mime: string, label: string) {
+    function recordPass1Intermediate(data: string, mime: string, label: string) {
       pass1Base64 = data;
       pass1Mime = mime || 'image/jpeg';
-      if (!jobId) return;
-      const p1Path = `${userId}/${jobId}_pass1.jpg`;
-      try {
-        const buf = Buffer.from(data, 'base64');
-        const { error: upErr } = await supabaseAdmin.storage
-          .from('generated-images')
-          .upload(p1Path, buf, { contentType: pass1Mime, upsert: true });
-        if (upErr) {
-          console.warn('[generate] pass1 upload', label, upErr.message);
-          return;
-        }
-        console.log('[generate] pass1 saved', p1Path, 'bytes', buf.length, label);
-        // Optional column pass1_storage_path — ignore if missing
-        const { error: colErr } = await supabaseAdmin
-          .from('generation_jobs')
-          .update({ pass1_storage_path: p1Path } as any)
-          .eq('id', jobId);
-        if (colErr) {
-          console.warn('[generate] pass1_storage_path column?', colErr.message);
-        }
-        const { data: signed } = await supabaseAdmin.storage
-          .from('generated-images')
-          .createSignedUrl(p1Path, 60 * 60 * 24 * 7);
-        pass1SignedUrl = signed?.signedUrl || null;
-      } catch (e: any) {
-        console.warn('[generate] pass1 save exception', e?.message || e);
-      }
+      console.log(`[generate] ${label} captured in memory (${data?.length || 0} chars). Upload deferred to end.`);
     }
 
     // ── Prompt + images: IDENTITY selfies + SCENE TEXT (no style image) ──
@@ -624,12 +720,12 @@ STRICT RULES:
     const age2Num = age2Provided ? Number(age2) : NaN;
     const age1Line =
       Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
-        ? `Apparent age of Person A should be about ${Math.round(ageNum)} years (only if consistent with the identity photos).`
-        : '';
+        ? `Apparent age of Person A: strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+        : 'Apparent age of Person A: strictly preserve the exact natural biological age and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, exaggerated skin folds, or eye bags.';
     const age2Line =
       Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
-        ? `Apparent age of Person B should be about ${Math.round(age2Num)} years (only if consistent with the identity photos).`
-        : '';
+        ? `Apparent age of Person B: strictly around ${Math.round(age2Num)} years. Preserve fresh, youthful skin elasticity and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+        : 'Apparent age of Person B: strictly preserve the exact natural biological age and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, exaggerated skin folds, or eye bags.';
     const h = Number(heightCm);
     const w = Number(weightKg);
     const bodyLine = [
@@ -643,9 +739,11 @@ STRICT RULES:
       .filter(Boolean)
       .join(' ');
 
+    const antiAgingTokens =
+      'premature aging, exaggerated wrinkles, deep nasolabial folds, tired eyes, dark circles under eyes, heavy eye bags, weathered haggard skin, coarse skin relief, plastic mannequin skin, artificial blur';
     const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
     let avoidLine = negFromDb
-      ? `Avoid: ${negFromDb}`
+      ? `Avoid: ${negFromDb}, ${antiAgingTokens}`
       : '';
     if (!avoidLine) {
       const avoidDefault = await loadPromptFromDb('avoid_default');
@@ -653,7 +751,7 @@ STRICT RULES:
         ? (avoidDefault.trim().startsWith('Avoid') || avoidDefault.trim().startsWith('Избег')
             ? avoidDefault.trim()
             : `Avoid: ${avoidDefault.trim()}`)
-        : 'Avoid: distorted anatomy, extra fingers, unnatural hands, plastic over-smoothed skin, watermarks, logos, random text overlays, and any face that does not match the IDENTITY photos.';
+        : `Avoid: ${antiAgingTokens}, distorted anatomy, extra fingers, unnatural hands, watermarks, logos, text overlays, and any face that does not match the IDENTITY photos.`;
     }
 
     const expressionRaw = String(template.expression || template.expression_text || '').trim();
@@ -848,8 +946,8 @@ STRICT RULES:
       if (interaction?.output_image?.data) {
         data = interaction.output_image.data;
         mime =
-          interaction.output_image.mime_type ||
-          interaction.output_image.mimeType ||
+          (interaction.output_image as any)?.mime_type ||
+          (interaction.output_image as any)?.mimeType ||
           'image/png';
       } else {
         const steps = (interaction as any)?.steps || [];
@@ -952,7 +1050,7 @@ STRICT RULES:
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
-      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-single');
+      recordPass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-single');
 
       // ========== SINGLE: PASS 2 ==========
       await supabaseAdmin
@@ -971,7 +1069,8 @@ STRICT RULES:
             'Image 1 — СЦЕНА с маской на лице/волосах.',
             'Image 2 — IDENTITY (голова).',
             'Сцену с Image 1 сохрани. Голову возьми с Image 2.',
-            'Выражение: {{expression}}.',
+            'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лица и упругость кожи, не старить.',
+            'Сбалансированная журнальная ретушь, гладкая здоровая кожа без подчеркивания пор или морщин.',
             '{{avoid}}'
           ].join('\n')
         );
@@ -1036,7 +1135,7 @@ STRICT RULES:
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
-      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-couple');
+      recordPass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-couple');
 
       // ========== COUPLE: PASS 2 (two masked heads) ==========
       await supabaseAdmin
@@ -1054,7 +1153,8 @@ STRICT RULES:
           [
             'Image 1 — СЦЕНА с ДВУМЯ людьми, лица под масками.',
             'Image 2 — оба человека (лево/право).',
-            'Выражение: {{expression}}.',
+            'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лиц и упругость кожи обоих персонажей, не старить.',
+            'Сбалансированная журнальная ретушь, гладкая здоровая кожа без подчеркивания пор или морщин.',
             '{{avoid}}'
           ].join('\n')
         );
@@ -1087,6 +1187,11 @@ STRICT RULES:
         throw new Error('Referința Pinterest lipsește.');
       }
 
+      const isCouplePinterest = Boolean(partnerPhotoUrl);
+      const pass1Key = isCouplePinterest ? 'pass1_pinterest_couple' : 'pass1_pinterest';
+      const maskKey = isCouplePinterest ? 'mask_pinterest_couple' : 'mask_pinterest';
+      const pass2Key = isCouplePinterest ? 'pass2_pinterest_couple' : 'pass2_pinterest';
+
       await supabaseAdmin
         .from('generation_jobs')
         .update({
@@ -1098,30 +1203,53 @@ STRICT RULES:
       const pass1Input: any[] = [];
       {
         const p1 = await promptOrFallback(
-          'pass1_pinterest',
-          [
-            'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
-            'IDENTITY — кто должен получиться (лицо только с этих фото).',
-            'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
-            'СЦЕНА:',
-            '{{scene}}',
-            '{{age1}}',
-            '{{body}}',
-            '{{avoid}}'
-          ].join('\n')
+          pass1Key,
+          isCouplePinterest
+            ? [
+                'ЗАДАЧА: Сделай одну фотореалистичную фотографию ДВУХ людей вместе в СЦЕНЕ (по референсу Pinterest).',
+                'Позиционирование и идентичность:',
+                '- ПЕРСОНАЖ А — левая сторона композиции (или позиция первого персонажа в СЦЕНЕ). Лицо и голова только из IDENTITY A.',
+                '- ПЕРСОНАЖ Б — правая сторона (или позиция второго). Лицо и голова только из IDENTITY B.',
+                '- Запрещено смешивать лица, усреднять черты или менять персонажей местами. Не добавлять третьего человека.',
+                'Изоляция волос:',
+                'Волосы каждого — строго с соответствующего IDENTITY. Описания причёсок в СЦЕНЕ игнорировать.',
+                'СЦЕНА (из разбора референса, без лиц):',
+                '{{scene}}',
+                '{{age1}}',
+                '{{age2}}',
+                '{{body}}',
+                '{{avoid}}',
+                'В кадре только IDENTITY A и IDENTITY B. Один фотореалистичный кадр высокого разрешения.'
+              ].join('\n')
+            : [
+                'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
+                'IDENTITY — кто должен получиться (лицо только с этих фото).',
+                'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
+                'СЦЕНА:',
+                '{{scene}}',
+                '{{age1}}',
+                '{{body}}',
+                '{{avoid}}'
+              ].join('\n')
         );
         pushText(pass1Input, p1);
       }
-      pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
+
+      if (isCouplePinterest) {
+        pushText(pass1Input, 'IDENTITY A — первый персонаж (лицо и голова слева):');
+      } else {
+        pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
+      }
       await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity');
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) {
           await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
         }
       }
-      // optional second person on reference
+
+      // second person on reference
       if (partnerPhotoUrl) {
-        pushText(pass1Input, 'IDENTITY B (второй персонаж на референсе), если нужен:');
+        pushText(pass1Input, 'IDENTITY B — второй персонаж (лицо и голова справа):');
         await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
         if (Array.isArray(partnerExtraPhotoUrls)) {
           for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
@@ -1129,13 +1257,21 @@ STRICT RULES:
           }
         }
       }
-      pushText(
-        pass1Input,
-        'ФИНАЛ: лицо с IDENTITY, сцена из текста. Один фотореалистичный кадр.'
-      );
+
+      if (isCouplePinterest) {
+        pushText(
+          pass1Input,
+          'ФИНАЛ: лица и головы строго с IDENTITY A и IDENTITY B, сцена из текста. Два человека в одном фотореалистичном кадре.'
+        );
+      } else {
+        pushText(
+          pass1Input,
+          'ФИНАЛ: лицо с IDENTITY, сцена из текста. Один фотореалистичный кадр.'
+        );
+      }
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-pinterest');
-      await savePass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-pinterest');
+      recordPass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-pinterest');
 
       // --- 3) MASK reference faces/hair at 1K ---
       await supabaseAdmin
@@ -1147,18 +1283,28 @@ STRICT RULES:
         .eq('id', jobId);
 
       const maskInput: any[] = [];
-      pushText(
-        maskInput,
-        [
-          'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
-          'Полностью закрась (сплошной нейтральной заливкой, например светло-серой) ВСЕ лица и ВСЕ волосы всех людей на кадре.',
-          'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
-          'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.'
-        ].join('\n')
+      const maskPromptText = await promptOrFallback(
+        maskKey,
+        isCouplePinterest
+          ? [
+              'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
+              'Полностью закрась (сплошной нейтральной светло-серой заливкой) ВСЕ лица и ВСЕ волосы ВСЕХ людей на кадре (оба персонажа).',
+              'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
+              'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.',
+              'ФИНАЛ: тот же кадр, оба лица и обе причёски замазаны.'
+            ].join('\n')
+          : [
+              'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
+              'Полностью закрась (сплошной нейтральной заливкой, например светло-серой) ВСЕ лица и ВСЕ волосы всех людей на кадре.',
+              'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
+              'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.',
+              'ФИНАЛ: тот же кадр, лица и волосы замазаны.'
+            ].join('\n')
       );
+      pushText(maskInput, maskPromptText);
       pushText(maskInput, 'ИСХОДНЫЙ РЕФЕРЕНС:');
       await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
-      pushText(maskInput, 'ФИНАЛ: тот же кадр, лица и волосы замазаны.');
+      pushText(maskInput, isCouplePinterest ? 'ФИНАЛ: тот же кадр, оба лица и обе причёски замазаны.' : 'ФИНАЛ: тот же кадр, лица и волосы замазаны.');
 
       const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
 
@@ -1174,24 +1320,43 @@ STRICT RULES:
       const pass2Input: any[] = [];
       {
         const p2 = await promptOrFallback(
-          'pass2_pinterest',
-          [
-            'Image 1 — СЦЕНА с маской на лице/волосах (референс).',
-            'Image 2 — IDENTITY / результат прохода с лицом пользователя.',
-            'Сцену с Image 1 сохрани. Голову(ы) возьми с Image 2.',
-            'Выражение: {{expression}}.',
-            '{{avoid}}'
-          ].join('\n')
+          pass2Key,
+          isCouplePinterest
+            ? [
+                'Задача: Выполнить безупречное, бесшовное встраивание (multi-subject seamless inpainting) двух голов целиком (включая лица, прически и шеи) с Image 2 в соответствующие маскированные области на Image 1.',
+                'Глобальное окружение сцены с Image 1 (фон, позы тел, физическое взаимодействие, одежда, руки и ракурс) остается на 100% неизменным. Маскированные области полностью замещаются головами с Image 2 с жестким сохранением пространственного соответствия:',
+                '- Левая маскированная голова и прическа замещаются исключительно левой головой/прической с Image 2.',
+                '- Правая маскированная голова и прическа замещаются исключительно правой головой/прической с Image 2.',
+                '- Строго исключить перетекание текстур, смешивание черт лица или случайную смену позиций между персонажами.',
+                'Правила интеграции двух голов и реализма:',
+                '1. Изоляция причесок и краев: точная форма, объем и текстура волос для каждого человека берутся строго со своей головы на Image 2.',
+                '2. Анатомическое соответствие: автоматически адаптировать поворот, наклон и размер каждой головы с Image 2 под позу тела на Image 1.',
+                '3. Независимый тон кожи: тон кожи каждого персонажа берется строго со своей головы на Image 2.',
+                '4. Бесшовный стык и тени по контуру обеих масок.',
+                '5. Коррекция освещения под схему света Image 1.',
+                '6. Выражения лиц: {{expression}}. Сохранять естественную молодость, свежесть лиц и упругость кожи, категорически не старить.',
+                '7. Сбалансированная ретушь и текстура: коммерческая портретная обработка высокого класса, гладкая здоровая кожа, деликатная микротекстура, легкое кинематографическое зерно без огрубления пор.',
+                '{{avoid}}',
+                'На выходе один цельный, реалистичный фотокадр, содержащий обоих правильно расположенных персонажей.'
+              ].join('\n')
+            : [
+                'Image 1 — СЦЕНА с маской на лице/волосах (референс).',
+                'Image 2 — IDENTITY / результат прохода с лицом пользователя.',
+                'Сцену с Image 1 сохрани. Голову(ы) возьми с Image 2.',
+                'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лица и упругость кожи, не старить.',
+                'Сбалансированная журнальная ретушь, гладкая здоровая кожа без акцента на порах или морщинах.',
+                '{{avoid}}'
+              ].join('\n')
         );
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, 'IMAGE 1 — SCENE (лица и волосы под маской):');
+      pushText(pass2Input, isCouplePinterest ? 'IMAGE 1 — SCENE (оба лица и волосы под маской):' : 'IMAGE 1 — SCENE (лица и волосы под маской):');
       pass2Input.push({
         type: 'image',
         mime_type: maskPass.mimeType || 'image/jpeg',
         data: maskPass.data
       });
-      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):');
+      pushText(pass2Input, isCouplePinterest ? 'IMAGE 2 — HEADS / IDENTITY (результат PASS1 с обоими персонажами):' : 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/jpeg',
@@ -1199,7 +1364,9 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'ФИНАЛ: голова(ы) с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр.'
+        isCouplePinterest
+          ? 'ФИНАЛ: обе головы с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр с двумя людьми.'
+          : 'ФИНАЛ: голова(ы) с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
@@ -1256,53 +1423,107 @@ STRICT RULES:
       throw new Error('Model did not return image data.');
     }
 
-        // 6. Save FINAL image to private bucket 'generated-images'
-    // Path convention used by GET /api/generations: `${userId}/${jobId}.jpg`
+    // 6. Save FINAL (pass2) image & optional pass1 image to 'generated-images' ONLY AT THE END, with retries
     const storagePath = `${userId}/${jobId}.jpg`;
     const imageBuffer = Buffer.from(imageBase64Data, 'base64');
 
-    const { error: storageError } = await supabaseAdmin.storage
-      .from('generated-images')
-      .upload(storagePath, imageBuffer, {
-        contentType: mimeType || 'image/jpeg',
-        upsert: true
-      });
+    // Upload PASS 2 (final result) with retry
+    const pass2UploadResult = await uploadToStorageWithRetry(
+      'generated-images',
+      storagePath,
+      imageBuffer,
+      mimeType || 'image/jpeg',
+      3
+    );
 
-    if (storageError) throw storageError;
-    console.log('[generate] saved', storagePath, 'bytes', imageBuffer.length);
-    // generated_images table dropped — paths live only on generation_jobs
+    if (!pass2UploadResult.success) {
+      throw new Error(`Upload final image to storage failed after retries: ${pass2UploadResult.error}`);
+    }
+    console.log('[generate] pass2 saved to storage', storagePath, 'bytes', imageBuffer.length);
 
-    // 8. Mark job completed — only columns that exist in production schema
-    // (result_storage_path may be missing until migration; never block completion)
+    // Upload PASS 1 (intermediate) with retry ONLY AT THE END (if pass1 exists)
+    let pass1SavedPath: string | null = null;
+    pass1SignedUrl = null;
+
+    if (pass1Base64) {
+      const p1Path = `${userId}/${jobId}_pass1.jpg`;
+      const p1Buffer = Buffer.from(pass1Base64, 'base64');
+      const pass1UploadResult = await uploadToStorageWithRetry(
+        'generated-images',
+        p1Path,
+        p1Buffer,
+        pass1Mime || 'image/jpeg',
+        3
+      );
+
+      if (pass1UploadResult.success) {
+        pass1SavedPath = p1Path;
+        console.log('[generate] pass1 saved to storage at end', p1Path, 'bytes', p1Buffer.length);
+        try {
+          const { data: signed } = await supabaseAdmin.storage
+            .from('generated-images')
+            .createSignedUrl(p1Path, 60 * 60 * 24 * 7);
+          pass1SignedUrl = signed?.signedUrl || supabaseAdmin.storage.from('generated-images').getPublicUrl(p1Path).data.publicUrl;
+        } catch {
+          pass1SignedUrl = supabaseAdmin.storage.from('generated-images').getPublicUrl(p1Path).data.publicUrl;
+        }
+      } else {
+        console.warn(`[generate] pass1 upload failed after retries: ${pass1UploadResult.error}`);
+      }
+    }
+
+    // 7. Path в базу — ТОЛЬКО после успешной заливки в Storage!
     const completedPayload: Record<string, unknown> = {
       status: 'completed',
       progress: 100,
       current_step_message: 'Portret finalizat cu succes!',
-      completed_at: new Date().toISOString()
+      completed_at: new Date().toISOString(),
+      result_storage_path: storagePath // Записан в базу ТОЛЬКО после успешной заливки!
     };
-    // Try with optional path columns; fall back without them if PostgREST schema cache rejects
+
+    if (pass1SavedPath) {
+      completedPayload.pass1_storage_path = pass1SavedPath; // Записан в базу ТОЛЬКО после успешной заливки pass1!
+    }
+
     let jobUpdate = await supabaseAdmin
       .from('generation_jobs')
-      .update({ ...completedPayload, result_storage_path: storagePath })
+      .update(completedPayload)
       .eq('id', jobId);
+
     if (jobUpdate.error) {
-      console.warn('[generate] job complete with result_storage_path failed:', jobUpdate.error.message);
-      jobUpdate = await supabaseAdmin
-        .from('generation_jobs')
-        .update(completedPayload)
-        .eq('id', jobId);
+      console.warn('[generate] job complete with optional paths failed:', jobUpdate.error.message);
+      if (completedPayload.pass1_storage_path) {
+        delete completedPayload.pass1_storage_path;
+        jobUpdate = await supabaseAdmin
+          .from('generation_jobs')
+          .update(completedPayload)
+          .eq('id', jobId);
+      }
       if (jobUpdate.error) {
-        console.error('[generate] job complete update failed', jobUpdate.error);
-        // File is already in storage; still return success URL so client/gallery can show it
+        delete completedPayload.result_storage_path;
+        await supabaseAdmin
+          .from('generation_jobs')
+          .update(completedPayload)
+          .eq('id', jobId);
       }
     }
 
-    // 9. Signed URL 7 days — save on job so gallery does not re-sign every visit
+    // 8. Signed URL 7 days — save on job so gallery does not re-sign every visit
     const SIGNED_TTL = 60 * 60 * 24 * 7;
-    const { data: signedData } = await supabaseAdmin.storage
-      .from('generated-images')
-      .createSignedUrl(storagePath, SIGNED_TTL);
-    const resultImageUrl = signedData?.signedUrl || '';
+    let resultImageUrl = '';
+    try {
+      const { data: signedData } = await supabaseAdmin.storage
+        .from('generated-images')
+        .createSignedUrl(storagePath, SIGNED_TTL);
+      resultImageUrl = signedData?.signedUrl || '';
+    } catch {}
+    if (!resultImageUrl) {
+      const { data: pubData } = supabaseAdmin.storage
+        .from('generated-images')
+        .getPublicUrl(storagePath);
+      resultImageUrl = pubData.publicUrl;
+    }
+
     const expiresAt = new Date(Date.now() + SIGNED_TTL * 1000).toISOString();
     if (resultImageUrl) {
       const { error: urlErr } = await supabaseAdmin
@@ -1396,14 +1617,31 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     // 7 days — gallery must not die after one hour
     const SIGNED_TTL = 60 * 60 * 24 * 7;
 
-    const { data: jobs, error } = await supabaseAdmin
-      .from('generation_jobs')
-      .select('*, templates(name_ro, preview_image_url)')
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    let jobs: any[] = [];
+    try {
+      const { rows } = await pool.query(
+        `SELECT j.*, 
+                json_build_object('name_ro', t.name_ro, 'preview_image_url', t.preview_image_url) as templates
+         FROM public.generation_jobs j
+         LEFT JOIN public.templates t ON t.id = j.template_id
+         WHERE j.user_id = $1
+         ORDER BY j.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [req.user!.id, limit, offset]
+      );
+      jobs = rows || [];
+    } catch (dbErr) {
+      console.warn('[api/generations] direct db query failed, falling back to supabaseAdmin:', dbErr);
+      const { data, error } = await supabaseAdmin
+        .from('generation_jobs')
+        .select('*, templates(name_ro, preview_image_url)')
+        .eq('user_id', req.user!.id)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
 
-    if (error) throw error;
+      if (error) throw error;
+      jobs = data || [];
+    }
 
     const refreshBeforeMs = 60 * 60 * 1000; // refresh if < 1h left
 
@@ -1425,11 +1663,21 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           if (stillGood) {
             resultImageUrl = cached;
           } else {
-            const { data: signed } = await supabaseAdmin.storage
-              .from('generated-images')
-              .createSignedUrl(storagePath, SIGNED_TTL);
-            if (signed?.signedUrl) {
-              resultImageUrl = signed.signedUrl;
+            try {
+              const { data: signed } = await supabaseAdmin.storage
+                .from('generated-images')
+                .createSignedUrl(storagePath, SIGNED_TTL);
+              if (signed?.signedUrl) {
+                resultImageUrl = signed.signedUrl;
+              }
+            } catch {}
+            if (!resultImageUrl) {
+              const { data: pubData } = supabaseAdmin.storage
+                .from('generated-images')
+                .getPublicUrl(storagePath);
+              resultImageUrl = pubData.publicUrl;
+            }
+            if (resultImageUrl) {
               const expiresAt = new Date(Date.now() + SIGNED_TTL * 1000).toISOString();
               // fire-and-forget cache update
               void supabaseAdmin
@@ -1499,6 +1747,18 @@ app.post('/api/generations/:id/retry', requireAuth, async (req: AuthRequest, res
 // User Photo Transactions Ledger
 app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) => {
   try {
+    try {
+      const { rows } = await pool.query(
+        'SELECT * FROM public.photo_transactions WHERE user_id = $1 ORDER BY created_at DESC',
+        [req.user!.id]
+      );
+      if (rows) {
+        return res.json(rows);
+      }
+    } catch (dbErr) {
+      console.warn('[api/photo-transactions] direct db query failed, falling back to supabaseAdmin:', dbErr);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('photo_transactions')
       .select('*')
@@ -1506,7 +1766,7 @@ app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) =>
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

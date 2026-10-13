@@ -49,6 +49,7 @@ export interface PhotoTemplate {
   negativePrompt?: string;
   aspectRatio: AspectRatio;
   photoCost: number;
+  creditCost?: number;
   requiredInputType: RequiredInputType;
   isActive: boolean;
   displayOrder: number;
@@ -107,6 +108,7 @@ export interface UserAccount {
   avatar: string;
   role: 'user' | 'admin';
   photoBalance: number;
+  creditBalance?: number;
   preferredLanguage: Language;
   preferredCurrency: Currency;
   country: 'Moldova' | 'Romania' | 'Other';

@@ -1,8 +1,19 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-// Frontend strictly uses VITE_SUPABASE_PUBLISHABLE_KEY
-const rawKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+const DEFAULT_SUPABASE_URL = 'https://zjshigepycaaqbqyuztk.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc2hpZ2VweWNhYXFicXl1enRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMDg1ODUsImV4cCI6MjEwNjc4NDU4NX0.CZvBuz6WuyqpIwGmmlNKrr8OQB5fWQOKFplJ4Q4DxUM';
+
+const rawUrl = (
+  import.meta.env.VITE_SUPABASE_URL ||
+  DEFAULT_SUPABASE_URL
+).trim();
+
+const rawKey = (
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  DEFAULT_SUPABASE_ANON_KEY
+).trim();
 
 export const isValidHttpUrl = (str?: string | null): boolean => {
   if (!str) return false;
@@ -35,7 +46,6 @@ export const isSupabaseConfigured = (): boolean => {
     lowerKey === 'placeholder-publishable-key' ||
     lowerKey === 'supabase_publishable_key' ||
     lowerKey === 'vite_supabase_publishable_key' ||
-    lowerKey === 'supabase_secret_key' ||
     lowerKey.length < 20
   ) {
     return false;
@@ -44,14 +54,14 @@ export const isSupabaseConfigured = (): boolean => {
   return true;
 };
 
-// Safe fallback URL and key guaranteed to be valid HTTP/HTTPS
+// Client URL and key
 const clientUrl = isSupabaseConfigured() && isValidHttpUrl(rawUrl)
   ? rawUrl
-  : 'https://placeholder.supabase.co';
+  : DEFAULT_SUPABASE_URL;
 
 const clientKey = isSupabaseConfigured()
   ? rawKey
-  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+  : DEFAULT_SUPABASE_ANON_KEY;
 
 function initializeSupabaseClient(): SupabaseClient {
   try {
@@ -64,10 +74,10 @@ function initializeSupabaseClient(): SupabaseClient {
     });
   } catch (err) {
     console.warn('Supabase client initialized in fallback mode:', err);
-    return createClient('https://placeholder.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder', {
+    return createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
       }
     });
   }

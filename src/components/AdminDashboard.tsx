@@ -531,14 +531,14 @@ export const AdminDashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-2.5 px-4 font-bold text-amber-300 text-sm tabular-nums">
-                        {u.creditBalance}
+                        {u.photoBalance ?? (u as any).creditBalance ?? 0}
                       </td>
                       <td className="py-2.5 px-4 text-right">
                         <button
                           onClick={() => setSelectedUserForCredit(u.id)}
                           className="rounded-lg bg-amber-400/10 border border-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-400/20"
                         >
-                          {t.adjustPhotos}
+                          {(t as any).adjustPhotos || (t as any).adjustCredits || 'Gestionează foto'}
                         </button>
                       </td>
                     </tr>
@@ -622,7 +622,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#12141c] p-6 shadow-2xl">
             <h3 className="text-base font-bold text-white font-display">
-              {t.adjustPhotos}
+              {(t as any).adjustPhotos || (t as any).adjustCredits || 'Gestionează foto'}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               Adaugă sau scade credite în mod atomic prin funcția securizată din PostgreSQL.
