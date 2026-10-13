@@ -92,7 +92,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [showPinHelp, setShowPinHelp] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [resultQuality, setResultQuality] = useState<'2k' | '4k'>('2k');
+  const [resultQuality, setResultQuality] = useState<'1k' | '2k' | '4k'>('2k');
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [stepText, setStepText] = useState('');
@@ -541,7 +541,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         extraPhotoUrls: extraUrls.length ? extraUrls : undefined,
         partnerExtraPhotoUrls:
           slots === 2 && photos2.length > 1 ? photos2.slice(1).map((p) => p.url) : undefined,
-        quality4k: resultQuality === '4k'
+        quality: (resultQuality === '4k' ? '4K' : resultQuality === '1k' ? '1K' : '2K') as any,
+          quality4k: resultQuality === '4k'
       } as any);
 
       finishProgressUI();
@@ -1707,7 +1708,18 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
             </button>
           ) : (
             <>
-              <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResultQuality('1k')}
+                  className={`rounded-xl border py-2.5 text-xs font-bold transition ${
+                    resultQuality === '1k'
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  }`}
+                >
+                  1K · {basePhotoCost} {language === 'ru' ? 'фото' : language === 'en' ? 'photo' : 'foto'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setResultQuality('2k')}
