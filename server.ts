@@ -1297,15 +1297,28 @@ STRICT RULES:
       }
     }
 
-    // 9. Signed URL for frontend
+    // 9. Signed URL 7 days — save on job so gallery does not re-sign every visit
+    const SIGNED_TTL = 60 * 60 * 24 * 7;
     const { data: signedData } = await supabaseAdmin.storage
       .from('generated-images')
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+      .createSignedUrl(storagePath, SIGNED_TTL);
+    const resultImageUrl = signedData?.signedUrl || '';
+    const expiresAt = new Date(Date.now() + SIGNED_TTL * 1000).toISOString();
+    if (resultImageUrl) {
+      const { error: urlErr } = await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          result_signed_url: resultImageUrl,
+          result_signed_expires_at: expiresAt
+        } as any)
+        .eq('id', jobId);
+      if (urlErr) console.warn('[generate] cache signed url', urlErr.message);
+    }
 
     return res.json({
       jobId,
       status: 'completed',
-      resultImageUrl: signedData?.signedUrl || '',
+      resultImageUrl,
       newBalance,
       pass1ImageUrl: pass1SignedUrl || undefined
     });
@@ -1392,23 +1405,47 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
 
     if (error) throw error;
 
-    const jobsWithSignedUrls = await Promise.all(
-      (jobs || []).map(async (job) => {
-        let resultImageUrl: string | undefined = undefined;
+    const SIGNED_TTL = 60 * 60 * 24 * 7;
+    const refreshBeforeMs = 60 * 60 * 1000; // refresh if < 1h left
 
-        // Prefer path from DB; fallback to legacy naming
+    const jobsOut = await Promise.all(
+      (jobs || []).map(async (job) => {
         const storagePath =
           job.result_storage_path ||
           (job.status === 'completed' ? `${job.user_id}/${job.id}.jpg` : null);
 
-        if (storagePath && job.status === 'completed') {
-          const { data: signed } = await supabaseAdmin.storage
-            .from('generated-images')
-            .createSignedUrl(storagePath, SIGNED_TTL);
-          if (signed?.signedUrl) resultImageUrl = signed.signedUrl;
-        }
+        let resultImageUrl: string | undefined = undefined;
 
-        // pass1 not signed on list (slow) — only final for gallery grid
+        if (storagePath && job.status === 'completed') {
+          const cached = job.result_signed_url as string | null | undefined;
+          const exp = job.result_signed_expires_at
+            ? new Date(job.result_signed_expires_at).getTime()
+            : 0;
+          const stillGood = cached && exp - Date.now() > refreshBeforeMs;
+
+          if (stillGood) {
+            resultImageUrl = cached;
+          } else {
+            const { data: signed } = await supabaseAdmin.storage
+              .from('generated-images')
+              .createSignedUrl(storagePath, SIGNED_TTL);
+            if (signed?.signedUrl) {
+              resultImageUrl = signed.signedUrl;
+              const expiresAt = new Date(Date.now() + SIGNED_TTL * 1000).toISOString();
+              // fire-and-forget cache update
+              void supabaseAdmin
+                .from('generation_jobs')
+                .update({
+                  result_signed_url: resultImageUrl,
+                  result_signed_expires_at: expiresAt
+                } as any)
+                .eq('id', job.id)
+                .then(({ error }) => {
+                  if (error) console.warn('[generations] cache url', error.message);
+                });
+            }
+          }
+        }
 
         return {
           id: job.id,
@@ -1433,7 +1470,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       })
     );
 
-    res.json(jobsWithSignedUrls);
+    res.json(jobsOut);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
