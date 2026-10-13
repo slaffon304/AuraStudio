@@ -516,26 +516,15 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     // Pinterest: scene from on-the-fly vision analysis of the reference
     // Blur / style-image face transfer removed on purpose.
 
-    const SCENE_ANALYZE_PROMPT = `You are a photography director writing a scene brief for an AI image generator.
-
-Analyze the reference photograph in extreme detail. Output ONLY a single dense English paragraph (no bullet lists, no markdown, no preamble).
-
-Describe the COMPLETE scene so another model can recreate the same shot WITHOUT seeing this image and WITHOUT copying any person's face:
-- Camera: exact framing (head-and-shoulders / waist-up / full body), camera height, angle (eye-level / slight low / high), approximate focal length feel (e.g. 35mm, 50mm, 85mm), depth of field
-- Pose: body orientation, head turn, gaze direction, arm and hand placement, weight distribution
-- Wardrobe: garments, colors, fabrics, fit, accessories, shoes if visible
-- Environment: location type, architecture, furniture, props, what is left/right/behind the subject
-- Lighting: key light direction and quality (soft/hard), fill, rim, color temperature, time of day, reflections
-- Color grade and mood: overall palette, contrast, atmosphere
-- Composition: subject placement in frame, leading lines, background blur amount
-
-STRICT RULES:
-- Do NOT describe facial features, age, gender presentation, skin, hair style/color, or identity of any person.
-- Do NOT invent objects that are not visible.
-- Prefer concrete visual facts over vague adjectives.
-- Write as an executable scene prompt for photorealistic generation.`;
-
     async function analyzeSceneFromImage(url: string): Promise<string> {
+      // Prompt lives in generation_prompts.key = 'scene_analyze' (editable in DB)
+      const sceneAnalyzePrompt = await loadPromptFromDb('scene_analyze');
+      if (!sceneAnalyzePrompt || sceneAnalyzePrompt.trim().length < 40) {
+        throw new Error(
+          "Промпт «scene_analyze» отсутствует в generation_prompts. Добавьте запись в БД."
+        );
+      }
+
       const part = await urlToGenerativePart(url);
       if (!part?.inlineData?.data) {
         throw new Error('Nu s-a putut încărca imaginea de referință pentru analiză.');
@@ -549,7 +538,7 @@ STRICT RULES:
       ].filter((m, i, arr) => arr.indexOf(m) === i);
 
       const parts = [
-        { text: SCENE_ANALYZE_PROMPT },
+        { text: sceneAnalyzePrompt.trim() },
         {
           inlineData: {
             mimeType: part.inlineData.mimeType || 'image/jpeg',
@@ -1120,31 +1109,43 @@ STRICT RULES:
       throw new Error('Model did not return image data.');
     }
 
-        // 6. Save generated image to private Supabase Storage bucket 'generated-images'
+    // 6. Save generated image to private Supabase Storage bucket 'generated-images'
     const storagePath = `${userId}/${jobId}.jpg`;
     const imageBuffer = Buffer.from(imageBase64Data, 'base64');
+    const uploadMime = (mimeType || 'image/jpeg').split(';')[0].trim() || 'image/jpeg';
 
     const { error: storageError } = await supabaseAdmin.storage
       .from('generated-images')
       .upload(storagePath, imageBuffer, {
-        contentType: mimeType,
+        contentType: uploadMime,
         upsert: true
       });
 
-    if (storageError) throw storageError;
+    if (storageError) {
+      console.error('[generate] storage upload failed', storageError);
+      throw storageError;
+    }
+    console.log('[generate] saved', storagePath, 'bytes', imageBuffer.length);
 
-    // 7. Insert record in generated_images table
-    await supabaseAdmin
+    // 7. Insert record in generated_images table (ignore duplicate if re-run)
+    const { error: giError } = await supabaseAdmin
       .from('generated_images')
-      .insert({
-        job_id: jobId,
-        user_id: userId,
-        storage_path: storagePath,
-        mime_type: mimeType
-      });
+      .upsert(
+        {
+          job_id: jobId,
+          user_id: userId,
+          storage_path: storagePath,
+          mime_type: uploadMime
+        },
+        { onConflict: 'job_id' }
+      );
+    if (giError) {
+      console.warn('[generate] generated_images upsert', giError.message || giError);
+      // still continue — file is in storage, job path is enough for gallery
+    }
 
     // 8. Update job to completed (persist storage path so DELETE can clean the bucket)
-    await supabaseAdmin
+    const { error: jobUpdErr } = await supabaseAdmin
       .from('generation_jobs')
       .update({
         status: 'completed',
@@ -1154,11 +1155,18 @@ STRICT RULES:
         result_storage_path: storagePath
       })
       .eq('id', jobId);
+    if (jobUpdErr) {
+      console.error('[generate] job complete update failed', jobUpdErr);
+      throw jobUpdErr;
+    }
 
     // 9. Generate secure signed URL for frontend
-    const { data: signedData } = await supabaseAdmin.storage
+    const { data: signedData, error: signErr } = await supabaseAdmin.storage
       .from('generated-images')
       .createSignedUrl(storagePath, 7200);
+    if (signErr) {
+      console.error('[generate] signed URL failed', signErr);
+    }
 
     return res.json({
       jobId,
@@ -1251,10 +1259,14 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       (jobs || []).map(async (job) => {
         let resultImageUrl: string | undefined = undefined;
         if (job.status === 'completed') {
-          const storagePath = `${job.user_id}/${job.id}.jpg`;
-          const { data: signed } = await supabaseAdmin.storage
+          const storagePath =
+            job.result_storage_path || `${job.user_id}/${job.id}.jpg`;
+          const { data: signed, error: signErr } = await supabaseAdmin.storage
             .from('generated-images')
             .createSignedUrl(storagePath, 3600);
+          if (signErr) {
+            console.warn('[generations] sign fail', job.id, signErr.message || signErr);
+          }
           resultImageUrl = signed?.signedUrl;
         }
 
