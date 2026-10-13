@@ -185,7 +185,7 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
     // 3. Create signed URL for frontend display
     const { data: signedData } = await supabaseAdmin.storage
       .from('user-photos')
-      .createSignedUrl(storagePath, 3600);
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
     res.json({
       ...record,
@@ -213,7 +213,7 @@ app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
       (photos || []).map(async (photo) => {
         const { data: signedData } = await supabaseAdmin.storage
           .from('user-photos')
-          .createSignedUrl(photo.storage_path, 3600);
+          .createSignedUrl(photo.storage_path, 60 * 60 * 24 * 7);
         return {
           id: photo.id,
           userId: photo.user_id,
@@ -231,7 +231,7 @@ app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Delete user photo
+// Delete user selfie: bucket user-photos + DB row (jobs.user_photo_id -> NULL via FK)
 app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { data: photo, error: fetchError } = await supabaseAdmin
@@ -245,16 +245,20 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Fotografia nu a fost găsită.' });
     }
 
-    // Delete from storage
-    await supabaseAdmin.storage
-      .from('user-photos')
-      .remove([photo.storage_path]);
+    if (photo.storage_path) {
+      const { error: rmErr } = await supabaseAdmin.storage
+        .from('user-photos')
+        .remove([photo.storage_path]);
+      if (rmErr) console.warn('[photos/delete] storage', rmErr.message);
+    }
 
-    // Delete from database
-    await supabaseAdmin
+    const { error: dbErr } = await supabaseAdmin
       .from('user_photos')
       .delete()
-      .eq('id', photo.id);
+      .eq('id', photo.id)
+      .eq('user_id', req.user!.id);
+
+    if (dbErr) throw dbErr;
 
     res.json({ success: true });
   } catch (err: any) {
@@ -540,7 +544,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         }
         const { data: signed } = await supabaseAdmin.storage
           .from('generated-images')
-          .createSignedUrl(p1Path, 7200);
+          .createSignedUrl(p1Path, 60 * 60 * 24 * 7);
         pass1SignedUrl = signed?.signedUrl || null;
       } catch (e: any) {
         console.warn('[generate] pass1 save exception', e?.message || e);
@@ -1266,21 +1270,7 @@ STRICT RULES:
 
     if (storageError) throw storageError;
     console.log('[generate] saved', storagePath, 'bytes', imageBuffer.length);
-
-    // 7. generated_images row — optional metadata; must NOT fail the job
-    try {
-      const { error: giErr } = await supabaseAdmin.from('generated_images').insert({
-        job_id: jobId,
-        user_id: userId,
-        storage_path: storagePath,
-        mime_type: mimeType || 'image/jpeg'
-      });
-      if (giErr) {
-        console.warn('[generate] generated_images insert:', giErr.message || giErr);
-      }
-    } catch (e: any) {
-      console.warn('[generate] generated_images insert exception:', e?.message || e);
-    }
+    // generated_images table dropped — paths live only on generation_jobs
 
     // 8. Mark job completed — only columns that exist in production schema
     // (result_storage_path may be missing until migration; never block completion)
@@ -1310,7 +1300,7 @@ STRICT RULES:
     // 9. Signed URL for frontend
     const { data: signedData } = await supabaseAdmin.storage
       .from('generated-images')
-      .createSignedUrl(storagePath, 7200);
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
     return res.json({
       jobId,
@@ -1357,31 +1347,28 @@ app.delete('/api/generations/:id', requireAuth, async (req: AuthRequest, res) =>
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    // Collect all storage paths for this job (column + generated_images table + fallback path)
+    // All possible objects for this job in generated-images bucket
     const paths = new Set<string>();
     if (job.result_storage_path) paths.add(job.result_storage_path);
-    const fallbackPath = `${job.user_id}/${job.id}.jpg`;
-    paths.add(fallbackPath);
-
-    const { data: genRows } = await supabaseAdmin
-      .from('generated_images')
-      .select('storage_path')
-      .eq('job_id', job.id);
-    for (const row of genRows || []) {
-      if (row.storage_path) paths.add(row.storage_path);
-    }
+    if (job.pass1_storage_path) paths.add(job.pass1_storage_path);
+    // Legacy fixed names (in case columns were empty)
+    paths.add(`${job.user_id}/${job.id}.jpg`);
+    paths.add(`${job.user_id}/${job.id}_pass1.jpg`);
 
     if (paths.size > 0) {
-      await supabaseAdmin.storage.from('generated-images').remove([...paths]);
+      const { error: rmErr } = await supabaseAdmin.storage
+        .from('generated-images')
+        .remove([...paths]);
+      if (rmErr) console.warn('[generations/delete] storage', rmErr.message);
     }
 
-    await supabaseAdmin.from('generated_images').delete().eq('job_id', job.id);
-
-    await supabaseAdmin
+    const { error: dbErr } = await supabaseAdmin
       .from('generation_jobs')
       .delete()
       .eq('id', job.id)
       .eq('user_id', req.user!.id);
+
+    if (dbErr) throw dbErr;
 
     res.json({ success: true });
   } catch (err: any) {
@@ -1391,35 +1378,37 @@ app.delete('/api/generations/:id', requireAuth, async (req: AuthRequest, res) =>
 
 app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
   try {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || '30'), 10) || 30, 1), 100);
+    const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
+    // 7 days — gallery must not die after one hour
+    const SIGNED_TTL = 60 * 60 * 24 * 7;
+
     const { data: jobs, error } = await supabaseAdmin
       .from('generation_jobs')
       .select('*, templates(name_ro, preview_image_url)')
       .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
 
-    // Resolve signed URLs for generated images
     const jobsWithSignedUrls = await Promise.all(
       (jobs || []).map(async (job) => {
         let resultImageUrl: string | undefined = undefined;
-        let pass1ImageUrl: string | undefined = undefined;
-        // Always try final path if status completed OR file may exist after partial success
-        const storagePath = `${job.user_id}/${job.id}.jpg`;
-        const pass1Path = `${job.user_id}/${job.id}_pass1.jpg`;
-        if (job.status === 'completed' || job.status === 'failed') {
+
+        // Prefer path from DB; fallback to legacy naming
+        const storagePath =
+          job.result_storage_path ||
+          (job.status === 'completed' ? `${job.user_id}/${job.id}.jpg` : null);
+
+        if (storagePath && job.status === 'completed') {
           const { data: signed } = await supabaseAdmin.storage
             .from('generated-images')
-            .createSignedUrl(storagePath, 3600);
+            .createSignedUrl(storagePath, SIGNED_TTL);
           if (signed?.signedUrl) resultImageUrl = signed.signedUrl;
         }
-        if (job.status === 'completed') {
-          const { data: signedP1 } = await supabaseAdmin.storage
-            .from('generated-images')
-            .createSignedUrl(pass1Path, 3600);
-          // only expose if object exists (signed URL may still be returned for missing — client 404 handles)
-          pass1ImageUrl = signedP1?.signedUrl;
-        }
+
+        // pass1 not signed on list (slow) — only final for gallery grid
 
         return {
           id: job.id,
@@ -1433,7 +1422,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
           progress: job.progress,
           currentStepMessage: job.current_step_message,
           resultImageUrl,
-          pass1ImageUrl,
+          resultStoragePath: storagePath || undefined,
           errorMessage: job.error_message,
           providerId: job.provider_id,
           photoCost: job.photo_cost,
