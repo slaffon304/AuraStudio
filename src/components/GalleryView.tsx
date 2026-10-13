@@ -88,7 +88,11 @@ export const GalleryView: React.FC = () => {
     download: language === 'ru' ? 'Скачать фото' : language === 'en' ? 'Download photo' : 'Descarcă foto',
     delete: language === 'ru' ? 'Удалить' : language === 'en' ? 'Delete' : 'Șterge',
     confirmDelete:
-      language === 'ru' ? 'Удалить это фото из галереи?' : language === 'en' ? 'Delete this photo from gallery?' : 'Ștergi această foto din galerie?',
+      language === 'ru'
+        ? 'Удалить это фото навсегда? Файл будет удалён из хранилища и из базы. Это действие необратимо.'
+        : language === 'en'
+          ? 'Delete this photo permanently? The file will be removed from storage and the database. This cannot be undone.'
+          : 'Ștergi această foto definitiv? Fișierul va fi șters din stocare și din baza de date. Acțiunea este ireversibilă.',
     rateTitle: language === 'ru' ? 'Оцени полученное фото' : language === 'en' ? 'Rate this photo' : 'Evaluează foto',
     rateLabels:
       language === 'ru'
