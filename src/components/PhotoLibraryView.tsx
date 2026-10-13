@@ -49,7 +49,13 @@ export const PhotoLibraryView: React.FC = () => {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!window.confirm(language === 'ru' ? 'Удалить это фото?' : language === 'en' ? 'Delete this photo?' : 'Ștergi această fotografie?')) {
+    if (!window.confirm(
+      language === 'ru'
+        ? 'Удалить это селфи навсегда? Файл будет удалён из хранилища и из базы. Это действие необратимо.'
+        : language === 'en'
+          ? 'Delete this selfie permanently? The file will be removed from storage and the database. This cannot be undone.'
+          : 'Ștergi acest selfie definitiv? Fișierul va fi șters din stocare și din baza de date. Acțiunea este ireversibilă.'
+    )) {
       return;
     }
     await deletePhoto(id);
