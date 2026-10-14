@@ -13,13 +13,9 @@ import {
 } from 'lucide-react';
 import logoImg from '../assets/images/aurastudio-logo.png';
 import { viewToPath } from '../lib/navigation';
-import heroFaceBeforeImg from '../assets/images/hero_face_before_1791279356294.jpg';
-import heroEditorialAfterImg from '../assets/images/hero_editorial_after_1791279364462.jpg';
 import refWoman2FaceImg from '../assets/images/ref_face_woman2_1791279674470.jpg';
 import resultWoman2EditorialImg from '../assets/images/result_vogue_woman2_1791279688635.jpg';
-import templateFashionImg from '../assets/images/template_fashion_milan_1791140809021.jpg';
 import templateGoldenImg from '../assets/images/template_insta_golden_1791140819273.jpg';
-import templateBusinessImg from '../assets/images/template_business_exec_1791140798767.jpg';
 import coupleImg from '../assets/images/couple_editorial_sunset_1791210833350.jpg';
 import studioBwImg from '../assets/images/studio_bw_portrait_1791214266378.jpg';
 
