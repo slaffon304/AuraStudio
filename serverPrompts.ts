@@ -91,6 +91,7 @@ export const DEFAULT_GENERATION_PROMPTS: Record<string, string> = {
 {{scene}}
 {{age1}}
 {{age2}}
+{{body}}
 {{avoid}}`,
 
   'pass2_couple': `РОЛЬ: Эксперт по композитингу парных портретов и журнальной ретуши высшей категории (High-End Master Editorial Compositor).

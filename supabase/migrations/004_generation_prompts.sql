@@ -173,8 +173,9 @@ VALUES (
 {{scene}}
 {{age1}}
 {{age2}}
+{{body}}
 {{avoid}}',
-  '["expression", "scene", "age1", "age2", "avoid"]'::jsonb
+  '["expression", "scene", "age1", "age2", "body", "avoid"]'::jsonb
 )
 ON CONFLICT (key) DO UPDATE SET
   name = EXCLUDED.name,
