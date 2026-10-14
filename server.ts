@@ -25,6 +25,32 @@ const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Guard against ECONNREFUSED 127.0.0.1:5432 when DATABASE_URL is unset or local
+const rawDbUrl = (process.env.DATABASE_URL || '').trim();
+let directDbAvailable = Boolean(
+  pool &&
+  rawDbUrl &&
+  !rawDbUrl.includes('127.0.0.1') &&
+  !rawDbUrl.includes('localhost') &&
+  !rawDbUrl.includes('::1')
+);
+
+function handleDirectDbError(context: string, err: any) {
+  const code = err?.code || err?.errors?.[0]?.code || '';
+  if (code === 'ECONNREFUSED' || String(err).includes('ECONNREFUSED')) {
+    if (directDbAvailable) {
+      console.warn(`[${context}] Direct Postgres connection refused. Switching to supabaseAdmin.`);
+      directDbAvailable = false;
+    }
+    return;
+  }
+  console.warn(`[${context}] direct db query failed, falling back to supabaseAdmin:`, dbErrMessage(err));
+}
+
+function dbErrMessage(err: any): string {
+  return err?.message || String(err);
+}
+
 // Initialize Google GenAI Client
 let aiClient: GoogleGenAI | null = null;
 if (process.env.GEMINI_API_KEY) {
@@ -85,7 +111,6 @@ app.get('/api/health', (req, res) => {
 // Templates list (public)
 app.get('/api/templates', async (req, res) => {
   if (!isServerSupabaseConfigured()) {
-    // Return empty array or notify
     return res.json([]);
   }
 
@@ -130,7 +155,7 @@ app.get('/api/photo-packages', async (req, res) => {
 // Get current profile
 app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   try {
-    if (pool) {
+    if (directDbAvailable && pool) {
       try {
         const { rows } = await pool.query(
           'SELECT id, email, name, avatar_url, role, photo_balance, credit_balance, country, preferred_language, preferred_currency, created_at FROM public.profiles WHERE id = $1',
@@ -153,7 +178,7 @@ app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
           });
         }
       } catch (dbErr) {
-        console.warn('[api/me] direct db query failed, falling back to supabaseAdmin:', dbErr);
+        handleDirectDbError('api/me', dbErr);
       }
     }
 
@@ -269,14 +294,16 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
       }
     } catch {}
 
-    if (!record && pool) {
+    if (!record && directDbAvailable && pool) {
       try {
         const { rows } = await pool.query(
           'INSERT INTO public.user_photos (user_id, storage_path, filename, mime_type, file_size) VALUES ($1, $2, $3, $4, $5) RETURNING *',
           [userId, storagePath, filename || 'my_photo.jpg', 'image/jpeg', buffer.length]
         );
         record = rows[0];
-      } catch {}
+      } catch (dbErr) {
+        handleDirectDbError('api/photos:insert', dbErr);
+      }
     }
 
     // 3. Create URL for frontend display
@@ -308,7 +335,7 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
 app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
   try {
     let photos: any[] = [];
-    if (pool) {
+    if (directDbAvailable && pool) {
       try {
         const { rows } = await pool.query(
           'SELECT * FROM public.user_photos WHERE user_id = $1 ORDER BY created_at DESC',
@@ -316,7 +343,7 @@ app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
         );
         photos = rows || [];
       } catch (dbErr) {
-        console.warn('[api/photos] direct db query failed, falling back to supabaseAdmin:', dbErr);
+        handleDirectDbError('api/photos', dbErr);
       }
     }
 
@@ -399,8 +426,9 @@ app.delete('/api/photos/:id', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // Helper to convert dataURL or fetch image buffer to Gemini inlineData
-async function urlToGenerativePart(url: string) {
-  if (!url) return null;
+async function urlToGenerativePart(rawUrl: string) {
+  if (!rawUrl) return null;
+  let url = String(rawUrl).trim();
 
   const normalizeMime = (raw: string | null | undefined): string => {
     const base = (raw || 'image/jpeg').split(';')[0].trim().toLowerCase();
@@ -422,6 +450,12 @@ async function urlToGenerativePart(url: string) {
     }
     console.warn('[urlToGenerativePart] bad data-url');
     return null;
+  }
+
+  if (url.startsWith('/')) {
+    url = `http://127.0.0.1:${PORT}${url}`;
+  } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `http://127.0.0.1:${PORT}/${url}`;
   }
 
   try {
@@ -657,26 +691,21 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       console.log(`[generate] ${label} captured in memory (${data?.length || 0} chars). Upload deferred to end.`);
     }
 
-    // ── Prompt + images: IDENTITY selfies + SCENE TEXT (no style image) ──
-    // Templates: scene from templates.prompt
-    // Pinterest: scene from on-the-fly vision analysis of the reference
-    // Blur / style-image face transfer removed on purpose.
-
     const SCENE_ANALYZE_PROMPT = `You are a photography director writing a scene brief for an AI image generator.
 
 Analyze the reference photograph in extreme detail. Output ONLY a single dense English paragraph (no bullet lists, no markdown, no preamble).
 
 Describe the COMPLETE scene so another model can recreate the same shot WITHOUT seeing this image and WITHOUT copying any person's face:
 - Camera: exact framing (head-and-shoulders / waist-up / full body), camera height, angle (eye-level / slight low / high), approximate focal length feel (e.g. 35mm, 50mm, 85mm), depth of field
-- Pose: body orientation, head turn, gaze direction, arm and hand placement, weight distribution
-- Wardrobe: garments, colors, fabrics, fit, accessories, shoes if visible
+- Pose & Head/Neck Geometry: body orientation, torso lean, shoulder angle, exact neck tilt, head turn, chin height, gaze direction, arm and hand placement, weight distribution
+- Wardrobe: garments, collar style, colors, fabrics, fit, accessories, shoes if visible
 - Environment: location type, architecture, furniture, props, what is left/right/behind the subject
 - Lighting: key light direction and quality (soft/hard), fill, rim, color temperature, time of day, reflections
 - Color grade and mood: overall palette, contrast, atmosphere
 - Composition: subject placement in frame, leading lines, background blur amount
 
 STRICT RULES:
-- Do NOT describe facial features, age, gender presentation, skin, hair style/color, or identity of any person.
+- Do NOT describe facial features, beard/mustache/stubble, age, gender presentation, skin, hair style/color, or identity of any person.
 - Do NOT invent objects that are not visible.
 - Prefer concrete visual facts over vague adjectives.
 - Write as an executable scene prompt for photorealistic generation.`;
@@ -730,12 +759,12 @@ STRICT RULES:
     const age2Num = age2Provided ? Number(age2) : NaN;
     const age1Line =
       Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
-        ? `Apparent age of Person A: strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
-        : 'Apparent age of Person A: strictly preserve the exact natural biological age and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, exaggerated skin folds, or eye bags.';
+        ? `Apparent age of Person A: strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+        : 'Apparent age of Person A: strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
     const age2Line =
       Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
-        ? `Apparent age of Person B: strictly around ${Math.round(age2Num)} years. Preserve fresh, youthful skin elasticity and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
-        : 'Apparent age of Person B: strictly preserve the exact natural biological age and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, exaggerated skin folds, or eye bags.';
+        ? `Apparent age of Person B: strictly around ${Math.round(age2Num)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+        : 'Apparent age of Person B: strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
     const h = Number(heightCm);
     const w = Number(weightKg);
     const bodyLine = [
@@ -750,7 +779,7 @@ STRICT RULES:
       .join(' ');
 
     const antiAgingTokens =
-      'premature aging, exaggerated wrinkles, deep nasolabial folds, tired eyes, dark circles under eyes, heavy eye bags, weathered haggard skin, coarse skin relief, plastic mannequin skin, artificial blur';
+      'premature aging, unrequested gray hair, gray beard, salt-and-pepper stubble instead of full beard, altered beard shape, shaved beard, unrequested facial stubble, exaggerated wrinkles, deep nasolabial folds, double chin, tired eyes, dark circles under eyes, heavy eye bags, weathered haggard skin, coarse skin relief, plastic mannequin skin, artificial blur, stiff unnatural neck angle, floating or pasted head effect, skin tone mismatch between face and hands';
     const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
     let avoidLine = negFromDb
       ? `Avoid: ${negFromDb}, ${antiAgingTokens}`
@@ -808,7 +837,7 @@ STRICT RULES:
 
     const editText = String(editInstruction || '').trim();
 
-    // Resolve SCENE TEXT (never send style/template image to the image model)
+    // Resolve SCENE TEXT
     let sceneText = '';
     if (effectiveMode === 'enhance' || effectiveMode === 'refine') {
       sceneText = '';
@@ -1005,7 +1034,10 @@ STRICT RULES:
         const p1 = await promptOrFallback('pass1_template');
         pushText(pass1Input, p1);
       }
-      pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure and hair to preserve):');
+      pushText(
+        pass1Input,
+        '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache shape and color to preserve):'
+      );
       await pushImageFromUrl(pass1Input, userPhotoUrl, 'user selfie');
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'user selfie extra');
@@ -1017,7 +1049,7 @@ STRICT RULES:
       if (templatePreviewUrl) {
         pushText(
           pass1Input,
-          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match head tilt, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure):'
+          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match head tilt, neck angle, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure, hair, or beard/stubble):'
         );
         try {
           await pushImageFromUrl(pass1Input, templatePreviewUrl, 'template pose reference');
@@ -1028,7 +1060,7 @@ STRICT RULES:
 
       pushText(
         pass1Input,
-        'FINAL PASS 1: Generate a single photorealistic portrait with the exact face and hair of the user [USER_IDENTITY_PHOTOS], naturally embodying the neat expression, head angle and lighting of the template.'
+        'FINAL PASS 1: Generate a single photorealistic portrait with the exact face, hair, and facial hair (beard/mustache) of the user [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging, naturally embodying the neat expression, head/neck angle and lighting of the template.'
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
@@ -1048,16 +1080,19 @@ STRICT RULES:
         const p2 = await promptOrFallback('pass2_template');
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costume, body, hands, environment; only head/neck area masked):');
+      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costume, body, hands, environment; only head/neck/hair area masked):');
       await pushImageFromUrl(pass2Input, maskUrl, 'masked scene');
-      pushText(pass2Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face to embed; primary selfie and extra angles):');
+      pushText(
+        pass2Input,
+        '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face, hair, and facial hair/beard/mustache to embed; primary selfie and extra angles):'
+      );
       await pushImageFromUrl(pass2Input, userPhotoUrl, 'user identity selfie');
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 3)) {
           await pushImageFromUrl(pass2Input, u, 'user identity extra');
         }
       }
-      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 RESULT (head pose, lighting, and neat natural emotion to polish):');
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 RESULT (head pose, neck angle, lighting, and neat natural emotion to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/png',
@@ -1065,7 +1100,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Flawless neck/collar junction, matching ambient light, natural neat expression, pristine skin. Output one single photorealistic image.'
+        'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless neck/collar junction, skin tone harmonized with ambient light and hands in [SCENE_IMAGE], natural neat expression, pristine editorial skin. Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
@@ -1086,12 +1121,18 @@ STRICT RULES:
         const p1 = await promptOrFallback('pass1_couple');
         pushText(pass1Input, p1);
       }
-      pushText(pass1Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face, multi-angle facial anatomy and hair to preserve):');
+      pushText(
+        pass1Input,
+        '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+      );
       await pushImageFromUrl(pass1Input, userPhotoUrl, 'user identity A');
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'user identity A extra');
       }
-      pushText(pass1Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face, multi-angle facial anatomy and hair to preserve):');
+      pushText(
+        pass1Input,
+        '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+      );
       if (partnerPhotoUrl) await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'partner identity B');
       if (Array.isArray(partnerExtraPhotoUrls)) {
         for (const u of partnerExtraPhotoUrls.slice(0, 4))
@@ -1103,7 +1144,7 @@ STRICT RULES:
       if (coupleTemplatePreviewUrl) {
         pushText(
           pass1Input,
-          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, head poses, gaze angles, and lighting):'
+          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, head poses, neck angles, gaze angles, and lighting; do not copy template models\' faces or hair):'
         );
         try {
           await pushImageFromUrl(pass1Input, coupleTemplatePreviewUrl, 'couple template pose reference');
@@ -1113,7 +1154,7 @@ STRICT RULES:
       }
       pushText(
         pass1Input,
-        'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS]. Delicate, natural expressions, matching poses and cinematic lighting.'
+        'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Delicate, natural expressions, matching head/neck poses and cinematic lighting.'
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
@@ -1135,20 +1176,20 @@ STRICT RULES:
       }
       pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costumes, body, hands, environment; head/neck/hair areas masked):');
       await pushImageFromUrl(pass2Input, maskUrl, 'masked couple scene');
-      pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face):');
+      pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, hair, and facial hair/beard to embed):');
       await pushImageFromUrl(pass2Input, userPhotoUrl, 'user identity A');
       if (Array.isArray(extraPhotoUrls)) {
         for (const u of extraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'user identity A extra');
       }
       if (partnerPhotoUrl) {
-        pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face):');
+        pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, hair, and facial hair/beard to embed):');
         await pushImageFromUrl(pass2Input, partnerPhotoUrl, 'partner identity B');
         if (Array.isArray(partnerExtraPhotoUrls)) {
           for (const u of partnerExtraPhotoUrls.slice(0, 2))
             await pushImageFromUrl(pass2Input, u, 'partner identity B extra');
         }
       }
-      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head poses, neat expressions to polish):');
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head poses, neck angles, lighting, and neat expressions to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/png',
@@ -1156,7 +1197,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Absolute facial likeness required. Seamless collar blend, matching light, neat natural expressions, pristine skin. Output one single photorealistic image.'
+        'FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Absolute facial likeness, hair, and exact beard/mustache preservation required. Seamless collar/neck blend, skin tones harmonized with ambient light and hands in [SCENE_IMAGE], neat natural expressions, pristine editorial skin. Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
@@ -1193,20 +1234,29 @@ STRICT RULES:
       }
 
       if (isCouplePinterest) {
-        pushText(pass1Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
+        pushText(
+          pass1Input,
+          '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+        );
         await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity A');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity A extra');
         }
         if (partnerPhotoUrl) {
-          pushText(pass1Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
+          pushText(
+            pass1Input,
+            '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+          );
           await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
           if (Array.isArray(partnerExtraPhotoUrls)) {
             for (const u of partnerExtraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
           }
         }
       } else {
-        pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
+        pushText(
+          pass1Input,
+          '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache shape and color to preserve):'
+        );
         await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity selfie');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) {
@@ -1217,7 +1267,7 @@ STRICT RULES:
 
       pushText(
         pass1Input,
-        '[POSE_AND_LIGHTING_REFERENCE] — PINTEREST REFERENCE (match head tilt, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure):'
+        '[POSE_AND_LIGHTING_REFERENCE] — PINTEREST REFERENCE (match head tilt, neck angle, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure, hair, or beard/stubble):'
       );
       try {
         await pushImageFromUrl(pass1Input, refUrl, 'pinterest pose reference');
@@ -1228,12 +1278,12 @@ STRICT RULES:
       if (isCouplePinterest) {
         pushText(
           pass1Input,
-          'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS]. Delicate, natural expressions, matching poses and cinematic lighting.'
+          'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Delicate, natural expressions, matching head/neck poses and cinematic lighting.'
         );
       } else {
         pushText(
           pass1Input,
-          'FINAL PASS 1: Generate a single photorealistic portrait with the exact face and hair of the user [USER_IDENTITY_PHOTOS], naturally embodying the neat expression, head angle and lighting of the reference.'
+          'FINAL PASS 1: Generate a single photorealistic portrait with the exact face, hair, and facial hair (beard/mustache) of the user [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging, naturally embodying the neat expression, head/neck angle and lighting of the reference.'
         );
       }
 
@@ -1257,8 +1307,8 @@ STRICT RULES:
       pushText(
         maskInput,
         isCouplePinterest
-          ? 'FINAL MASK: Output the exact same input image with both faces, ears, necks, and all hair solidly covered with uniform light gray (#C0C0C0) down to the collar lines. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
-          : 'FINAL MASK: Output the exact same input image with face, ears, neck, and all hair solidly covered with uniform light gray (#C0C0C0) down to the collar line. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
+          ? 'FINAL MASK: Output the exact same input image with both faces, ears, necks, and all hair (including any glasses or earrings on the heads) solidly covered with uniform light gray (#C0C0C0) down to the collar lines. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
+          : 'FINAL MASK: Output the exact same input image with face, ears, neck, and all hair (including any glasses or earrings on the head) solidly covered with uniform light gray (#C0C0C0) down to the collar line. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
       );
 
       const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
@@ -1284,26 +1334,26 @@ STRICT RULES:
         data: maskPass.data
       });
       if (isCouplePinterest) {
-        pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face):');
+        pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, hair, and facial hair/beard to embed):');
         await pushImageFromUrl(pass2Input, userPhotoUrl, 'pinterest selfie A');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'pinterest extra A');
         }
         if (partnerPhotoUrl) {
-          pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face):');
+          pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, hair, and facial hair/beard to embed):');
           await pushImageFromUrl(pass2Input, partnerPhotoUrl, 'pinterest partner B');
           if (Array.isArray(partnerExtraPhotoUrls)) {
             for (const u of partnerExtraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'pinterest extra B');
           }
         }
       } else {
-        pushText(pass2Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face to embed):');
+        pushText(pass2Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face, hair, and facial hair/beard/mustache to embed):');
         await pushImageFromUrl(pass2Input, userPhotoUrl, 'pinterest selfie identity');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 3)) await pushImageFromUrl(pass2Input, u, 'pinterest extra identity');
         }
       }
-      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head pose, lighting, and neat expression to polish):');
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head pose, neck angle, lighting, and neat expression to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/jpeg',
@@ -1312,8 +1362,8 @@ STRICT RULES:
       pushText(
         pass2Input,
         isCouplePinterest
-          ? 'FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Flawless collar seams, matching ambient light, natural expressions, high-end editorial skin. Output one single photorealistic image.'
-          : 'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Flawless neck/collar seams and hair, neat natural expression, matching ambient light, magazine retouching. Output one single photorealistic image.'
+          ? 'FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless collar/neck seams, skin tones harmonized with ambient light and hands in [SCENE_IMAGE], natural expressions, high-end editorial skin. Output one single photorealistic image.'
+          : 'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless neck/collar seams and hair, neat natural expression, skin tone harmonized with ambient light and hands in [SCENE_IMAGE], magazine retouching. Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
@@ -1332,37 +1382,55 @@ STRICT RULES:
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'refine base');
         pushText(interactionInput, 'Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT]. Output one edited photorealistic image.');
       } else if (effectiveMode === 'couple') {
-        pushText(interactionInput, '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
+        pushText(
+          interactionInput,
+          '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+        );
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'identity A');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u, 'identity A extra');
         }
-        pushText(interactionInput, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
+        pushText(
+          interactionInput,
+          '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache to preserve):'
+        );
         if (partnerPhotoUrl) await pushImageFromUrl(interactionInput, partnerPhotoUrl, 'identity B');
         if (Array.isArray(partnerExtraPhotoUrls)) {
           for (const u of partnerExtraPhotoUrls.slice(0, 4))
             await pushImageFromUrl(interactionInput, u, 'identity B extra');
         }
       } else {
-        pushText(interactionInput, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
+        pushText(
+          interactionInput,
+          '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color, and exact facial hair/beard/mustache shape and color to preserve):'
+        );
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'user identity');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u, 'user identity extra');
         }
       }
 
-      // If single pass with a template (single or couple), provide POSE_AND_LIGHTING_REFERENCE
+      // If single pass with a template (single or couple), provide POSE_AND_LIGHTING_REFERENCE if available
+      let singlePassHasPoseRef = false;
       if (effectiveMode === 'template' || effectiveMode === 'couple') {
         const templatePreviewUrl = String(
           template.preview_image_url || template.previewImageUrl || template.image_url || ''
         ).trim();
         if (templatePreviewUrl) {
-          pushText(
-            interactionInput,
-            '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, pose, head tilt, gaze angle, lighting scheme, and natural neat expression):'
-          );
           try {
-            await pushImageFromUrl(interactionInput, templatePreviewUrl, 'template pose reference');
+            const refPart = await urlToGenerativePart(templatePreviewUrl);
+            if (refPart?.inlineData?.data) {
+              pushText(
+                interactionInput,
+                '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, pose, head tilt, neck angle, gaze angle, lighting scheme, and natural neat expression; do not copy this person\'s facial bone structure, hair, or beard):'
+              );
+              interactionInput.push({
+                type: 'image',
+                mime_type: (refPart.inlineData.mimeType || 'image/jpeg').split(';')[0].trim(),
+                data: refPart.inlineData.data
+              });
+              singlePassHasPoseRef = true;
+            }
           } catch (e) {
             console.warn('[single-pass] could not load templatePreviewUrl:', e);
           }
@@ -1372,12 +1440,16 @@ STRICT RULES:
       pushText(
         interactionInput,
         effectiveMode === 'enhance'
-          ? 'FINAL: Output an enhanced version of [IMAGE_TO_ENHANCE] with restored micro-details, sharp eyes, natural skin texture and cinematic lighting.'
+          ? 'FINAL: Output an enhanced version of [IMAGE_TO_ENHANCE] with restored micro-details, sharp eyes, natural skin texture, preserved facial hair/beard and hair, and cinematic lighting.'
           : effectiveMode === 'refine'
-            ? 'FINAL: Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT]. Output one edited photorealistic image.'
+            ? 'FINAL: Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT] while preserving 100% facial identity, hair, and beard/mustache. Output one edited photorealistic image.'
             : effectiveMode === 'couple'
-              ? 'FINAL: Faces strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right). Embody head poses and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text only. No other faces.'
-              : 'FINAL: Face strictly from [USER_IDENTITY_PHOTOS]. Embody head pose and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text only. No other face.'
+              ? singlePassHasPoseRef
+                ? 'FINAL: Faces, hair, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested gray hair or aging. Embody head/neck poses and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text. No other faces.'
+                : 'FINAL: Faces, hair, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested gray hair or aging. Scene from the SCENE text only. No other faces.'
+              : singlePassHasPoseRef
+                ? 'FINAL: Face, hair, and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Embody head/neck pose and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text. No other face.'
+                : 'FINAL: Face, hair, and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Scene from the SCENE text only. No other face.'
       );
 
       const imageSize: '1K' | '2K' | '4K' = imageQuality;
@@ -1585,7 +1657,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     const SIGNED_TTL = 60 * 60 * 24 * 7;
 
     let jobs: any[] = [];
-    if (pool) {
+    if (directDbAvailable && pool) {
       try {
         const { rows } = await pool.query(
           `SELECT j.*, 
@@ -1599,7 +1671,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         );
         jobs = rows || [];
       } catch (dbErr) {
-        console.warn('[api/generations] direct db query failed, falling back to supabaseAdmin:', dbErr);
+        handleDirectDbError('api/generations', dbErr);
       }
     }
 
@@ -1719,7 +1791,7 @@ app.post('/api/generations/:id/retry', requireAuth, async (req: AuthRequest, res
 // User Photo Transactions Ledger
 app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) => {
   try {
-    if (pool) {
+    if (directDbAvailable && pool) {
       try {
         const { rows } = await pool.query(
           'SELECT * FROM public.photo_transactions WHERE user_id = $1 ORDER BY created_at DESC',
@@ -1729,7 +1801,7 @@ app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) =>
           return res.json(rows);
         }
       } catch (dbErr) {
-        console.warn('[api/photo-transactions] direct db query failed, falling back to supabaseAdmin:', dbErr);
+        handleDirectDbError('api/photo-transactions', dbErr);
       }
     }
 
@@ -2186,8 +2258,6 @@ app.get('/api/admin/providers', requireAuth, requireAdmin, async (req: AuthReque
   }
 });
 
-
-
 // User level (spend-based)
 app.get('/api/me/levels', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -2210,8 +2280,6 @@ app.get('/api/me/levels', requireAuth, async (req: AuthRequest, res) => {
 // ====================================================================
 // ACCOUNT: delete, referral, profile extras
 // ====================================================================
-
-// Extended /api/me already returns profile columns (level, referral_code, etc.)
 
 app.get('/api/me/referral', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -2293,7 +2361,6 @@ app.post('/api/account/delete', requireAuth, async (req: AuthRequest, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // ====================================================================
 // STATIC & VITE MIDDLEWARE
