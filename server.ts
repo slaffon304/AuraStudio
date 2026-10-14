@@ -1133,7 +1133,7 @@ STRICT RULES:
         const p2 = await promptOrFallback('pass2_couple');
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costumes, environment; faces/hair masked):');
+      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costumes, body, hands, environment; head/neck/hair areas masked):');
       await pushImageFromUrl(pass2Input, maskUrl, 'masked couple scene');
       pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face):');
       await pushImageFromUrl(pass2Input, userPhotoUrl, 'user identity A');
@@ -1193,20 +1193,20 @@ STRICT RULES:
       }
 
       if (isCouplePinterest) {
-        pushText(pass1Input, '[IDENTITY_A_PHOTOS] — первый персонаж (лицо и голова слева, все ракурсы):');
+        pushText(pass1Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
         await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity A');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity A extra');
         }
         if (partnerPhotoUrl) {
-          pushText(pass1Input, '[IDENTITY_B_PHOTOS] — второй персонаж (лицо и голова справа, все ракурсы):');
+          pushText(pass1Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
           await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
           if (Array.isArray(partnerExtraPhotoUrls)) {
             for (const u of partnerExtraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
           }
         }
       } else {
-        pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy and hair to preserve):');
+        pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure, hair texture and color to preserve):');
         await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity selfie');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) {
@@ -1252,9 +1252,14 @@ STRICT RULES:
       const maskInput: any[] = [];
       const maskPromptText = await promptOrFallback(maskKey);
       pushText(maskInput, maskPromptText);
-      pushText(maskInput, 'ИСХОДНЫЙ РЕФЕРЕНС:');
+      pushText(maskInput, '[ORIGINAL_REFERENCE] — PINTEREST PHOTO TO MASK:');
       await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
-      pushText(maskInput, isCouplePinterest ? 'ФИНАЛ: тот же кадр, оба лица и обе причёски замазаны.' : 'ФИНАЛ: тот же кадр, лица и волосы замазаны.');
+      pushText(
+        maskInput,
+        isCouplePinterest
+          ? 'FINAL MASK: Output the exact same input image with both faces, ears, necks, and all hair solidly covered with uniform light gray (#C0C0C0) down to the collar lines. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
+          : 'FINAL MASK: Output the exact same input image with face, ears, neck, and all hair solidly covered with uniform light gray (#C0C0C0) down to the collar line. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
+      );
 
       const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
 
@@ -1272,7 +1277,7 @@ STRICT RULES:
         const p2 = await promptOrFallback(pass2Key);
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, '[SCENE_IMAGE] — SCENE TO PRESERVE (costumes, environment; faces/hair masked):');
+      pushText(pass2Input, '[SCENE_IMAGE] — SCENE TO PRESERVE (costumes, body, hands, environment; head/neck/hair area masked):');
       pass2Input.push({
         type: 'image',
         mime_type: maskPass.mimeType || 'image/jpeg',
@@ -1320,41 +1325,59 @@ STRICT RULES:
       pushText(interactionInput, promptContext);
 
       if (effectiveMode === 'enhance') {
-        pushText(interactionInput, 'PHOTO TO ENHANCE:');
-        await pushImageFromUrl(interactionInput, userPhotoUrl);
+        pushText(interactionInput, '[IMAGE_TO_ENHANCE] — PHOTO TO ENHANCE:');
+        await pushImageFromUrl(interactionInput, userPhotoUrl, 'enhance photo');
       } else if (effectiveMode === 'refine') {
-        pushText(interactionInput, 'PHOTO TO EDIT (base image):');
+        pushText(interactionInput, '[IMAGE_TO_EDIT] — PHOTO TO EDIT (base image):');
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'refine base');
-        pushText(interactionInput, 'Apply the USER INSTRUCTION only. Output one edited photorealistic image.');
+        pushText(interactionInput, 'Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT]. Output one edited photorealistic image.');
       } else if (effectiveMode === 'couple') {
-        pushText(interactionInput, '[IDENTITY_A_PHOTOS] — PERSON ON THE LEFT (exact real face):');
+        pushText(interactionInput, '[IDENTITY_A_PHOTOS] — LEFT PERSON (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'identity A');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u, 'identity A extra');
         }
-        pushText(interactionInput, '[IDENTITY_B_PHOTOS] — PERSON ON THE RIGHT (exact real face):');
+        pushText(interactionInput, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
         if (partnerPhotoUrl) await pushImageFromUrl(interactionInput, partnerPhotoUrl, 'identity B');
         if (Array.isArray(partnerExtraPhotoUrls)) {
           for (const u of partnerExtraPhotoUrls.slice(0, 4))
             await pushImageFromUrl(interactionInput, u, 'identity B extra');
         }
       } else {
-        pushText(interactionInput, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (the only face that must appear in the result):');
+        pushText(interactionInput, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face, multi-angle facial anatomy, hair texture and color to preserve):');
         await pushImageFromUrl(interactionInput, userPhotoUrl, 'user identity');
         if (Array.isArray(extraPhotoUrls)) {
           for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(interactionInput, u, 'user identity extra');
         }
       }
 
+      // If single pass with a template (single or couple), provide POSE_AND_LIGHTING_REFERENCE
+      if (effectiveMode === 'template' || effectiveMode === 'couple') {
+        const templatePreviewUrl = String(
+          template.preview_image_url || template.previewImageUrl || template.image_url || ''
+        ).trim();
+        if (templatePreviewUrl) {
+          pushText(
+            interactionInput,
+            '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, pose, head tilt, gaze angle, lighting scheme, and natural neat expression):'
+          );
+          try {
+            await pushImageFromUrl(interactionInput, templatePreviewUrl, 'template pose reference');
+          } catch (e) {
+            console.warn('[single-pass] could not load templatePreviewUrl:', e);
+          }
+        }
+      }
+
       pushText(
         interactionInput,
         effectiveMode === 'enhance'
-          ? 'Output an enhanced version of the same photo.'
+          ? 'FINAL: Output an enhanced version of [IMAGE_TO_ENHANCE] with restored micro-details, sharp eyes, natural skin texture and cinematic lighting.'
           : effectiveMode === 'refine'
-            ? 'Output one edited photorealistic image following the USER INSTRUCTION.'
+            ? 'FINAL: Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT]. Output one edited photorealistic image.'
             : effectiveMode === 'couple'
-              ? 'FINAL: Faces strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right). Scene from the SCENE text only. No other faces.'
-              : 'FINAL: Face strictly from [USER_IDENTITY_PHOTOS]. Scene from the SCENE text only. No other face.'
+              ? 'FINAL: Faces strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right). Embody head poses and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text only. No other faces.'
+              : 'FINAL: Face strictly from [USER_IDENTITY_PHOTOS]. Embody head pose and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text only. No other face.'
       );
 
       const imageSize: '1K' | '2K' | '4K' = imageQuality;
