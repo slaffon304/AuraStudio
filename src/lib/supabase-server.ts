@@ -30,39 +30,23 @@ export const isValidHttpUrl = (str?: string | null): boolean => {
 };
 
 export const isServerSupabaseConfigured = (): boolean => {
-  if (!isValidHttpUrl(rawUrl)) return false;
-  if (!rawSecretKey && !process.env.DATABASE_URL) return false;
-
-  const lowerUrl = rawUrl.toLowerCase();
-  const lowerKey = rawSecretKey.toLowerCase();
-
-  if (
-    lowerUrl.includes('your-project') ||
-    lowerUrl.includes('placeholder') ||
-    lowerUrl === 'supabase_url' ||
-    lowerUrl === 'vite_supabase_url'
-  ) {
-    return false;
-  }
-
-  if (
-    lowerKey === 'your-secret-key-here' ||
-    lowerKey === 'placeholder-secret-key' ||
-    lowerKey === 'supabase_secret_key' ||
-    lowerKey === 'supabase_service_role_key'
-  ) {
-    return false;
-  }
-
   return true;
 };
 
+const isValidJwtKey = (k?: string | null): boolean => {
+  if (!k) return false;
+  const trimmed = k.trim();
+  return trimmed.startsWith('ey') && trimmed.split('.').length === 3;
+};
+
 // Safe server URL and key
-const serverUrl = isServerSupabaseConfigured() && isValidHttpUrl(rawUrl)
+const serverUrl = isValidHttpUrl(rawUrl) && !rawUrl.toLowerCase().includes('supabase_url')
   ? rawUrl
   : 'https://zjshigepycaaqbqyuztk.supabase.co';
 
-const serverKey = rawSecretKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc2hpZ2VweWNhYXFicXl1enRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMDg1ODUsImV4cCI6MjEwNjc4NDU4NX0.CZvBuz6WuyqpIwGmmlNKrr8OQB5fWQOKFplJ4Q4DxUM';
+const serverKey = isValidJwtKey(rawSecretKey)
+  ? rawSecretKey
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqc2hpZ2VweWNhYXFicXl1enRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMDg1ODUsImV4cCI6MjEwNjc4NDU4NX0.CZvBuz6WuyqpIwGmmlNKrr8OQB5fWQOKFplJ4Q4DxUM';
 
 function initializeServerSupabaseClient(): SupabaseClient {
   try {
@@ -115,23 +99,25 @@ export async function authenticateRequest(req: Request): Promise<AuthenticatedUs
       return null;
     }
 
-    // Try PostgreSQL directly first for instant, accurate profile lookup
-    try {
-      const { rows } = await pool.query(
-        'SELECT id, email, role, photo_balance, credit_balance FROM public.profiles WHERE id = $1',
-        [user.id]
-      );
-      if (rows && rows.length > 0) {
-        const p = rows[0];
-        return {
-          id: p.id,
-          email: p.email || user.email || '',
-          role: (p.role === 'admin' ? 'admin' : 'user'),
-          creditBalance: p.photo_balance ?? p.credit_balance ?? 0
-        };
+    // Try PostgreSQL directly first for instant, accurate profile lookup (if configured)
+    if (pool) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT id, email, role, photo_balance, credit_balance FROM public.profiles WHERE id = $1',
+          [user.id]
+        );
+        if (rows && rows.length > 0) {
+          const p = rows[0];
+          return {
+            id: p.id,
+            email: p.email || user.email || '',
+            role: (p.role === 'admin' ? 'admin' : 'user'),
+            creditBalance: p.photo_balance ?? p.credit_balance ?? 0
+          };
+        }
+      } catch (dbErr) {
+        console.warn('Postgres profile lookup fallback to supabaseAdmin:', dbErr);
       }
-    } catch (dbErr) {
-      console.warn('Postgres profile lookup fallback to supabaseAdmin:', dbErr);
     }
 
     // Fetch user profile from database via supabaseAdmin

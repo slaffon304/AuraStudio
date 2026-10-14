@@ -10,6 +10,7 @@ import {
   isServerSupabaseConfigured,
   AuthenticatedUser
 } from './src/lib/supabase-server.js';
+import { DEFAULT_GENERATION_PROMPTS } from './serverPrompts.js';
 import { pool } from './src/lib/db.js';
 import { paymentGateway } from './src/services/payments/index.js';
 
@@ -129,29 +130,31 @@ app.get('/api/photo-packages', async (req, res) => {
 // Get current profile
 app.get('/api/me', requireAuth, async (req: AuthRequest, res) => {
   try {
-    try {
-      const { rows } = await pool.query(
-        'SELECT id, email, name, avatar_url, role, photo_balance, credit_balance, country, preferred_language, preferred_currency, created_at FROM public.profiles WHERE id = $1',
-        [req.user!.id]
-      );
-      if (rows && rows.length > 0) {
-        const p = rows[0];
-        return res.json({
-          id: p.id,
-          email: p.email || req.user!.email,
-          name: p.name || (p.email || 'User').split('@')[0],
-          avatar_url: p.avatar_url || '',
-          role: p.role || 'user',
-          photo_balance: p.photo_balance ?? p.credit_balance ?? 0,
-          credit_balance: p.photo_balance ?? p.credit_balance ?? 0,
-          country: p.country || 'Moldova',
-          preferred_language: p.preferred_language || 'ru',
-          preferred_currency: p.preferred_currency || 'EUR',
-          created_at: p.created_at
-        });
+    if (pool) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT id, email, name, avatar_url, role, photo_balance, credit_balance, country, preferred_language, preferred_currency, created_at FROM public.profiles WHERE id = $1',
+          [req.user!.id]
+        );
+        if (rows && rows.length > 0) {
+          const p = rows[0];
+          return res.json({
+            id: p.id,
+            email: p.email || req.user!.email,
+            name: p.name || (p.email || 'User').split('@')[0],
+            avatar_url: p.avatar_url || '',
+            role: p.role || 'user',
+            photo_balance: p.photo_balance ?? p.credit_balance ?? 0,
+            credit_balance: p.photo_balance ?? p.credit_balance ?? 0,
+            country: p.country || 'Moldova',
+            preferred_language: p.preferred_language || 'ru',
+            preferred_currency: p.preferred_currency || 'EUR',
+            created_at: p.created_at
+          });
+        }
+      } catch (dbErr) {
+        console.warn('[api/me] direct db query failed, falling back to supabaseAdmin:', dbErr);
       }
-    } catch (dbErr) {
-      console.warn('[api/me] direct db query failed, falling back to supabaseAdmin:', dbErr);
     }
 
     const { data, error } = await supabaseAdmin
@@ -266,12 +269,14 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
       }
     } catch {}
 
-    if (!record) {
-      const { rows } = await pool.query(
-        'INSERT INTO public.user_photos (user_id, storage_path, filename, mime_type, file_size) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [userId, storagePath, filename || 'my_photo.jpg', 'image/jpeg', buffer.length]
-      );
-      record = rows[0];
+    if (!record && pool) {
+      try {
+        const { rows } = await pool.query(
+          'INSERT INTO public.user_photos (user_id, storage_path, filename, mime_type, file_size) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [userId, storagePath, filename || 'my_photo.jpg', 'image/jpeg', buffer.length]
+        );
+        record = rows[0];
+      } catch {}
     }
 
     // 3. Create URL for frontend display
@@ -303,20 +308,25 @@ app.post('/api/photos', requireAuth, async (req: AuthRequest, res) => {
 app.get('/api/photos', requireAuth, async (req: AuthRequest, res) => {
   try {
     let photos: any[] = [];
-    try {
-      const { rows } = await pool.query(
-        'SELECT * FROM public.user_photos WHERE user_id = $1 ORDER BY created_at DESC',
-        [req.user!.id]
-      );
-      photos = rows || [];
-    } catch (dbErr) {
-      console.warn('[api/photos] direct db query failed, falling back to supabaseAdmin:', dbErr);
+    if (pool) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT * FROM public.user_photos WHERE user_id = $1 ORDER BY created_at DESC',
+          [req.user!.id]
+        );
+        photos = rows || [];
+      } catch (dbErr) {
+        console.warn('[api/photos] direct db query failed, falling back to supabaseAdmin:', dbErr);
+      }
+    }
+
+    if (!photos || photos.length === 0) {
       const { data, error } = await supabaseAdmin
         .from('user_photos')
         .select('*')
         .eq('user_id', req.user!.id)
         .order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error && !photos) throw error;
       photos = data || [];
     }
 
@@ -751,13 +761,32 @@ STRICT RULES:
         ? (avoidDefault.trim().startsWith('Avoid') || avoidDefault.trim().startsWith('Избег')
             ? avoidDefault.trim()
             : `Avoid: ${avoidDefault.trim()}`)
-        : `Avoid: ${antiAgingTokens}, distorted anatomy, extra fingers, unnatural hands, watermarks, logos, text overlays, and any face that does not match the IDENTITY photos.`;
+        : (DEFAULT_GENERATION_PROMPTS['avoid_default'] || `Avoid: ${antiAgingTokens}, distorted anatomy, extra fingers, unnatural hands, watermarks, logos, text overlays, and any face that does not match the IDENTITY photos.`);
+    }
+
+    function formatExpression(exprRaw: string): string {
+      const raw = exprRaw.trim();
+      if (!raw) {
+        return 'Естественное, спокойное и доброжелательное выражение лица, соответствующее настроению сцены.';
+      }
+      const lower = raw.toLowerCase();
+      let desc = raw;
+      if (lower.includes('soft') && lower.includes('smile')) {
+        desc = 'Мягкая сдержанная естественная улыбка с сомкнутыми губами (Soft closed-mouth smile). Губы мягко приподняты в уголках, живой теплый взгляд, гладкая кожа без глубоких носогубных складок.';
+      } else if (lower.includes('wide smile') || lower.includes('laugh')) {
+        desc = 'Широкая открытая и жизнерадостная улыбка (Wide smile / laughing). Искрящиеся глаза, естественная мимика, гармоничное и молодое выражение лица без гримас.';
+      } else if (lower.includes('light smile')) {
+        desc = 'Легкая естественная полуулыбка (Light smile). Приятный, доброжелательный взгляд, расслабленная мимика.';
+      } else if (lower.includes('open smile')) {
+        desc = 'Открытая естественная улыбка (Open smile showing teeth). Привлекательный, уверенный и естественный вид, ровная линия губ без перенапряжения.';
+      } else if (lower.includes('neutral') || lower.includes('no smile') || lower.includes('calm')) {
+        desc = 'Спокойное, уверенное и сосредоточенное нейтральное выражение лица с закрытым ртом (Calm, neutral expression). Расслабленные губы, прямой уверенный взгляд.';
+      }
+      return `${desc} ВНИМАНИЕ: Эмоция переносится аккуратно, органично анатомии лица пользователя, сохраняя молодость и свежесть кожи без глубоких заломов.`;
     }
 
     const expressionRaw = String(template.expression || template.expression_text || '').trim();
-    const expressionLine = expressionRaw
-      ? expressionRaw
-      : 'спокойное нейтральное выражение';
+    const expressionLine = formatExpression(expressionRaw);
 
     const qualityLine =
       imageQuality === '4K'
@@ -810,84 +839,31 @@ STRICT RULES:
       quality: qualityLine || ''
     };
 
-    async function promptOrFallback(key: string, fallback: string): Promise<string> {
+    async function promptOrFallback(key: string, customFallback?: string): Promise<string> {
       const fromDb = await loadPromptFromDb(key);
       if (fromDb) {
         console.log('[prompt] using DB key=', key, 'chars=', fromDb.length);
         return fillPrompt(fromDb, promptVars);
       }
+      const fallback = customFallback || DEFAULT_GENERATION_PROMPTS[key] || '';
       console.warn('[prompt] missing DB key=', key, '— using code fallback');
       return fillPrompt(fallback, promptVars);
     }
 
     let promptContext = '';
     if (effectiveMode === 'enhance') {
-      promptContext = await promptOrFallback(
-        'pass1_enhance',
-        [
-          'ЗАДАЧА: Улучши только техническое качество присланного фото.',
-          'СОХРАНИ: личность, лицо, выражение, позу, одежду, композицию, фон.',
-          'УЛУЧШИ: резкость, чистоту, шум/сжатие, естественный цвет.',
-          'НЕЛЬЗЯ: переделывать сцену, менять возраст или структуру лица, превращать в другого человека.',
-          '{{quality}}',
-          '{{avoid}}'
-        ].join('\n')
-      );
+      promptContext = await promptOrFallback('pass1_enhance');
     } else if (effectiveMode === 'refine') {
       if (!editText) {
         throw new Error('editInstruction is required for refine mode.');
       }
-      promptContext = await promptOrFallback(
-        'refine',
-        [
-          'ЗАДАЧА: Отредактируй присланное фото строго по инструкции пользователя.',
-          'Меняй ТОЛЬКО то, о чём просят. Личность и композицию сохраняй, если инструкция явно этого не меняет.',
-          'ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ:',
-          '{{edit}}',
-          '{{avoid}}'
-        ].join('\n')
-      );
+      promptContext = await promptOrFallback('refine');
     } else if (effectiveMode === 'pinterest') {
-      promptContext = await promptOrFallback(
-        'pass1_pinterest',
-        [
-          'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
-          'IDENTITY — кто должен получиться (лицо только с этих фото).',
-          'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
-          'СЦЕНА:',
-          '{{scene}}',
-          '{{age1}}',
-          '{{body}}',
-          '{{avoid}}'
-        ].join('\n')
-      );
+      promptContext = await promptOrFallback('pass1_pinterest');
     } else if (effectiveMode === 'couple') {
-      // single-pass couple (no mask) — still use pass1_couple text
-      promptContext = await promptOrFallback(
-        'pass1_couple',
-        [
-          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе.',
-          'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
-          'СЦЕНА:',
-          '{{scene}}',
-          '{{age1}}',
-          '{{age2}}',
-          '{{avoid}}'
-        ].join('\n')
-      );
+      promptContext = await promptOrFallback('pass1_couple');
     } else {
-      // template single-pass fallback text
-      promptContext = await promptOrFallback(
-        'pass1_template',
-        [
-          'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ.',
-          'СЦЕНА:',
-          '{{scene}}',
-          '{{age1}}',
-          '{{body}}',
-          '{{avoid}}'
-        ].join('\n')
-      );
+      promptContext = await promptOrFallback('pass1_template');
     }
 
     const targetRatio =
@@ -1026,27 +1002,33 @@ STRICT RULES:
 
       const pass1Input: any[] = [];
       {
-        const p1 = await promptOrFallback(
-          'pass1_template',
-          [
-            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию человека IDENTITY в СЦЕНЕ ниже.',
-            'СЦЕНА:',
-            '{{scene}}',
-            '{{age1}}',
-            '{{body}}',
-            '{{avoid}}'
-          ].join('\n')
-        );
+        const p1 = await promptOrFallback('pass1_template');
         pushText(pass1Input, p1);
       }
-      pushText(pass1Input, 'IDENTITY — the only face that must appear:');
-      await pushImageFromUrl(pass1Input, userPhotoUrl);
+      pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy, facial bone structure and hair to preserve):');
+      await pushImageFromUrl(pass1Input, userPhotoUrl, 'user selfie');
       if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
+        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'user selfie extra');
       }
+
+      const templatePreviewUrl = String(
+        template.preview_image_url || template.previewImageUrl || template.image_url || ''
+      ).trim();
+      if (templatePreviewUrl) {
+        pushText(
+          pass1Input,
+          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match head tilt, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure):'
+        );
+        try {
+          await pushImageFromUrl(pass1Input, templatePreviewUrl, 'template pose reference');
+        } catch (e) {
+          console.warn('[pass1] could not load templatePreviewUrl:', e);
+        }
+      }
+
       pushText(
         pass1Input,
-        'FINAL: Face and hair from IDENTITY only. Output a single photorealistic image.'
+        'FINAL PASS 1: Generate a single photorealistic portrait with the exact face and hair of the user [USER_IDENTITY_PHOTOS], naturally embodying the neat expression, head angle and lighting of the template.'
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
@@ -1063,22 +1045,19 @@ STRICT RULES:
 
       const pass2Input: any[] = [];
       {
-        const p2 = await promptOrFallback(
-          'pass2_template',
-          [
-            'Image 1 — СЦЕНА с маской на лице/волосах.',
-            'Image 2 — IDENTITY (голова).',
-            'Сцену с Image 1 сохрани. Голову возьми с Image 2.',
-            'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лица и упругость кожи, не старить.',
-            'Сбалансированная журнальная ретушь, гладкая здоровая кожа без подчеркивания пор или морщин.',
-            '{{avoid}}'
-          ].join('\n')
-        );
+        const p2 = await promptOrFallback('pass2_template');
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, 'IMAGE 1 — SCENE (face and hair masked):');
-      await pushImageFromUrl(pass2Input, maskUrl);
-      pushText(pass2Input, 'IMAGE 2 — HEAD / IDENTITY source:');
+      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costume, body, hands, environment; only head/neck area masked):');
+      await pushImageFromUrl(pass2Input, maskUrl, 'masked scene');
+      pushText(pass2Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face to embed; primary selfie and extra angles):');
+      await pushImageFromUrl(pass2Input, userPhotoUrl, 'user identity selfie');
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 3)) {
+          await pushImageFromUrl(pass2Input, u, 'user identity extra');
+        }
+      }
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 RESULT (head pose, lighting, and neat natural emotion to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/png',
@@ -1086,7 +1065,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL: Composite the head from Image 2 onto the masked scene of Image 1. One photorealistic image. Skin tone of the head matches Image 2.'
+        'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Flawless neck/collar junction, matching ambient light, natural neat expression, pristine skin. Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
@@ -1104,34 +1083,37 @@ STRICT RULES:
 
       const pass1Input: any[] = [];
       {
-        const p1 = await promptOrFallback(
-          'pass1_couple',
-          [
-            'ЗАДАЧА: Сделай ОДНУ фотореалистичную фотографию ДВУХ людей вместе в СЦЕНЕ.',
-            'PERSON A — СЛЕВА. PERSON B — СПРАВА.',
-            'СЦЕНА:',
-            '{{scene}}',
-            '{{age1}}',
-            '{{age2}}',
-            '{{avoid}}'
-          ].join('\n')
-        );
+        const p1 = await promptOrFallback('pass1_couple');
         pushText(pass1Input, p1);
       }
-      pushText(pass1Input, 'IDENTITY A (LEFT) — photos of the person who must appear on the LEFT:');
-      await pushImageFromUrl(pass1Input, userPhotoUrl);
+      pushText(pass1Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face, multi-angle facial anatomy and hair to preserve):');
+      await pushImageFromUrl(pass1Input, userPhotoUrl, 'user identity A');
       if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u);
+        for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'user identity A extra');
       }
-      pushText(pass1Input, 'IDENTITY B (RIGHT) — photos of the person who must appear on the RIGHT:');
-      if (partnerPhotoUrl) await pushImageFromUrl(pass1Input, partnerPhotoUrl);
+      pushText(pass1Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face, multi-angle facial anatomy and hair to preserve):');
+      if (partnerPhotoUrl) await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'partner identity B');
       if (Array.isArray(partnerExtraPhotoUrls)) {
         for (const u of partnerExtraPhotoUrls.slice(0, 4))
-          await pushImageFromUrl(pass1Input, u);
+          await pushImageFromUrl(pass1Input, u, 'partner identity B extra');
+      }
+      const coupleTemplatePreviewUrl = String(
+        template.preview_image_url || template.previewImageUrl || template.image_url || ''
+      ).trim();
+      if (coupleTemplatePreviewUrl) {
+        pushText(
+          pass1Input,
+          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, head poses, gaze angles, and lighting):'
+        );
+        try {
+          await pushImageFromUrl(pass1Input, coupleTemplatePreviewUrl, 'couple template pose reference');
+        } catch (e) {
+          console.warn('[pass1-couple] could not load preview:', e);
+        }
       }
       pushText(
         pass1Input,
-        'FINAL: Two people in one image. Faces and hair from IDENTITY A and IDENTITY B only. Do not merge or swap them.'
+        'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS]. Delicate, natural expressions, matching poses and cinematic lighting.'
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
@@ -1148,21 +1130,25 @@ STRICT RULES:
 
       const pass2Input: any[] = [];
       {
-        const p2 = await promptOrFallback(
-          'pass2_couple',
-          [
-            'Image 1 — СЦЕНА с ДВУМЯ людьми, лица под масками.',
-            'Image 2 — оба человека (лево/право).',
-            'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лиц и упругость кожи обоих персонажей, не старить.',
-            'Сбалансированная журнальная ретушь, гладкая здоровая кожа без подчеркивания пор или морщин.',
-            '{{avoid}}'
-          ].join('\n')
-        );
+        const p2 = await promptOrFallback('pass2_couple');
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, 'IMAGE 1 — SCENE (both faces and hair masked):');
-      await pushImageFromUrl(pass2Input, maskUrl);
-      pushText(pass2Input, 'IMAGE 2 — both HEADS / IDENTITY sources (left and right as already composed):');
+      pushText(pass2Input, '[SCENE_IMAGE] — BASE SCENE TO PRESERVE (costumes, environment; faces/hair masked):');
+      await pushImageFromUrl(pass2Input, maskUrl, 'masked couple scene');
+      pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face):');
+      await pushImageFromUrl(pass2Input, userPhotoUrl, 'user identity A');
+      if (Array.isArray(extraPhotoUrls)) {
+        for (const u of extraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'user identity A extra');
+      }
+      if (partnerPhotoUrl) {
+        pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face):');
+        await pushImageFromUrl(pass2Input, partnerPhotoUrl, 'partner identity B');
+        if (Array.isArray(partnerExtraPhotoUrls)) {
+          for (const u of partnerExtraPhotoUrls.slice(0, 2))
+            await pushImageFromUrl(pass2Input, u, 'partner identity B extra');
+        }
+      }
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head poses, neat expressions to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/png',
@@ -1170,7 +1156,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL: Composite both heads from Image 2 onto the two masked people in Image 1. One photorealistic image. Do not swap left and right. Each person\'s skin tone matches their own head in Image 2.'
+        'FINAL: Composite both heads from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Absolute facial likeness required. Seamless collar blend, matching light. Output one photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
@@ -1202,60 +1188,41 @@ STRICT RULES:
 
       const pass1Input: any[] = [];
       {
-        const p1 = await promptOrFallback(
-          pass1Key,
-          isCouplePinterest
-            ? [
-                'ЗАДАЧА: Сделай одну фотореалистичную фотографию ДВУХ людей вместе в СЦЕНЕ (по референсу Pinterest).',
-                'Позиционирование и идентичность:',
-                '- ПЕРСОНАЖ А — левая сторона композиции (или позиция первого персонажа в СЦЕНЕ). Лицо и голова только из IDENTITY A.',
-                '- ПЕРСОНАЖ Б — правая сторона (или позиция второго). Лицо и голова только из IDENTITY B.',
-                '- Запрещено смешивать лица, усреднять черты или менять персонажей местами. Не добавлять третьего человека.',
-                'Изоляция волос:',
-                'Волосы каждого — строго с соответствующего IDENTITY. Описания причёсок в СЦЕНЕ игнорировать.',
-                'СЦЕНА (из разбора референса, без лиц):',
-                '{{scene}}',
-                '{{age1}}',
-                '{{age2}}',
-                '{{body}}',
-                '{{avoid}}',
-                'В кадре только IDENTITY A и IDENTITY B. Один фотореалистичный кадр высокого разрешения.'
-              ].join('\n')
-            : [
-                'ЗАДАЧА: Сделай новую фотореалистичную фотографию.',
-                'IDENTITY — кто должен получиться (лицо только с этих фото).',
-                'СЦЕНА — из разбора референса. Лицо с референса НЕ копировать.',
-                'СЦЕНА:',
-                '{{scene}}',
-                '{{age1}}',
-                '{{body}}',
-                '{{avoid}}'
-              ].join('\n')
-        );
+        const p1 = await promptOrFallback(pass1Key);
         pushText(pass1Input, p1);
       }
 
       if (isCouplePinterest) {
-        pushText(pass1Input, 'IDENTITY A — первый персонаж (лицо и голова слева):');
+        pushText(pass1Input, '[IDENTITY_A_PHOTOS] — первый персонаж (лицо и голова слева, все ракурсы):');
+        await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity A');
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity A extra');
+        }
+        if (partnerPhotoUrl) {
+          pushText(pass1Input, '[IDENTITY_B_PHOTOS] — второй персонаж (лицо и голова справа, все ракурсы):');
+          await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
+          if (Array.isArray(partnerExtraPhotoUrls)) {
+            for (const u of partnerExtraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
+          }
+        }
       } else {
-        pushText(pass1Input, 'IDENTITY — единственное лицо на результате:');
-      }
-      await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity');
-      if (Array.isArray(extraPhotoUrls)) {
-        for (const u of extraPhotoUrls.slice(0, 4)) {
-          await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
+        pushText(pass1Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER PHOTOS (exact real face, multi-angle facial anatomy and hair to preserve):');
+        await pushImageFromUrl(pass1Input, userPhotoUrl, 'pinterest identity selfie');
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 4)) {
+            await pushImageFromUrl(pass1Input, u, 'pinterest identity extra');
+          }
         }
       }
 
-      // second person on reference
-      if (partnerPhotoUrl) {
-        pushText(pass1Input, 'IDENTITY B — второй персонаж (лицо и голова справа):');
-        await pushImageFromUrl(pass1Input, partnerPhotoUrl, 'pinterest identity B');
-        if (Array.isArray(partnerExtraPhotoUrls)) {
-          for (const u of partnerExtraPhotoUrls.slice(0, 4)) {
-            await pushImageFromUrl(pass1Input, u, 'pinterest identity B extra');
-          }
-        }
+      pushText(
+        pass1Input,
+        '[POSE_AND_LIGHTING_REFERENCE] — PINTEREST REFERENCE (match head tilt, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure):'
+      );
+      try {
+        await pushImageFromUrl(pass1Input, refUrl, 'pinterest pose reference');
+      } catch (e) {
+        console.warn('[pass1-pinterest] could not load refUrl:', e);
       }
 
       if (isCouplePinterest) {
@@ -1266,7 +1233,7 @@ STRICT RULES:
       } else {
         pushText(
           pass1Input,
-          'ФИНАЛ: лицо с IDENTITY, сцена из текста. Один фотореалистичный кадр.'
+          'ФИНАЛ: лицо строго с [USER_IDENTITY_PHOTOS], аккуратная эмоция и поза по референсу. Один фотореалистичный кадр.'
         );
       }
 
@@ -1283,24 +1250,7 @@ STRICT RULES:
         .eq('id', jobId);
 
       const maskInput: any[] = [];
-      const maskPromptText = await promptOrFallback(
-        maskKey,
-        isCouplePinterest
-          ? [
-              'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
-              'Полностью закрась (сплошной нейтральной светло-серой заливкой) ВСЕ лица и ВСЕ волосы ВСЕХ людей на кадре (оба персонажа).',
-              'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
-              'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.',
-              'ФИНАЛ: тот же кадр, оба лица и обе причёски замазаны.'
-            ].join('\n')
-          : [
-              'ЗАДАЧА: Верни ТО ЖЕ фото, что на входе, без изменения композиции, позы, одежды, фона и света.',
-              'Полностью закрась (сплошной нейтральной заливкой, например светло-серой) ВСЕ лица и ВСЕ волосы всех людей на кадре.',
-              'Границы маски аккуратные, без дыр. Остальное изображение не меняй и не улучшай.',
-              'Не добавляй людей. Не меняй ракурс. Один кадр того же размера по смыслу кадра.',
-              'ФИНАЛ: тот же кадр, лица и волосы замазаны.'
-            ].join('\n')
-      );
+      const maskPromptText = await promptOrFallback(maskKey);
       pushText(maskInput, maskPromptText);
       pushText(maskInput, 'ИСХОДНЫЙ РЕФЕРЕНС:');
       await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
@@ -1319,44 +1269,36 @@ STRICT RULES:
 
       const pass2Input: any[] = [];
       {
-        const p2 = await promptOrFallback(
-          pass2Key,
-          isCouplePinterest
-            ? [
-                'Задача: Выполнить безупречное, бесшовное встраивание (multi-subject seamless inpainting) двух голов целиком (включая лица, прически и шеи) с Image 2 в соответствующие маскированные области на Image 1.',
-                'Глобальное окружение сцены с Image 1 (фон, позы тел, физическое взаимодействие, одежда, руки и ракурс) остается на 100% неизменным. Маскированные области полностью замещаются головами с Image 2 с жестким сохранением пространственного соответствия:',
-                '- Левая маскированная голова и прическа замещаются исключительно левой головой/прической с Image 2.',
-                '- Правая маскированная голова и прическа замещаются исключительно правой головой/прической с Image 2.',
-                '- Строго исключить перетекание текстур, смешивание черт лица или случайную смену позиций между персонажами.',
-                'Правила интеграции двух голов и реализма:',
-                '1. Изоляция причесок и краев: точная форма, объем и текстура волос для каждого человека берутся строго со своей головы на Image 2.',
-                '2. Анатомическое соответствие: автоматически адаптировать поворот, наклон и размер каждой головы с Image 2 под позу тела на Image 1.',
-                '3. Независимый тон кожи: тон кожи каждого персонажа берется строго со своей головы на Image 2.',
-                '4. Бесшовный стык и тени по контуру обеих масок.',
-                '5. Коррекция освещения под схему света Image 1.',
-                '6. Выражения лиц: {{expression}}. Сохранять естественную молодость, свежесть лиц и упругость кожи, категорически не старить.',
-                '7. Сбалансированная ретушь и текстура: коммерческая портретная обработка высокого класса, гладкая здоровая кожа, деликатная микротекстура, легкое кинематографическое зерно без огрубления пор.',
-                '{{avoid}}',
-                'На выходе один цельный, реалистичный фотокадр, содержащий обоих правильно расположенных персонажей.'
-              ].join('\n')
-            : [
-                'Image 1 — СЦЕНА с маской на лице/волосах (референс).',
-                'Image 2 — IDENTITY / результат прохода с лицом пользователя.',
-                'Сцену с Image 1 сохрани. Голову(ы) возьми с Image 2.',
-                'Выражение: {{expression}}. Сохранять естественную молодость, свежесть лица и упругость кожи, не старить.',
-                'Сбалансированная журнальная ретушь, гладкая здоровая кожа без акцента на порах или морщинах.',
-                '{{avoid}}'
-              ].join('\n')
-        );
+        const p2 = await promptOrFallback(pass2Key);
         pushText(pass2Input, p2);
       }
-      pushText(pass2Input, isCouplePinterest ? 'IMAGE 1 — SCENE (оба лица и волосы под маской):' : 'IMAGE 1 — SCENE (лица и волосы под маской):');
+      pushText(pass2Input, '[SCENE_IMAGE] — SCENE TO PRESERVE (costumes, environment; faces/hair masked):');
       pass2Input.push({
         type: 'image',
         mime_type: maskPass.mimeType || 'image/jpeg',
         data: maskPass.data
       });
-      pushText(pass2Input, isCouplePinterest ? 'IMAGE 2 — HEADS / IDENTITY (результат PASS1 с обоими персонажами):' : 'IMAGE 2 — HEAD / IDENTITY (результат PASS1):');
+      if (isCouplePinterest) {
+        pushText(pass2Input, '[IDENTITY_A_PHOTOS] — LEFT PERSON (real face):');
+        await pushImageFromUrl(pass2Input, userPhotoUrl, 'pinterest selfie A');
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'pinterest extra A');
+        }
+        if (partnerPhotoUrl) {
+          pushText(pass2Input, '[IDENTITY_B_PHOTOS] — RIGHT PERSON (real face):');
+          await pushImageFromUrl(pass2Input, partnerPhotoUrl, 'pinterest partner B');
+          if (Array.isArray(partnerExtraPhotoUrls)) {
+            for (const u of partnerExtraPhotoUrls.slice(0, 2)) await pushImageFromUrl(pass2Input, u, 'pinterest extra B');
+          }
+        }
+      } else {
+        pushText(pass2Input, '[USER_IDENTITY_PHOTOS] — PRIMARY USER IDENTITY (exact real face to embed):');
+        await pushImageFromUrl(pass2Input, userPhotoUrl, 'pinterest selfie identity');
+        if (Array.isArray(extraPhotoUrls)) {
+          for (const u of extraPhotoUrls.slice(0, 3)) await pushImageFromUrl(pass2Input, u, 'pinterest extra identity');
+        }
+      }
+      pushText(pass2Input, '[POSE_GUIDE_IMAGE] — PASS 1 INTERMEDIATE RESULT (head pose, lighting, and neat expression to polish):');
       pass2Input.push({
         type: 'image',
         mime_type: pass1.mimeType || 'image/jpeg',
@@ -1365,8 +1307,8 @@ STRICT RULES:
       pushText(
         pass2Input,
         isCouplePinterest
-          ? 'ФИНАЛ: обе головы с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр с двумя людьми.'
-          : 'ФИНАЛ: голова(ы) с Image 2 на маскированной сцене Image 1. Один фотореалистичный кадр.'
+          ? 'ФИНАЛ: лица и головы строго из [IDENTITY_A_PHOTOS] и [IDENTITY_B_PHOTOS] на маскированной сцене [SCENE_IMAGE]. Бесшовные стыки, идеальное соответствие свету. Один фотореалистичный кадр.'
+          : 'ФИНАЛ: лицо и голова строго из [USER_IDENTITY_PHOTOS] на маскированной сцене [SCENE_IMAGE]. Бесшовные стыки воротника и волос, аккуратное выражение лица, журнальная ретушь. Один фотореалистичный кадр.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
@@ -1618,20 +1560,25 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
     const SIGNED_TTL = 60 * 60 * 24 * 7;
 
     let jobs: any[] = [];
-    try {
-      const { rows } = await pool.query(
-        `SELECT j.*, 
-                json_build_object('name_ro', t.name_ro, 'preview_image_url', t.preview_image_url) as templates
-         FROM public.generation_jobs j
-         LEFT JOIN public.templates t ON t.id = j.template_id
-         WHERE j.user_id = $1
-         ORDER BY j.created_at DESC
-         LIMIT $2 OFFSET $3`,
-        [req.user!.id, limit, offset]
-      );
-      jobs = rows || [];
-    } catch (dbErr) {
-      console.warn('[api/generations] direct db query failed, falling back to supabaseAdmin:', dbErr);
+    if (pool) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT j.*, 
+                  json_build_object('name_ro', t.name_ro, 'preview_image_url', t.preview_image_url) as templates
+           FROM public.generation_jobs j
+           LEFT JOIN public.templates t ON t.id = j.template_id
+           WHERE j.user_id = $1
+           ORDER BY j.created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [req.user!.id, limit, offset]
+        );
+        jobs = rows || [];
+      } catch (dbErr) {
+        console.warn('[api/generations] direct db query failed, falling back to supabaseAdmin:', dbErr);
+      }
+    }
+
+    if (!jobs || jobs.length === 0) {
       const { data, error } = await supabaseAdmin
         .from('generation_jobs')
         .select('*, templates(name_ro, preview_image_url)')
@@ -1639,7 +1586,7 @@ app.get('/api/generations', requireAuth, async (req: AuthRequest, res) => {
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
-      if (error) throw error;
+      if (error && !jobs) throw error;
       jobs = data || [];
     }
 
@@ -1747,16 +1694,18 @@ app.post('/api/generations/:id/retry', requireAuth, async (req: AuthRequest, res
 // User Photo Transactions Ledger
 app.get('/api/photo-transactions', requireAuth, async (req: AuthRequest, res) => {
   try {
-    try {
-      const { rows } = await pool.query(
-        'SELECT * FROM public.photo_transactions WHERE user_id = $1 ORDER BY created_at DESC',
-        [req.user!.id]
-      );
-      if (rows) {
-        return res.json(rows);
+    if (pool) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT * FROM public.photo_transactions WHERE user_id = $1 ORDER BY created_at DESC',
+          [req.user!.id]
+        );
+        if (rows) {
+          return res.json(rows);
+        }
+      } catch (dbErr) {
+        console.warn('[api/photo-transactions] direct db query failed, falling back to supabaseAdmin:', dbErr);
       }
-    } catch (dbErr) {
-      console.warn('[api/photo-transactions] direct db query failed, falling back to supabaseAdmin:', dbErr);
     }
 
     const { data, error } = await supabaseAdmin
