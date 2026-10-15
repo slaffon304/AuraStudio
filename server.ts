@@ -718,12 +718,16 @@ STRICT RULES:
       // Text+vision model for scene breakdown (not the image generator)
       const analysisModel =
         process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
+      const promptText =
+        (await loadPromptFromDb('scene_analyze')) ||
+        DEFAULT_GENERATION_PROMPTS['scene_analyze'] ||
+        SCENE_ANALYZE_PROMPT;
       try {
         const resp = await aiClient!.models.generateContent({
           model: analysisModel,
           contents: {
             parts: [
-              { text: SCENE_ANALYZE_PROMPT },
+              { text: promptText },
               {
                 inlineData: {
                   mimeType: part.inlineData.mimeType || 'image/jpeg',
@@ -1307,9 +1311,8 @@ STRICT RULES:
       pushText(
         maskInput,
         isCouplePinterest
-          isCouplePinterest
-        ? 'FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Maintain proportional 1/8 head scale and visible neck, matching ambient light, natural expressions, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
-        : 'FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Maintain anatomical head scale and visible neck, neat natural expression, matching ambient light, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
+          ? 'FINAL MASK: Output the exact same photo with faces, ears, neck and hair of both persons uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
+          : 'FINAL MASK: Output the exact same photo with face, ears, neck and hair uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
       );
 
       const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
