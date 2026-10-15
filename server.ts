@@ -757,18 +757,36 @@ STRICT RULES:
       }
     }
 
+    const effectiveMode =
+      mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
+        ? 'couple'
+        : mode === 'pinterest' || customReferenceUrl
+          ? 'pinterest'
+          : mode === 'enhance'
+            ? 'enhance'
+            : mode === 'refine'
+              ? 'refine'
+              : 'template';
+
     const ageProvided = age !== undefined && age !== null && age !== '';
     const age2Provided = age2 !== undefined && age2 !== null && age2 !== '';
     const ageNum = ageProvided ? Number(age) : NaN;
     const age2Num = age2Provided ? Number(age2) : NaN;
+
     const age1Line =
-      Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
-        ? `Apparent age of Person A: strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
-        : 'Apparent age of Person A: strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
+      effectiveMode === 'couple'
+        ? Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
+          ? `Apparent age of Person A (left, [IDENTITY_A_PHOTOS]): strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+          : 'Apparent age of Person A (left, [IDENTITY_A_PHOTOS]): strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.'
+        : Number.isFinite(ageNum) && ageNum >= 1 && ageNum <= 120
+          ? `Apparent age of the user [USER_IDENTITY_PHOTOS]: strictly around ${Math.round(ageNum)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+          : 'Apparent age of the user [USER_IDENTITY_PHOTOS]: strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in [USER_IDENTITY_PHOTOS]. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
+
     const age2Line =
       Number.isFinite(age2Num) && age2Num >= 1 && age2Num <= 120
-        ? `Apparent age of Person B: strictly around ${Math.round(age2Num)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
-        : 'Apparent age of Person B: strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
+        ? `Apparent age of Person B (right, [IDENTITY_B_PHOTOS]): strictly around ${Math.round(age2Num)} years. Preserve fresh, youthful skin elasticity, natural hair/beard color without unrequested gray hair, and a well-rested complexion; absolutely no premature aging, heavy eye bags, or exaggerated wrinkles.`
+        : 'Apparent age of Person B (right, [IDENTITY_B_PHOTOS]): strictly preserve the exact natural biological age, hair/beard color, and youthful vitality seen in the IDENTITY photos. Render a fresh, well-rested complexion without premature aging, unrequested gray hair/beard, exaggerated skin folds, or eye bags.';
+
     const h = Number(heightCm);
     const w = Number(weightKg);
     const bodyLine = [
@@ -783,39 +801,39 @@ STRICT RULES:
       .join(' ');
 
     const antiAgingTokens =
-    'wax figure face, Madame Tussauds wax look, silicone skin, plastic mannequin skin, airbrushed blur, oversized head, bobblehead proportions, missing neck, premature aging, exaggerated wrinkles, deep nasolabial folds, tired eyes, dark circles under eyes, heavy eye bags'; 
+      'wax figure face, Madame Tussauds wax look, silicone skin, plastic mannequin skin, airbrushed blur, beauty filter smoothing, porcelain doll face, oversized head, bobblehead proportions, missing neck, premature aging, exaggerated wrinkles, deep nasolabial folds, artificial eye bags, exaggerated under-eye puffiness, fake dark circles under eyes, tired exhausted eyes, muddy blotchy skin tone, unrequested hair color change, altered hair color, darkening blonde hair, bleaching hair, dyeing hair, wrong hair color, hair color mismatch with identity photos, altered hair texture, straightening curly or wavy hair, unrequested gray hair, gray beard, altered beard shape, shaving off beard, stubble instead of full beard, wrong beard color, altered eye color, double chin';
+
+    // DB PROMPT 'avoid_default' HAS STRICT PRIORITY. Always load and preserve it!
+    const avoidDefaultFromDb = await loadPromptFromDb('avoid_default');
+    const baseAvoid = avoidDefaultFromDb
+      ? (avoidDefaultFromDb.trim().startsWith('Avoid') || avoidDefaultFromDb.trim().startsWith('Избег')
+          ? avoidDefaultFromDb.trim()
+          : `Avoid: ${avoidDefaultFromDb.trim()}`)
+      : (DEFAULT_GENERATION_PROMPTS['avoid_default'] ||
+          `Avoid: ${antiAgingTokens}, distorted anatomy, extra fingers, unnatural hands, watermarks, logos, text overlays, and any face that does not match the IDENTITY photos.`);
+
     const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
-    let avoidLine = negFromDb
-      ? `Avoid: ${negFromDb}, ${antiAgingTokens}`
-      : '';
-    if (!avoidLine) {
-      const avoidDefault = await loadPromptFromDb('avoid_default');
-      avoidLine = avoidDefault
-        ? (avoidDefault.trim().startsWith('Avoid') || avoidDefault.trim().startsWith('Избег')
-            ? avoidDefault.trim()
-            : `Avoid: ${avoidDefault.trim()}`)
-        : (DEFAULT_GENERATION_PROMPTS['avoid_default'] || `Avoid: ${antiAgingTokens}, distorted anatomy, extra fingers, unnatural hands, watermarks, logos, text overlays, and any face that does not match the IDENTITY photos.`);
-    }
+    const avoidLine = negFromDb ? `${baseAvoid}, ${negFromDb}` : baseAvoid;
 
     function formatExpression(exprRaw: string): string {
       const raw = exprRaw.trim();
       if (!raw) {
-        return 'Естественное, спокойное и доброжелательное выражение лица, соответствующее настроению сцены.';
+        return 'Естественное, живое и гармоничное выражение лица, точно передающее атмосферу и настроение сцены.';
       }
       const lower = raw.toLowerCase();
       let desc = raw;
       if (lower.includes('soft') && lower.includes('smile')) {
-        desc = 'Мягкая сдержанная естественная улыбка с сомкнутыми губами (Soft closed-mouth smile). Губы мягко приподняты в уголках, живой теплый взгляд, гладкая кожа без глубоких носогубных складок.';
+        desc = 'Мягкая естественная улыбка с сомкнутыми губами (Soft closed-mouth smile): живой теплый взгляд, уголки губ мягко приподняты, лицо расслаблено.';
       } else if (lower.includes('wide smile') || lower.includes('laugh')) {
-        desc = 'Широкая открытая и жизнерадостная улыбка (Wide smile / laughing). Искрящиеся глаза, естественная мимика, гармоничное и молодое выражение лица без гримас.';
+        desc = 'Широкая открытая и жизнерадостная улыбка (Wide smile / laughing): открытый взгляд, сияющие глаза, естественная мимика без искажения формы челюсти и скул.';
       } else if (lower.includes('light smile')) {
-        desc = 'Легкая естественная полуулыбка (Light smile). Приятный, доброжелательный взгляд, расслабленная мимика.';
+        desc = 'Легкая естественная полуулыбка (Light smile): приятный, доброжелательный взгляд, расслабленная мимика.';
       } else if (lower.includes('open smile')) {
-        desc = 'Открытая естественная улыбка (Open smile showing teeth). Привлекательный, уверенный и естественный вид, ровная линия губ без перенапряжения.';
+        desc = 'Открытая естественная улыбка с видимыми зубами (Open smile showing teeth): живые сияющие глаза, привлекательный уверенный вид, естественная линия губ без перенапряжения.';
       } else if (lower.includes('neutral') || lower.includes('no smile') || lower.includes('calm')) {
-        desc = 'Спокойное, уверенное и сосредоточенное нейтральное выражение лица с закрытым ртом (Calm, neutral expression). Расслабленные губы, прямой уверенный взгляд.';
+        desc = 'Спокойное, уверенное и сосредоточенное нейтральное выражение лица с закрытым ртом (Calm, neutral expression): расслабленные губы, прямой ясный взгляд.';
       }
-      return `${desc} ВНИМАНИЕ: Эмоция переносится аккуратно, органично анатомии лица пользователя, сохраняя молодость и свежесть кожи без глубоких заломов.`;
+      return `${desc} КРИТИЧЕСКИ ВАЖНО: Эмоция шаблона применяется строго к индивидуальной анатомии лица пользователя, без растягивания рта, без деформации челюсти, подбородка, носа или разреза глаз, и без добавления искусственных морщин.`;
     }
 
     const expressionRaw = String(template.expression || template.expression_text || '').trim();
@@ -827,17 +845,6 @@ STRICT RULES:
         : imageQuality === '1K'
           ? 'Базовая детализация (1K).'
           : 'Высокая детализация (2K).';
-
-    const effectiveMode =
-      mode === 'couple' || (mode === 'template' && partnerPhotoUrl)
-        ? 'couple'
-        : mode === 'pinterest' || customReferenceUrl
-          ? 'pinterest'
-          : mode === 'enhance'
-            ? 'enhance'
-            : mode === 'refine'
-              ? 'refine'
-              : 'template';
 
     const editText = String(editInstruction || '').trim();
 
@@ -874,13 +881,17 @@ STRICT RULES:
 
     async function promptOrFallback(key: string, customFallback?: string): Promise<string> {
       const fromDb = await loadPromptFromDb(key);
-      if (fromDb) {
+      const fallback = customFallback || DEFAULT_GENERATION_PROMPTS[key] || '';
+      // If DB has an older version of pass2 prompt missing {{expression}}, prefer the updated fallback
+      if (fromDb && (key.startsWith('pass2') ? fromDb.includes('{{expression}}') : true)) {
         console.log('[prompt] using DB key=', key, 'chars=', fromDb.length);
         return fillPrompt(fromDb, promptVars);
       }
-      const fallback = customFallback || DEFAULT_GENERATION_PROMPTS[key] || '';
-      console.warn('[prompt] missing DB key=', key, '— using code fallback');
-      return fillPrompt(fallback, promptVars);
+      if (fallback) {
+        console.log('[prompt] using updated code prompt key=', key, 'chars=', fallback.length);
+        return fillPrompt(fallback, promptVars);
+      }
+      return fillPrompt(fromDb || '', promptVars);
     }
 
     let promptContext = '';
@@ -1064,7 +1075,7 @@ STRICT RULES:
 
       pushText(
         pass1Input,
-        'FINAL PASS 1: Generate a single photorealistic portrait with the exact face, hair, and facial hair (beard/mustache) of the user [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging, naturally embodying the neat expression, head/neck angle and lighting of the template.'
+        `FINAL PASS 1: Generate a single photorealistic portrait with the exact face, eye color, hair (exact natural color, texture, curls/waves, length, and volume), and facial hair (beard/mustache) of the user strictly from [USER_IDENTITY_PHOTOS] without unrequested hair color change, gray hair or aging. Naturally embody the template expression (${expressionRaw || 'natural expression'}), head/neck angle and lighting, strictly preserving the user's authentic facial bone structure, jaw and facial features without distortion. Preserve original skin freshness from [USER_IDENTITY_PHOTOS] (if no eye bags on selfie, keep under-eye area clean and fresh without artificial puffiness).`
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
@@ -1104,7 +1115,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Maintain anatomical head scale and visible neck, matching ambient light, natural neat expression, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
+        `FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, eye color, exact hair color and texture (do not alter, darken or dye the hair color; preserve curls/waves/volume as in [USER_IDENTITY_PHOTOS]), and exact beard/mustache shape and color without unrequested gray. Polish and preserve the template expression (${expressionRaw || 'natural expression'}) established in [POSE_GUIDE_IMAGE] without pulling or deforming facial features. Preserve original skin freshness and authentic under-eye clarity from identity photos (do not add eye bags or dark circles if absent on selfie; no wax look). Maintain anatomical head scale and visible neck, matching ambient light. Output one single photorealistic image.`
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
@@ -1158,7 +1169,7 @@ STRICT RULES:
       }
       pushText(
         pass1Input,
-        'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Delicate, natural expressions, matching head/neck poses and cinematic lighting.'
+        `FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Embody the template expression (${expressionRaw || 'natural expression'}) on both faces while strictly preserving their authentic facial bone structure, jawline and features without distortion. Preserve authentic skin freshness from identity photos (if no eye bags on selfies, keep under-eyes clean and smooth without artificial puffiness or dark circles), matching head/neck poses and cinematic lighting.`
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
@@ -1201,7 +1212,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Maintain proportional 1/8 head scale and visible neck (do not stretch heads to fill the mask), matching 3D head turn and ambient light, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
+        `FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Preserve 100% facial likeness, eye colors, exact hair colors and textures, and beard/mustache shape and color without unrequested gray for both persons. Polish and preserve the template expression (${expressionRaw || 'natural expression'}) from [POSE_GUIDE_IMAGE] without pulling or deforming facial features. Preserve authentic skin freshness and under-eye clarity from identity photos (do not add artificial eye bags or dark circles if absent on selfies; no wax look). Maintain proportional 1/8 head scale and visible neck (do not stretch heads to fill the mask), matching 3D head turn and ambient light. Output one single photorealistic image.`
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
@@ -1449,11 +1460,11 @@ STRICT RULES:
             ? 'FINAL: Apply the USER INSTRUCTION only to [IMAGE_TO_EDIT] while preserving 100% facial identity, hair, and beard/mustache. Output one edited photorealistic image.'
             : effectiveMode === 'couple'
               ? singlePassHasPoseRef
-                ? 'FINAL: Faces, hair, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested gray hair or aging. Embody head/neck poses and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text. No other faces.'
-                : 'FINAL: Faces, hair, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested gray hair or aging. Scene from the SCENE text only. No other faces.'
+                ? 'FINAL: Faces, eye colors, exact hair colors and textures, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested hair color change, gray hair or aging. Embody head/neck poses and lighting from [POSE_AND_LIGHTING_REFERENCE]. Environment and styling from the scene prompt. No other faces.'
+                : 'FINAL: Faces, eye colors, exact hair colors and textures, and facial hair/beard strictly from [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) without unrequested hair color change, gray hair or aging. Environment and styling from the scene prompt. No other faces.'
               : singlePassHasPoseRef
-                ? 'FINAL: Face, hair, and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Embody head/neck pose and lighting from [POSE_AND_LIGHTING_REFERENCE]. Scene from the SCENE text. No other face.'
-                : 'FINAL: Face, hair, and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Scene from the SCENE text only. No other face.'
+                ? 'FINAL: Face, eye color, exact hair color and texture (do not alter, darken or dye hair), and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Embody head/neck pose and lighting from [POSE_AND_LIGHTING_REFERENCE]. Environment and styling from the scene prompt. No other face.'
+                : 'FINAL: Face, eye color, exact hair color and texture (do not alter, darken or dye hair), and exact facial hair/beard strictly from [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Environment and styling from the scene prompt. No other face.'
       );
 
       const imageSize: '1K' | '2K' | '4K' = imageQuality;

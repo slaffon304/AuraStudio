@@ -30,7 +30,7 @@ export const BottomNav: React.FC = () => {
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 pb-[max(6px,env(safe-area-inset-bottom))] pointer-events-none">
-      <div className="mx-auto mb-1.5 flex max-w-[200px] items-center rounded-full bg-white/95 dark:bg-[#151822]/95 shadow-[0_4px_20px_rgba(20,30,60,0.12)] border border-slate-200/70 dark:border-white/10 backdrop-blur-xl pointer-events-auto px-2 py-1">
+      <div className="mx-auto mb-1.5 flex max-w-[260px] sm:max-w-[280px] items-center rounded-full bg-white/95 dark:bg-[#151822]/95 shadow-[0_4px_20px_rgba(20,30,60,0.12)] border border-slate-200/70 dark:border-white/10 backdrop-blur-xl pointer-events-auto px-3 py-1.5">
         <button
           type="button"
           onClick={() => go('explore')}
@@ -38,7 +38,7 @@ export const BottomNav: React.FC = () => {
           aria-label={homeLabel}
         >
           <Home className="h-4 w-4" strokeWidth={currentView === 'explore' || currentView === 'landing' ? 2.5 : 2} />
-          <span className="text-[8px] font-medium leading-none">{homeLabel}</span>
+          <span className="text-[9px] font-semibold leading-tight tracking-tight truncate max-w-[70px]">{homeLabel}</span>
         </button>
         <button
           type="button"
@@ -47,7 +47,7 @@ export const BottomNav: React.FC = () => {
           aria-label={galleryLabel}
         >
           <Images className="h-4 w-4" strokeWidth={galleryActive ? 2.5 : 2} />
-          <span className="text-[8px] font-medium leading-none">{galleryLabel}</span>
+          <span className="text-[9px] font-semibold leading-tight tracking-tight truncate max-w-[70px]">{galleryLabel}</span>
         </button>
         <button
           type="button"
@@ -60,7 +60,7 @@ export const BottomNav: React.FC = () => {
           ) : (
             <LogIn className="h-4 w-4" strokeWidth={2} />
           )}
-          <span className="text-[8px] font-medium leading-none">{profileLabel}</span>
+          <span className="text-[9px] font-semibold leading-tight tracking-tight truncate max-w-[70px]">{profileLabel}</span>
         </button>
       </div>
     </div>

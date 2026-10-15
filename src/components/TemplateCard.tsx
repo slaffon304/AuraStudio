@@ -68,13 +68,13 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, 
       {/* Card Metadata */}
       <div className="p-3.5 flex flex-col gap-1.5 flex-1 justify-between">
         <div>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="font-semibold text-amber-600 dark:text-amber-400">{template.category}</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-semibold text-amber-600 dark:text-amber-400 truncate max-w-[110px]">{template.category}</span>
             <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
             <span>{template.aspectRatio}</span>
             <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-            <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
-              <Coins className="h-3 w-3 text-amber-500" />
+            <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300 shrink-0">
+              <Coins className="h-3 w-3 text-amber-500 shrink-0" />
               <span className="font-bold text-slate-900 dark:text-white">{template.creditCost}</span> {t.credits.toLowerCase()}
             </span>
           </div>

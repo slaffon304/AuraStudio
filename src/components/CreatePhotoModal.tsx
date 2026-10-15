@@ -1715,8 +1715,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
         {slots === 2 ? (
           <div className="mt-5 grid grid-cols-2 gap-4 items-start">
             <div className="flex flex-col">
-              <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
-                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight line-clamp-2">
+              <div className="min-h-[2rem] flex items-center justify-center text-center px-1 mb-2">
+                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight">
                   {copy.ageYou}
                 </p>
               </div>
@@ -1736,8 +1736,8 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
               </div>
             </div>
             <div className="flex flex-col">
-              <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
-                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight line-clamp-2">
+              <div className="min-h-[2rem] flex items-center justify-center text-center px-1 mb-2">
+                <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight">
                   {copy.agePartner}
                 </p>
               </div>
@@ -1759,7 +1759,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           </div>
         ) : (
           <div className="mt-5">
-            <div className="h-8 flex items-center justify-center text-center px-1 mb-2">
+            <div className="min-h-[2rem] flex items-center justify-center text-center px-1 mb-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-tight">
                 {copy.age}
               </p>

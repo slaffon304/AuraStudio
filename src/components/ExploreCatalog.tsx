@@ -404,18 +404,17 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                       </span>
                     </span>
 
-                    {/* Badge: mobile compact, desktop slightly larger (was too tiny) */}
+                    {/* Badge: clean centered alignment, no clipping */}
                     <span
-                      className="absolute z-20 inline-flex items-center gap-[2px] whitespace-nowrap rounded-full bg-white shadow-md md:gap-[3px]"
+                      className="absolute z-20 inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 shadow-md px-2 py-0.5"
                       style={{
-                        top: '-6px',
+                        top: '-7px',
                         left: '50%',
-                        transform: `translateX(-50%) rotate(${tilt}deg)`,
-                        padding: '2px 5px 2px 4px'
+                        transform: 'translateX(-50%)'
                       }}
                     >
-                      <FlameIcon className="block h-[9px] w-[9px] md:h-[11px] md:w-[11px]" />
-                      <span className="text-[8px] font-extrabold uppercase leading-none tracking-tight text-[#ff2d8b] md:text-[10px]">
+                      <FlameIcon className="block h-2.5 w-2.5 md:h-3 md:w-3 shrink-0" />
+                      <span className="text-[8px] sm:text-[9px] md:text-[10px] font-extrabold uppercase leading-tight tracking-tight text-[#ff2d8b]">
                         {count.toLocaleString('ru-RU')} {todayWord}
                       </span>
                     </span>

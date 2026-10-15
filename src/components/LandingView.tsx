@@ -48,9 +48,10 @@ const WISH_ROTATING_PHRASES = {
   ]
 };
 
-export const RotatingWord: React.FC<{ words: string[]; intervalMs?: number }> = ({
+export const RotatingWord: React.FC<{ words: string[]; intervalMs?: number; align?: 'center' | 'left' }> = ({
   words,
-  intervalMs = 2200
+  intervalMs = 2200,
+  align = 'left'
 }) => {
   const [state, setState] = useState({ current: 0, previous: -1 });
 
@@ -65,20 +66,17 @@ export const RotatingWord: React.FC<{ words: string[]; intervalMs?: number }> = 
     return () => window.clearInterval(timer);
   }, [words.length, intervalMs]);
 
-  const longest = useMemo(
-    () => words.reduce((a, b) => (b.length > a.length ? b : a), words[0]),
-    [words]
-  );
+  const alignClass = align === 'center' ? 'text-center' : 'text-left';
 
   return (
-    <span className="relative inline-block align-baseline whitespace-nowrap text-[#4c63ed] dark:text-[#8ba0ff]">
+    <span className={`relative inline-block align-baseline whitespace-nowrap text-[#4c63ed] dark:text-[#8ba0ff] transition-[width] duration-200 ${alignClass}`}>
       <span aria-hidden="true" className="invisible">
-        {longest}
+        {words[state.current]}
       </span>
       <span
         key={`current-${state.current}`}
         aria-hidden="true"
-        className="hero-word-in absolute inset-0 inline-block whitespace-nowrap text-center"
+        className={`hero-word-in absolute inset-0 inline-block whitespace-nowrap ${alignClass}`}
       >
         {words[state.current]}
       </span>
@@ -86,7 +84,7 @@ export const RotatingWord: React.FC<{ words: string[]; intervalMs?: number }> = 
         <span
           key={`prev-${state.previous}`}
           aria-hidden="true"
-          className="hero-word-out absolute inset-0 inline-block whitespace-nowrap text-center"
+          className={`hero-word-out absolute inset-0 inline-block whitespace-nowrap ${alignClass}`}
         >
           {words[state.previous]}
         </span>
@@ -213,7 +211,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onGoToApp }) => {
               <div className="sm:hidden flex flex-col items-center justify-center font-display text-4xl min-[380px]:text-[44px] font-extrabold leading-[1.12] tracking-tight text-[#181d32] dark:text-white">
                 <span>{t.landingHeadlineLead}</span>
                 <span className="my-0.5">
-                  <RotatingWord words={headlineWords} />
+                  <RotatingWord words={headlineWords} align="center" />
                 </span>
                 <span>{language === 'ru' ? 'одной' : language === 'ro' ? 'cu un' : 'in one'}</span>
                 <span>{language === 'ru' ? 'кнопкой' : language === 'ro' ? 'click' : 'click'}</span>
