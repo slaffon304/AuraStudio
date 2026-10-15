@@ -1058,24 +1058,29 @@ STRICT RULES:
         for (const u of extraPhotoUrls.slice(0, 4)) await pushImageFromUrl(pass1Input, u, 'user selfie extra');
       }
 
-      const templatePreviewUrl = String(
-        template.preview_image_url || template.previewImageUrl || template.image_url || ''
+      // Prefer masked layout so Pass 1 does not see foreign faces on the preview
+      const poseRefUrl = String(
+        maskUrl ||
+          template.preview_image_url ||
+          template.previewImageUrl ||
+          template.image_url ||
+          ''
       ).trim();
-      if (templatePreviewUrl) {
+      if (poseRefUrl) {
         pushText(
           pass1Input,
-          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match head tilt, neck angle, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure, hair, or beard/stubble):'
+          '[POSE_AND_LIGHTING_REFERENCE] — POSE & LIGHTING REFERENCE (match body pose, 3D head turn, neck angle, gaze angle, and lighting scheme from this masked layout; do not copy any facial features since faces are masked):'
         );
         try {
-          await pushImageFromUrl(pass1Input, templatePreviewUrl, 'template pose reference');
+          await pushImageFromUrl(pass1Input, poseRefUrl, 'template pose reference');
         } catch (e) {
-          console.warn('[pass1] could not load templatePreviewUrl:', e);
+          console.warn('[pass1] could not load poseRefUrl:', e);
         }
       }
 
       pushText(
         pass1Input,
-        `FINAL PASS 1: Generate a single photorealistic portrait with the exact face, eye color, hair (exact natural color, texture, curls/waves, length, and volume), and facial hair (beard/mustache) of the user strictly from [USER_IDENTITY_PHOTOS] without unrequested hair color change, gray hair or aging. Naturally embody the template expression (${expressionRaw || 'natural expression'}), head/neck angle and lighting, strictly preserving the user's authentic facial bone structure, jaw and facial features without distortion. Preserve original skin freshness from [USER_IDENTITY_PHOTOS] (if no eye bags on selfie, keep under-eye area clean and fresh without artificial puffiness). CRITICAL SKIN TONE MATCHING: The user's natural skin tone from [USER_IDENTITY_PHOTOS] must apply to all exposed body parts (neck, chest, arms, hands, and legs in dress slits); prevent any skin tone mismatch between face and body.`
+        `FINAL PASS 1: Generate a single photorealistic portrait with the exact face, eye color, hair (exact natural color, texture, curls/waves, length, and volume), and facial hair (beard/mustache) of the user strictly from [USER_IDENTITY_PHOTOS] without unrequested hair color change, gray hair or aging. Match head/neck angle and lighting from the pose reference. Keep the user's authentic facial bone structure, jaw and features without distortion. Do not force a fixed smile or reshape the jaw/cheeks for expression. Keep under-eye area natural as on the selfie (do not invent bags or force an artificially smooth under-eye zone). SKIN TONE: Face, neck, and any other exposed skin visible on this frame must match [USER_IDENTITY_PHOTOS]. If full body or legs are visible (e.g. dress slits), harmonize their skin tone to the user's authentic tone from identity photos; if legs are not visible, ignore leg-related rules.`
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-single');
@@ -1115,7 +1120,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        `FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, eye color, exact hair color and texture (do not alter, darken or dye the hair color; preserve curls/waves/volume as in [USER_IDENTITY_PHOTOS]), and exact beard/mustache shape and color without unrequested gray. Polish and preserve the template expression (${expressionRaw || 'natural expression'}) established in [POSE_GUIDE_IMAGE] without pulling or deforming facial features. Preserve original skin freshness and authentic under-eye clarity from identity photos (do not add eye bags or dark circles if absent on selfie; no wax look). Maintain anatomical head scale and visible neck, matching ambient light. CRITICAL FULL-BODY SKIN TONE HARMONIZATION: All exposed skin on the body — neck, chest, arms, hands, and EXPLICITLY female legs showing in dress slits — MUST strictly match the skin tone, melanin and ethnicity of the user from [USER_IDENTITY_PHOTOS]. Never leave original template model's white/pale skin on legs or hands for a dark-skinned user, and never mismatch face and body skin tone. Output one single photorealistic image.`
+        `FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, eye color, exact hair color and texture (do not alter, darken or dye the hair color; preserve curls/waves/volume as in [USER_IDENTITY_PHOTOS]), and exact beard/mustache shape and color without unrequested gray. Keep head pose and expression from [POSE_GUIDE_IMAGE] without pulling or deforming jaw, cheeks or facial features. Keep under-eye area natural as on the selfie (do not invent bags or force an artificially smooth under-eye zone; no wax look). Maintain anatomical head scale and visible neck, matching ambient light. SKIN TONE: Face, neck, chest, arms and hands must match [USER_IDENTITY_PHOTOS]. If full body or legs are visible in the scene (e.g. dress slits), harmonize their skin tone to the user's authentic tone from identity photos; if legs are not visible, ignore leg-related rules. Never leave mismatched face vs body skin tone. Output one single photorealistic image.`
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
@@ -1153,23 +1158,28 @@ STRICT RULES:
         for (const u of partnerExtraPhotoUrls.slice(0, 4))
           await pushImageFromUrl(pass1Input, u, 'partner identity B extra');
       }
-      const coupleTemplatePreviewUrl = String(
-        template.preview_image_url || template.previewImageUrl || template.image_url || ''
+      // Prefer masked layout so Pass 1 does not see foreign faces on the preview
+      const poseRefUrlCouple = String(
+        maskUrl ||
+          template.preview_image_url ||
+          template.previewImageUrl ||
+          template.image_url ||
+          ''
       ).trim();
-      if (coupleTemplatePreviewUrl) {
+      if (poseRefUrlCouple) {
         pushText(
           pass1Input,
-          '[POSE_AND_LIGHTING_REFERENCE] — TEMPLATE REFERENCE (match composition, head poses, neck angles, gaze angles, and lighting; do not copy template models\' faces or hair):'
+          '[POSE_AND_LIGHTING_REFERENCE] — POSE & LIGHTING REFERENCE (match composition, body poses, 3D head turns, neck angles, gaze angles, and lighting from this masked layout; do not copy any facial features since faces are masked):'
         );
         try {
-          await pushImageFromUrl(pass1Input, coupleTemplatePreviewUrl, 'couple template pose reference');
+          await pushImageFromUrl(pass1Input, poseRefUrlCouple, 'couple template pose reference');
         } catch (e) {
-          console.warn('[pass1-couple] could not load preview:', e);
+          console.warn('[pass1-couple] could not load poseRefUrl:', e);
         }
       }
       pushText(
         pass1Input,
-        `FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Embody the template expression (${expressionRaw || 'natural expression'}) on both faces while strictly preserving their authentic facial bone structure, jawline and features without distortion. Preserve authentic skin freshness from identity photos (if no eye bags on selfies, keep under-eyes clean and smooth without artificial puffiness or dark circles), matching head/neck poses and cinematic lighting. FULL-BODY SKIN TONE: All exposed skin for each person (arms, hands, neck, legs in dress slits) must match that person's authentic selfie skin tone; zero skin tone mismatch between face and body.`
+        `FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Match head/neck poses and lighting from the pose reference. Keep each person's authentic facial bone structure, jawline and features without distortion. Do not force a fixed smile or reshape jaws/cheeks for expression. Keep under-eye areas natural as on the selfies (do not invent bags or force an artificially smooth under-eye zone). SKIN TONE: Face, neck, and any other exposed skin visible on this frame must match that person's identity photos. If full body or legs are visible (e.g. dress slits), harmonize their skin tone to each person's authentic tone; if legs are not visible, ignore leg-related rules.`
       );
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-couple');
@@ -1212,7 +1222,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        `FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Preserve 100% facial likeness, eye colors, exact hair colors and textures, and beard/mustache shape and color without unrequested gray for both persons. Polish and preserve the template expression (${expressionRaw || 'natural expression'}) from [POSE_GUIDE_IMAGE] without pulling or deforming facial features. Preserve authentic skin freshness and under-eye clarity from identity photos (do not add artificial eye bags or dark circles if absent on selfies; no wax look). Maintain proportional 1/8 head scale and visible neck (do not stretch heads to fill the mask), matching 3D head turn and ambient light. CRITICAL FULL-BODY SKIN TONE HARMONIZATION: For both persons, all exposed skin — including necks, décolleté, arms, hands, and EXPLICITLY female legs in dress slits — MUST be recolored and harmonized to strictly match that person's authentic skin tone and melanin from their selfie photos. Never leave original template model's white legs or white hands on a dark-skinned woman. Output one single photorealistic image.`
+        `FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Preserve 100% facial likeness, eye colors, exact hair colors and textures, and beard/mustache shape and color without unrequested gray for both persons. Keep head poses and expressions from [POSE_GUIDE_IMAGE] without pulling or deforming jaws, cheeks or facial features. Keep under-eye areas natural as on the selfies (do not invent bags or force an artificially smooth under-eye zone; no wax look). Maintain proportional head scale and visible neck (do not stretch heads to fill the mask), matching 3D head turn and ambient light. SKIN TONE: For each person, face, neck, arms and hands must match that person's identity photos. If full body or legs are visible (e.g. dress slits), harmonize their skin tone to that person's authentic tone; if legs are not visible, ignore leg-related rules. Never leave mismatched face vs body skin tone. Output one single photorealistic image.`
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
@@ -1377,8 +1387,8 @@ STRICT RULES:
       pushText(
         pass2Input,
         isCouplePinterest
-          ? "FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless collar/neck seams, all exposed skin (neck, hands, and legs) harmonized to strictly match users' authentic skin tones from identity photos without leaving original model skin, natural expressions, high-end editorial skin. Output one single photorealistic image."
-          : "FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless neck/collar seams and hair, neat natural expression, all exposed skin (neck, chest, arms, hands, legs) harmonized to strictly match the user's authentic skin tone from [USER_IDENTITY_PHOTOS] without leaving original model skin, magazine retouching. Output one single photorealistic image."
+          ? "FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless collar/neck seams, all exposed skin (neck, hands, and if legs are visible in the frame) harmonized to match users' authentic skin tones from identity photos; if legs are not visible, ignore leg-related rules. Natural expressions, high-end editorial skin. Output one single photorealistic image."
+          : "FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless neck/collar seams and hair, neat natural expression, all exposed skin (neck, chest, arms, hands, and if legs are visible in the frame) harmonized to match the user's authentic skin tone from [USER_IDENTITY_PHOTOS]; if legs are not visible, ignore leg-related rules. Magazine retouching. Output one single photorealistic image."
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-pinterest');
