@@ -1231,8 +1231,8 @@ STRICT RULES:
     } else if (effectiveMode === 'pinterest') {
       // ========== PINTEREST multi-pass ==========
       // 1) sceneText already from analyzeSceneFromImage(ref) — «атомы»
-      // 2) PASS1 1K: IDENTITY selfies + scene text
-      // 3) MASK 1K: reference with faces/hair covered
+      // 2) MASK 1K: reference with faces/hair covered
+      // 3) PASS1 1K: IDENTITY + mask as pose/lighting reference
       // 4) PASS2 user quality: mask + PASS1 result
       const refUrl = String(customReferenceUrl || '').trim();
       if (!refUrl) {
@@ -1244,11 +1244,36 @@ STRICT RULES:
       const maskKey = isCouplePinterest ? 'mask_pinterest_couple' : 'mask_pinterest';
       const pass2Key = isCouplePinterest ? 'pass2_pinterest_couple' : 'pass2_pinterest';
 
+      // Order: (sceneText already done) → MASK → PASS1 (pose from mask) → PASS2
+      // --- 1) MASK reference faces/hair at 1K ---
       await supabaseAdmin
         .from('generation_jobs')
         .update({
           progress: 40,
-          current_step_message: 'Pinterest 1/4: сцена разобрана, генерируем PASS1 (1K)...'
+          current_step_message: 'Pinterest 1/4: маска лиц/волос на референсе (1K)...'
+        })
+        .eq('id', jobId);
+
+      const maskInput: any[] = [];
+      const maskPromptText = await promptOrFallback(maskKey);
+      pushText(maskInput, maskPromptText);
+      pushText(maskInput, '[ORIGINAL_REFERENCE] — PINTEREST PHOTO TO MASK:');
+      await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
+      pushText(
+        maskInput,
+        isCouplePinterest
+          ? 'FINAL MASK: Output the exact same photo with faces, ears, neck and hair of both persons uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
+          : 'FINAL MASK: Output the exact same photo with face, ears, neck and hair uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
+      );
+
+      const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
+
+      // --- 2) PASS1 1K: identity + mask as pose/lighting (no foreign faces) ---
+      await supabaseAdmin
+        .from('generation_jobs')
+        .update({
+          progress: 58,
+          current_step_message: 'Pinterest 2/4: PASS1 identity + masked pose (1K)...'
         })
         .eq('id', jobId);
 
@@ -1290,55 +1315,33 @@ STRICT RULES:
         }
       }
 
+      // Pose/light from MASK (faces already covered) — not from original ref with foreign faces
       pushText(
         pass1Input,
-        '[POSE_AND_LIGHTING_REFERENCE] — PINTEREST REFERENCE (match head tilt, neck angle, gaze angle, lighting scheme, and natural expression vibe; do not copy this person\'s facial bone structure, hair, or beard/stubble):'
+        '[POSE_AND_LIGHTING_REFERENCE] — POSE & LIGHTING REFERENCE from masked Pinterest layout (match body pose, 3D head turn, neck angle, gaze angle, framing and lighting; do not invent facial features — faces on this image are masked):'
       );
-      try {
-        await pushImageFromUrl(pass1Input, refUrl, 'pinterest pose reference');
-      } catch (e) {
-        console.warn('[pass1-pinterest] could not load refUrl:', e);
-      }
+      pass1Input.push({
+        type: 'image',
+        mime_type: maskPass.mimeType || 'image/jpeg',
+        data: maskPass.data
+      });
 
       if (isCouplePinterest) {
         pushText(
           pass1Input,
-          'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Delicate, natural expressions, matching head/neck poses and cinematic lighting.'
+          'FINAL PASS 1: Two distinct people in one image. Left person strictly matches [IDENTITY_A_PHOTOS], right person strictly matches [IDENTITY_B_PHOTOS] (including exact hair and facial hair/beard without unrequested gray). Match head/neck poses and lighting from the masked pose reference. Natural expressions without forcing a smile or deforming jaw/cheeks. Under-eye area as on selfies.'
         );
       } else {
         pushText(
           pass1Input,
-          'FINAL PASS 1: Generate a single photorealistic portrait with the exact face, hair, and facial hair (beard/mustache) of the user [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging, naturally embodying the neat expression, head/neck angle and lighting of the reference.'
+          'FINAL PASS 1: Generate a single photorealistic portrait with the exact face, hair, and facial hair (beard/mustache) of the user [USER_IDENTITY_PHOTOS] without unrequested gray hair or aging. Match head/neck angle and lighting from the masked pose reference. Natural expression without forcing a smile or deforming jaw/cheeks. Under-eye area as on the selfie.'
         );
       }
 
       const pass1 = await runImagePass(pass1Input, '1K', 'PASS1-pinterest');
       recordPass1Intermediate(pass1.data, pass1.mimeType, 'PASS1-pinterest');
 
-      // --- 3) MASK reference faces/hair at 1K ---
-      await supabaseAdmin
-        .from('generation_jobs')
-        .update({
-          progress: 60,
-          current_step_message: 'Pinterest 2/4: маска лиц/волос на референсе (1K)...'
-        })
-        .eq('id', jobId);
-
-      const maskInput: any[] = [];
-      const maskPromptText = await promptOrFallback(maskKey);
-      pushText(maskInput, maskPromptText);
-      pushText(maskInput, '[ORIGINAL_REFERENCE] — PINTEREST PHOTO TO MASK:');
-      await pushImageFromUrl(maskInput, refUrl, 'pinterest reference');
-      pushText(
-        maskInput,
-        isCouplePinterest
-          ? 'FINAL MASK: Output the exact same photo with faces, ears, neck and hair of both persons uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
-          : 'FINAL MASK: Output the exact same photo with face, ears, neck and hair uniformly painted over with solid light gray. Do not alter clothing, background or poses.'
-      );
-
-      const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
-
-      // --- 4) PASS2 composite at user quality ---
+      // --- 3) PASS2 composite at user quality ---
       await supabaseAdmin
         .from('generation_jobs')
         .update({
