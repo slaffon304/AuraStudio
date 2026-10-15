@@ -779,7 +779,7 @@ STRICT RULES:
       .join(' ');
 
     const antiAgingTokens =
-      'premature aging, unrequested gray hair, gray beard, salt-and-pepper stubble instead of full beard, altered beard shape, shaved beard, unrequested facial stubble, exaggerated wrinkles, deep nasolabial folds, double chin, tired eyes, dark circles under eyes, heavy eye bags, weathered haggard skin, coarse skin relief, plastic mannequin skin, artificial blur, stiff unnatural neck angle, floating or pasted head effect, skin tone mismatch between face and hands';
+    'wax figure face, Madame Tussauds wax look, silicone skin, plastic mannequin skin, airbrushed blur, oversized head, bobblehead proportions, missing neck, premature aging, exaggerated wrinkles, deep nasolabial folds, tired eyes, dark circles under eyes, heavy eye bags'; 
     const negFromDb = (template.negative_prompt || template.negativePrompt || '').trim();
     let avoidLine = negFromDb
       ? `Avoid: ${negFromDb}, ${antiAgingTokens}`
@@ -1100,7 +1100,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly polish and composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Preserve 100% facial likeness, hair, and exact beard/mustache shape and color without unrequested gray. Flawless neck/collar junction, skin tone harmonized with ambient light and hands in [SCENE_IMAGE], natural neat expression, pristine editorial skin. Output one single photorealistic image.'
+        'FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] into the masked scene [SCENE_IMAGE]. Maintain anatomical head scale and visible neck, matching ambient light, natural neat expression, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-single');
@@ -1197,7 +1197,7 @@ STRICT RULES:
       });
       pushText(
         pass2Input,
-        'FINAL PASS 2: Seamlessly polish and composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Absolute facial likeness, hair, and exact beard/mustache preservation required. Seamless collar/neck blend, skin tones harmonized with ambient light and hands in [SCENE_IMAGE], neat natural expressions, pristine editorial skin. Output one single photorealistic image.'
+        'FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the two masked people in [SCENE_IMAGE]. Maintain proportional 1/8 head scale and visible neck (do not stretch heads to fill the mask), matching 3D head turn and ambient light, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
       );
 
       const pass2 = await runImagePass(pass2Input, imageQuality, 'PASS2-couple');
@@ -1307,8 +1307,9 @@ STRICT RULES:
       pushText(
         maskInput,
         isCouplePinterest
-          ? 'FINAL MASK: Output the exact same input image with both faces, ears, necks, and all hair (including any glasses or earrings on the heads) solidly covered with uniform light gray (#C0C0C0) down to the collar lines. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
-          : 'FINAL MASK: Output the exact same input image with face, ears, neck, and all hair (including any glasses or earrings on the head) solidly covered with uniform light gray (#C0C0C0) down to the collar line. Preserve clothing, body, hands, accessories outside the neck, and background 100% untouched.'
+          isCouplePinterest
+        ? 'FINAL PASS 2: Seamlessly composite both heads from [POSE_GUIDE_IMAGE], [IDENTITY_A_PHOTOS] (left) and [IDENTITY_B_PHOTOS] (right) onto the masked scene [SCENE_IMAGE]. Maintain proportional 1/8 head scale and visible neck, matching ambient light, natural expressions, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
+        : 'FINAL PASS 2: Seamlessly composite the user head from [POSE_GUIDE_IMAGE] and [USER_IDENTITY_PHOTOS] onto the masked scene [SCENE_IMAGE]. Maintain anatomical head scale and visible neck, neat natural expression, matching ambient light, raw unretouched skin texture with natural pores (no wax look). Output one single photorealistic image.'
       );
 
       const maskPass = await runImagePass(maskInput, '1K', 'MASK-pinterest');
