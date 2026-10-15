@@ -1354,7 +1354,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-white dark:bg-[#12141c] p-5 pb-8 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 shrink-0">
                   <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
                     {language === 'ru' ? 'Загруженные фото' : language === 'en' ? 'Uploaded photos' : 'Fotografii încărcate'}
                   </h2>
@@ -1363,24 +1363,31 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   </button>
                 </div>
                 {(!userPhotos || userPhotos.length === 0) ? (
-                  <div className="py-10 text-center text-sm text-slate-500">
+                  <div className="py-10 text-center text-sm text-slate-500 shrink-0">
                     {language === 'ru' ? 'Пока нет загруженных фото' : language === 'en' ? 'No uploaded photos yet' : 'Încă nu sunt fotografii'}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2 overflow-y-auto">
-                    {userPhotos.map((ph) => (
-                      <button
-                        key={ph.id}
-                        type="button"
-                        onClick={() => {
-                          selectFromLibrary({ id: ph.id, url: ph.url });
-                          setShowLibraryPicker(false);
-                        }}
-                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-95 transition"
-                      >
-                        <img src={ph.url} alt="" className="h-full w-full object-cover" />
-                      </button>
-                    ))}
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1">
+                    <div className="grid grid-cols-3 gap-2.5 pb-2">
+                      {userPhotos.map((ph) => (
+                        <button
+                          key={ph.id}
+                          type="button"
+                          onClick={() => {
+                            selectFromLibrary({ id: ph.id, url: ph.url });
+                            setShowLibraryPicker(false);
+                          }}
+                          className="relative aspect-square min-w-0 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 active:scale-[0.98] transition touch-manipulation select-none"
+                        >
+                          <img
+                            src={ph.url}
+                            alt=""
+                            draggable={false}
+                            className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <button
@@ -1389,7 +1396,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                     setShowLibraryPicker(false);
                     setTimeout(() => triggerFilePick(), 50);
                   }}
-                  className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  className="mt-4 shrink-0 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
                 >
                   {language === 'ru' ? 'Загрузить с устройства' : language === 'en' ? 'Upload from device' : 'Încarcă de pe dispozitiv'}
                 </button>
