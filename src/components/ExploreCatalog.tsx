@@ -63,8 +63,13 @@ function filterByTab(templates: PhotoTemplate[], tab: TabId): PhotoTemplate[] {
           /video/i.test(`${t.name.ru}${t.name.en}${t.name.ro}`)
       );
     case 'effects':
+      // Strict: only explicit visual effects / filters (no generic "style")
       return active.filter((t) =>
-        (t.tags || []).some((x) => /effect|filter|style|bw|glam/i.test(x))
+        (t.tags || []).some((x) =>
+          /^(effect|effects|filter|filters|bw|black.?and.?white|b&w|glam|glamour|rembrandt|studio.?light|cinematic.?light|film.?grain|vhs|neon|glow|bloom|lens.?flare|double.?exposure|holographic|iridescent|chromatic|duotone|sepia|noir)$/i.test(
+            x.trim()
+          )
+        )
       );
     case 'holidays':
       return active.filter(
