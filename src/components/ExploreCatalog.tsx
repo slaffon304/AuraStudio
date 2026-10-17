@@ -7,7 +7,7 @@ type TabId = 'forYou' | 'video' | 'effects' | 'holidays' | 'together' | 'pets' |
 
 const TABS: { id: TabId; ru: string; ro: string; en: string }[] = [
   { id: 'forYou', ru: 'для тебя', ro: 'pentru tine', en: 'for you' },
-  { id: 'video', ru: 'видеошаблоны', ro: 'video', en: 'video' },
+  { id: 'video', ru: 'видео', ro: 'video', en: 'video' },
   { id: 'effects', ru: 'эффекты', ro: 'efecte', en: 'effects' },
   { id: 'holidays', ru: 'праздники', ro: 'sărbători', en: 'holidays' },
   { id: 'together', ru: 'вместе', ro: 'împreună', en: 'together' },
@@ -225,7 +225,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
           <>
         {/* Tabs */}
         <div className="-mx-4 mt-5 overflow-x-auto px-4 no-scrollbar">
-          <div className="flex min-w-max items-end gap-5 pb-1">
+          <div className="flex min-w-max items-end gap-6 pb-1 sm:gap-7">
             {TABS.map((t) => {
               const active = tab === t.id;
               return (
@@ -233,7 +233,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setTab(t.id)}
-                  className={`relative whitespace-nowrap pb-2.5 text-[17px] font-extrabold tracking-tight transition-colors md:text-[18px] ${
+                  className={`relative whitespace-nowrap pb-2.5 text-[19px] font-extrabold tracking-tight transition-colors md:text-[20px] ${
                     active ? 'text-slate-900 dark:text-white' : 'text-[#a8b0c0] dark:text-slate-500'
                   }`}
                 >
@@ -429,7 +429,7 @@ export const ExploreCatalog: React.FC<ExploreCatalogProps> = ({
             </div>
           </div>
 
-          <p className="mt-1.5 text-[13px] text-slate-400">{swipeHint}</p>
+          <p className="mt-1.5 text-[13px] font-medium text-slate-900 dark:text-slate-400">{swipeHint}</p>
         </section>
 
                               </>
