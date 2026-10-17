@@ -86,7 +86,7 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   const [heroWidth, setHeroWidth] = useState(0);
 
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadTarget, setUploadTarget] = useState<'p1' | 'p2'>('p1');
+  const [uploadTarget, setUploadTarget] = useState<'p1' | 'p2' | 'ref'>('p1');
   const [showTipModal, setShowTipModal] = useState(false);
   const [showUploadSheet, setShowUploadSheet] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
@@ -400,12 +400,18 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
   };
 
   const selectFromLibrary = (photo: { id: string; url: string }) => {
+    if (uploadTarget === 'ref') {
+      setRefUrl(photo.url);
+      setShowLibraryPicker(false);
+      return;
+    }
     const current = uploadTarget === 'p1' ? photos1 : photos2;
     if (current.length >= MAX_FACE_PHOTOS) return;
     if (current.some((p) => p.id === photo.id || p.url === photo.url)) return;
     const entry = { url: photo.url, id: photo.id };
     if (uploadTarget === 'p1') setPhotos1((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
     else setPhotos2((prev) => [...prev, entry].slice(0, MAX_FACE_PHOTOS));
+    setShowLibraryPicker(false);
   };
 
 
@@ -547,7 +553,22 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
 
       finishProgressUI();
       setStepText(t.completed);
-      setResultUrl(job.resultImageUrl || null);
+      const url = job?.resultImageUrl || null;
+      if (!url) {
+        clearProgressTimers();
+        setIsGenerating(false);
+        setProgressSteps([]);
+        setSecondsLeft(null);
+        setErrorMessage(
+          language === 'ru'
+            ? 'Генерация завершилась без результата. Попробуй ещё раз.'
+            : language === 'en'
+              ? 'Generation finished without a result. Try again.'
+              : 'Generarea s-a terminat fără rezultat. Încearcă din nou.'
+        );
+        return;
+      }
+      setResultUrl(url);
     } catch (err: any) {
       clearProgressTimers();
       setIsGenerating(false);
@@ -866,8 +887,12 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       }
       if ((currentUser.photoBalance ?? 0) < pinCost) { setIsPhotoModalOpen(true); return; }
       setIsGenerating(true);
-      setStepText(t.progressStepAnalyze);
       setErrorMessage(null);
+      setResultUrl(null);
+      setResultSource('pinterest');
+      setRating(null);
+      setEditText('');
+      startProgressUI('pinterest');
       try {
         const job = await createGenerationJob('custom-pinterest', photos1[0].url, photos1[0].id, {
           mode: 'pinterest',
@@ -884,10 +909,29 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
           quality: (resultQuality === '4k' ? '4K' : resultQuality === '1k' ? '1K' : '2K') as any,
           quality4k: resultQuality === '4k'
         } as any);
-        setResultUrl(job.resultImageUrl || null);
+        finishProgressUI();
         setStepText(t.completed);
+        const url = job?.resultImageUrl || null;
+        if (!url) {
+          clearProgressTimers();
+          setIsGenerating(false);
+          setProgressSteps([]);
+          setSecondsLeft(null);
+          setErrorMessage(
+            language === 'ru'
+              ? 'Генерация завершилась без результата. Попробуй ещё раз.'
+              : language === 'en'
+                ? 'Generation finished without a result. Try again.'
+                : 'Generarea s-a terminat fără rezultat. Încearcă din nou.'
+          );
+          return;
+        }
+        setResultUrl(url);
       } catch (err: any) {
+        clearProgressTimers();
         setIsGenerating(false);
+        setProgressSteps([]);
+        setSecondsLeft(null);
         setErrorMessage(err?.message || 'Error');
       }
     };
@@ -958,10 +1002,28 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                 {language === 'ru' ? 'Референс' : language === 'en' ? 'Reference' : 'Referință'}{' '}
                 <span className="normal-case font-medium text-violet-500">{language === 'ru' ? 'откуда' : language === 'en' ? 'from' : 'de unde'}</span>
               </p>
-              <label className="flex aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white cursor-pointer overflow-hidden">
-                {refUrl ? <img src={refUrl} alt="" className="h-full w-full object-cover" /> : (<><Plus className="h-6 w-6 text-slate-400" /><span className="text-sm font-semibold text-slate-500 mt-1">{language === 'ru' ? 'Загрузить' : 'Upload'}</span></>)}
-                <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
-              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!currentUser) { setIsAuthModalOpen(true); return; }
+                  setUploadTarget('ref');
+                  setShowLibraryPicker(true);
+                }}
+                className="flex w-full aspect-square flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden dark:bg-white/5 dark:border-white/15"
+              >
+                {refUrl ? (
+                  <img src={refUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <>
+                    <Plus className="h-6 w-6 text-slate-400" />
+                    <span className="text-sm font-semibold text-slate-500 mt-1">
+                      {language === 'ru' ? 'Загрузить' : language === 'en' ? 'Upload' : 'Încarcă'}
+                    </span>
+                  </>
+                )}
+              </button>
+              {/* device file fallback for reference */}
+              <input id="pin-ref-file" type="file" accept="image/*" className="hidden" onChange={onRefFile} />
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
@@ -1394,7 +1456,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   type="button"
                   onClick={() => {
                     setShowLibraryPicker(false);
-                    setTimeout(() => triggerFilePick(), 50);
+                    setTimeout(() => {
+                      if (uploadTarget === 'ref') {
+                        (document.getElementById('pin-ref-file') as HTMLInputElement | null)?.click();
+                      } else {
+                        triggerFilePick();
+                      }
+                    }, 50);
                   }}
                   className="mt-4 shrink-0 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
                 >
@@ -1456,18 +1524,42 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
       if (!photos1[0]) { setErrorMessage(copy.needPhoto); return; }
       if ((currentUser.photoBalance ?? 0) < cost) { setIsPhotoModalOpen(true); return; }
       setIsGenerating(true);
-      setStepText(t.progressStepAnalyze);
       setErrorMessage(null);
+      setResultUrl(null);
+      setResultSource('enhance');
+      setRating(null);
+      setEditText('');
+      startProgressUI('enhance');
       try {
         const job = await createGenerationJob('enhance-quality', photos1[0].url, photos1[0].id, {
           mode: 'enhance' as any,
           aspectRatio: selectedAspectRatio,
+          quality: (enhanceRes === '4k' ? '4K' : '2K') as any,
           quality4k: enhanceRes === '4k'
         } as any);
-        setResultUrl(job.resultImageUrl || null);
+        finishProgressUI();
         setStepText(t.completed);
+        const url = job?.resultImageUrl || null;
+        if (!url) {
+          clearProgressTimers();
+          setIsGenerating(false);
+          setProgressSteps([]);
+          setSecondsLeft(null);
+          setErrorMessage(
+            language === 'ru'
+              ? 'Генерация завершилась без результата. Попробуй ещё раз.'
+              : language === 'en'
+                ? 'Generation finished without a result. Try again.'
+                : 'Generarea s-a terminat fără rezultat. Încearcă din nou.'
+          );
+          return;
+        }
+        setResultUrl(url);
       } catch (err: any) {
+        clearProgressTimers();
         setIsGenerating(false);
+        setProgressSteps([]);
+        setSecondsLeft(null);
         setErrorMessage(err?.message || 'Error');
       }
     };
@@ -2093,7 +2185,13 @@ export const CreatePhotoModal: React.FC<CreatePhotoModalProps> = ({
                   type="button"
                   onClick={() => {
                     setShowLibraryPicker(false);
-                    setTimeout(() => triggerFilePick(), 50);
+                    setTimeout(() => {
+                      if (uploadTarget === 'ref') {
+                        (document.getElementById('pin-ref-file') as HTMLInputElement | null)?.click();
+                      } else {
+                        triggerFilePick();
+                      }
+                    }, 50);
                   }}
                   className="mt-4 w-full rounded-2xl border border-slate-200 dark:border-white/10 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
                 >
