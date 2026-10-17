@@ -521,6 +521,79 @@ function fillPrompt(
   }).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+
+/** Ensure virtual mode rows exist in templates (FK + NOT NULL on generation_jobs.template_id). */
+async function ensureSystemTemplateRow(tmpl: {
+  id: string;
+  name_ro: string;
+  name_ru: string;
+  name_en: string;
+  photo_cost?: number;
+  aspect_ratio?: string;
+  prompt?: string;
+}): Promise<void> {
+  // Resolve any existing category so FK categories holds
+  let categoryId = 'Lifestyle';
+  try {
+    const { data: cats } = await supabaseAdmin
+      .from('categories')
+      .select('id')
+      .limit(5);
+    if (cats && cats.length) {
+      const preferred = cats.find((c: any) =>
+        /^(Lifestyle|lifestyle|System|system)$/i.test(String(c.id))
+      );
+      categoryId = preferred ? preferred.id : cats[0].id;
+    }
+  } catch {}
+
+  const row = {
+    id: tmpl.id,
+    category_id: categoryId,
+    name_ro: tmpl.name_ro,
+    name_ru: tmpl.name_ru,
+    name_en: tmpl.name_en,
+    description_ro: tmpl.name_ro,
+    description_ru: tmpl.name_ru,
+    description_en: tmpl.name_en,
+    preview_image_url: '',
+    prompt: tmpl.prompt || '',
+    negative_prompt: null,
+    aspect_ratio: tmpl.aspect_ratio || '3:4',
+    photo_cost: tmpl.photo_cost ?? 1,
+    required_input_type: 'any',
+    provider_hint: 'gemini-genai',
+    tags: ['system'],
+    is_active: false,
+    display_order: 9990
+  };
+
+  // Try upsert by primary key
+  const { error } = await supabaseAdmin.from('templates').upsert(row, { onConflict: 'id' });
+  if (error) {
+    // Fallback: insert ignore if already exists
+    const { data: existing } = await supabaseAdmin
+      .from('templates')
+      .select('id')
+      .eq('id', tmpl.id)
+      .maybeSingle();
+    if (!existing) {
+      const { error: insErr } = await supabaseAdmin.from('templates').insert(row);
+      if (insErr) {
+        console.warn('[ensureSystemTemplateRow]', tmpl.id, insErr.message);
+        throw new Error(
+          'Nu s-a putut pregăti șablonul de sistem (' +
+            tmpl.id +
+            '): ' +
+            insErr.message +
+            '. Verifică cascade categories (category_id).'
+        );
+      }
+    }
+  }
+}
+
+
 // ====================================================================
 // GENERATION JOBS PIPELINE (Real AI + Atomic Photo Ledger)
 // ====================================================================
@@ -623,13 +696,17 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
   let jobId: string | null = null;
 
   try {
+    // Virtual modes need a real templates row (template_id is NOT NULL + FK).
+    if (templateIsVirtual) {
+      await ensureSystemTemplateRow(template);
+    }
+
     // 2. Create job record in queued state
     const { data: jobRecord, error: jobCreateError } = await supabaseAdmin
       .from('generation_jobs')
       .insert({
         user_id: userId,
-        // null for virtual modes — avoids FK generation_jobs_template_id_fkey
-        template_id: templateIsVirtual ? null : template.id,
+        template_id: template.id,
         status: 'queued',
         progress: 10,
         current_step_message: 'Verificare foto și autorizare...',
@@ -651,7 +728,7 @@ app.post('/api/generations', requireAuth, async (req: AuthRequest, res) => {
       .rpc('deduct_photos_for_generation', {
         p_user_id: userId,
         p_amount: effectivePhotoCost,
-        p_template_id: templateIsVirtual ? null : template.id,
+        p_template_id: template.id,
         p_template_name: template.name_ro || 'Photo Shoot',
         p_job_id: jobId
       });
