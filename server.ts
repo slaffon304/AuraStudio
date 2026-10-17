@@ -799,7 +799,7 @@ STRICT RULES:
       }
       // Text+vision model for scene breakdown (not the image generator)
       const analysisModel =
-        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-flash';
+        process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3.8-flash';
       const promptText =
         (await loadPromptFromDb('scene_analyze')) ||
         DEFAULT_GENERATION_PROMPTS['scene_analyze'] ||
